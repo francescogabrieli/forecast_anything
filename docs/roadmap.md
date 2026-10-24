@@ -1,6 +1,6 @@
 # Forecast Anything — roadmap completa
 
-24 ottobre 2026 · Specifica approvata · Piano proposto, ancora da eseguire.
+24 ottobre 2026 · Specifica e roadmap approvate · Esecuzione non ancora avviata.
 
 Questa roadmap ordina risultati e dipendenze, senza assegnare date. Non è un elenco di funzionalità da costruire tutte prima di imparare qualcosa: ogni passaggio produce evidenze utilizzabili per decidere il successivo.
 
@@ -132,7 +132,7 @@ Il repository è stato collegato a francescogabrieli/forecast_anything e il lavo
 
 ## Stato e passaggio all’esecuzione
 
-Questa consegna contiene documenti, non prodotto implementato. La specifica è approvata; la roadmap e le scelte tecniche sopra sono da revisionare prima dell’esecuzione.
+La specifica e la roadmap sono state approvate dall’utente in chat il 24 ottobre 2026. La consegna corrente contiene documenti; l’implementazione parte dopo la scelta della modalità di esecuzione.
 
 La modalità proposta è subagent-driven: un task alla volta con implementatore e revisore, condividendo contratti fissati. Offre controlli indipendenti sui confini delicati tra tempo, probabilità e autonomia; comporta più contesti rispetto all’esecuzione nativa. In modalità nativa l’implementazione resta a un solo agente, con revisione complessiva finale.
 

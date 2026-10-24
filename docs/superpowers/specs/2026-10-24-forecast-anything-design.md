@@ -2,7 +2,7 @@
 
 Data: 24 ottobre 2026
 
-Stato: approvata dall’utente in chat il 24 ottobre 2026; passaggio successivo: revisione del piano prima dell’implementazione.
+Stato: approvata dall’utente in chat il 24 ottobre 2026; anche la roadmap è confermata. Passaggio successivo: scelta della modalità di esecuzione.
 
 Nome di lavoro: Forecast Anything; disponibilità e nome definitivo da verificare.
 

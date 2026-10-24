@@ -7,7 +7,7 @@ Timestral is the first forecasting-model candidate. Language-model agents interp
 ## Project status
 
 - Design approved on 24 October 2026.
-- Roadmap and implementation plans prepared; execution-method selection remains open.
+- Roadmap approved on 24 October 2026; implementation plans prepared; execution-method selection remains open.
 - Product implementation has not started.
 - The repository is currently private. The code license and final public branding will be resolved before public release.
 
