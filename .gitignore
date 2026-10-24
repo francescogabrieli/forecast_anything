@@ -1,0 +1,16 @@
+# Local working materials and legacy document links
+/work/
+/outputs/
+/roadmap.md
+
+# Local state, model caches and credentials
+.local/
+.venv/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+node_modules/
+.DS_Store
