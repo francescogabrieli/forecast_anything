@@ -840,3 +840,85 @@ def test_evaluation_job_persists_scores_and_recovers_after_completion_crash(
     assert evaluation.metrics["f_b"]["mae"] == 0.0
     with ledger._connection() as connection:
         assert connection.execute("SELECT COUNT(*) FROM evaluations").fetchone()[0] == 1
+
+
+@pytest.mark.parametrize("completion_committed", [False, True])
+def test_completion_ack_error_preserves_published_attempt(
+    tmp_path, monkeypatch, completion_committed
+):
+    import sqlite3
+
+    ledger, provider, runtime = setup(tmp_path)
+    queue = JobQueue(ledger)
+    job = queue.enqueue("run/ack", payload())
+    complete = queue.complete
+
+    def fail_ack(*args, **kwargs):
+        if completion_committed:
+            complete(*args, **kwargs)
+        raise sqlite3.OperationalError("transient completion acknowledgement failure")
+
+    monkeypatch.setattr(queue, "complete", fail_ack)
+    with pytest.raises(sqlite3.OperationalError, match="acknowledgement failure"):
+        Worker(runtime, queue).run_due(T)
+    assert queue.get(job.job_id).attempt == 1
+    assert ledger.get_run_by_key(f"{job.job_id}/1").state == "completed"
+    assert ledger.get_run_by_key(f"{job.job_id}/2") is None
+    assert (
+        len(
+            [event for event in ledger.events_after(0) if event.kind == "run_completed"]
+        )
+        == 1
+    )
+    monkeypatch.setattr(queue, "complete", complete)
+    ledger.clock = runtime.clock = lambda: T + timedelta(seconds=61)
+    Worker(runtime, queue).run_due(runtime.clock())
+    assert queue.get(job.job_id).state == "completed"
+    assert queue.get(job.job_id).attempt == 1
+    assert [attempt["state"] for attempt in queue.history(job.job_id)] == ["completed"]
+    assert provider.calls == ["a", "b"]
+    assert (
+        len(
+            [event for event in ledger.events_after(0) if event.kind == "run_completed"]
+        )
+        == 1
+    )
+
+
+def test_batch_resume_rechecks_deadline_crossed_by_preceding_run(tmp_path, monkeypatch):
+    deadline = T + timedelta(days=1)
+    batch_started = deadline - timedelta(seconds=10)
+    now = [batch_started]
+    ledger, provider, runtime = setup(tmp_path, lambda: now[0])
+    qualify_watch(tmp_path, ledger)
+    ledger.advance_watch("watch", {"kind": "paused"}, T, event_id="pause")
+    queue = JobQueue(ledger)
+    forecast = queue.enqueue("run/before-resume", payload())
+    resume = queue.enqueue(
+        "resume/after-run", {"kind": "watch_resume", "watch_id": "watch"}
+    )
+    original_forecast = provider.forecast
+
+    def cross_deadline(request):
+        result = original_forecast(request)
+        now[0] = deadline + timedelta(seconds=10)
+        return result
+
+    monkeypatch.setattr(provider, "forecast", cross_deadline)
+    assert Worker(runtime, queue).run_due(batch_started, limit=2) == (
+        forecast.job_id,
+        resume.job_id,
+    )
+    current = ledger.get_watch("watch")
+    assert (current.lifecycle, current.quality, current.operational) == (
+        "evaluating",
+        "stale",
+        False,
+    )
+    history = ledger.watch_history("watch")
+    assert [entry["event"]["kind"] for entry in history[-2:]] == [
+        "refresh_expired",
+        "resumed",
+    ]
+    assert all(entry["occurred_at"] == now[0] for entry in history[-2:])
+    assert queue.get(resume.job_id).state == "completed"

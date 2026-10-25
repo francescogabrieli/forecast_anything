@@ -64,35 +64,41 @@ class Worker:
             stopped.set()
             thread.join()
 
+    def _now(self, supplied: datetime) -> datetime:
+        return max(supplied, self.runtime.clock(), self.runtime.ledger.clock())
+
     def run_due(self, now: datetime, limit: int = 10) -> tuple[str, ...]:
         if type(limit) is not int or limit <= 0:
             raise DomainError("invalid_limit", {})
-        self._sync_watches(now)
-        self._schedule_sources(now)
+        self._sync_watches(self._now(now))
+        self._schedule_sources(self._now(now))
         completed = []
         for _ in range(limit):
-            job = self.queue.claim(self.owner, max(now, self.runtime.clock()), 60)
+            job = self.queue.claim(self.owner, self._now(now), 60)
             if job is None:
                 break
-            try:
-                with self._lease(job):
-                    result = self._execute(job, now)
-                    if result is not None:
-                        self.queue.complete(job, max(now, self.runtime.clock()), result)
-            except Exception as error:
-                details = (
-                    error.model_dump()
-                    if isinstance(error, DomainError)
-                    else {
-                        "code": "job_execution_error",
-                        "details": {"type": type(error).__name__},
-                    }
-                )
+            with self._lease(job):
                 try:
-                    self.queue.fail(job, self.runtime.clock(), details)
-                except DomainError as lost:
-                    if lost.code != "lease_lost":
-                        raise
+                    result = self._execute(job, self._now(now))
+                except Exception as error:
+                    details = (
+                        error.model_dump()
+                        if isinstance(error, DomainError)
+                        else {
+                            "code": "job_execution_error",
+                            "details": {"type": type(error).__name__},
+                        }
+                    )
+                    try:
+                        self.queue.fail(job, self._now(now), details)
+                    except DomainError as lost:
+                        if lost.code != "lease_lost":
+                            raise
+                else:
+                    if result is not None:
+                        # An acknowledgement error leaves the attempt recoverable.
+                        # It must never turn a published emission into a new attempt.
+                        self.queue.complete(job, self._now(now), result)
             completed.append(job.job_id)
         return tuple(completed)
 
@@ -150,6 +156,7 @@ class Worker:
 
     def _sync_watches(self, now: datetime, *, lease_guard=None):
         """Apply expiry and registered mapping revisions before reading operational."""
+        now = self._now(now)
         ledger = self.runtime.ledger
         for watch in ledger.list_watches():
             if watch.next_due_at <= now:
@@ -182,6 +189,7 @@ class Worker:
     def resume_watch(
         self, watch_id: str, now: datetime, *, event_id: str, lease_guard=None
     ):
+        now = self._now(now)
         self._sync_watches(now, lease_guard=lease_guard)
         self.runtime.ledger.advance_watch(
             watch_id,
