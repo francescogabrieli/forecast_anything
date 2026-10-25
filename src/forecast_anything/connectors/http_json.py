@@ -76,7 +76,9 @@ def sanitize_rows(
     secrets: tuple[str, ...] = (),
     *,
     mapping: dict[str, Any] | None = None,
+    limit: int | None = None,
 ) -> tuple[dict[str, Any], ...]:
+    """Discover credentials across all rows before limiting the emitted sample."""
     secrets = (
         *secrets,
         *(
@@ -93,7 +95,7 @@ def sanitize_rows(
             for key, value in row.items()
             if not sensitive_key(key) and sanitize_text(key, secrets) == key
         }
-        for row in rows
+        for row in (rows[:limit] if limit is not None else rows)
     )
 
 
@@ -228,7 +230,8 @@ def load_http_json(
     ):
         raise DomainError("invalid_source_data", {"reason": "nonfinite_number"})
     return sanitize_rows(
-        tuple(data[:limit] if limit is not None else data),
+        tuple(data),
         secrets,
         mapping=spec.mapping,
+        limit=limit,
     )

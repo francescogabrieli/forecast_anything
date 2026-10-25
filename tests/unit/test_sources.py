@@ -467,8 +467,9 @@ def test_catalog_database_rejects_history_rewrite(tmp_path):
 
 @pytest.mark.parametrize("kind", ["csv", "http_json"])
 @pytest.mark.parametrize("artifact", ["profile", "snapshot"])
+@pytest.mark.parametrize("credential_row", [0, 100])
 def test_sensitive_column_credentials_cannot_reenter_through_mapping_constants(
-    tmp_path, monkeypatch, kind, artifact
+    tmp_path, monkeypatch, kind, artifact, credential_row
 ):
     from forecast_anything.connectors import http_json
 
@@ -478,7 +479,8 @@ def test_sensitive_column_credentials_cannot_reenter_through_mapping_constants(
         source = csv_source(
             tmp_path,
             "date,published,edition,amount,api_key\n"
-            "2026-10-23,2026-10-23,a,1,opaque-private-value\n",
+            + "2026-10-23,2026-10-23,a,1,\n" * credential_row
+            + "2026-10-23,2026-10-23,a,1,opaque-private-value\n",
             mapping,
         )
     else:
@@ -491,7 +493,16 @@ def test_sensitive_column_credentials_cannot_reenter_through_mapping_constants(
                 pass
 
             def read(self, *args):
-                return b'[{"date":"2026-10-23","published":"2026-10-23","edition":"a","amount":1,"api_key":"opaque-private-value"}]'
+                row = {
+                    "date": "2026-10-23",
+                    "published": "2026-10-23",
+                    "edition": "a",
+                    "amount": 1,
+                    "api_key": "",
+                }
+                return json.dumps(
+                    [row] * credential_row + [{**row, "api_key": credential}]
+                ).encode()
 
         class Opener:
             def open(self, *args, **kwargs):
@@ -516,3 +527,9 @@ def test_sensitive_column_credentials_cannot_reenter_through_mapping_constants(
             ingest_source(source, AS_OF)
     assert error.value.code == "invalid_source_mapping"
     assert credential not in error.value.model_dump_json()
+
+    if artifact == "profile" and credential_row == 100:
+        safe_source = source.model_copy(update={"mapping": MAPPING})
+        profile = inspect_source(safe_source)
+        assert len(profile.sample_rows) == 100
+        assert credential not in profile.model_dump_json()

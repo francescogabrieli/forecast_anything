@@ -65,7 +65,7 @@ def _read(spec: SourceSpec, limit: int | None, resolver: SecretResolver | None):
             "source_unavailable", {"reason": "csv_credentials_unsupported"}
         )
     return sanitize_rows(
-        load_csv_rows(Path(spec.location), limit=limit), mapping=spec.mapping
+        load_csv_rows(Path(spec.location)), mapping=spec.mapping, limit=limit
     )
 
 
@@ -181,7 +181,7 @@ def _profile(spec: SourceSpec, rows) -> SourceProfile:
 def inspect_source(
     spec: SourceSpec, *, secret_resolver: SecretResolver | None = None
 ) -> SourceProfile:
-    """Read at most 100 sample rows and return only sanitized source evidence."""
+    """Scan source credentials and expose at most 100 sanitized sample rows."""
     return _profile(spec, _read(spec, 100, secret_resolver))
 
 
