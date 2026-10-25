@@ -509,3 +509,41 @@ def test_maturity_uses_absolute_instants_across_dst_fold():
         timestamps[-1],
     )
     assert evaluate_run(issued, snapshot, graph()).metrics["model"]["mae"] == 0
+
+
+def test_unpublished_folded_target_with_utc_forecast_is_pending():
+    from zoneinfo import ZoneInfo
+
+    zone = ZoneInfo("Europe/Rome")
+    origin = datetime(2026, 10, 25, 2, tzinfo=zone, fold=0)
+    folded_target = origin.replace(fold=1)
+    last_target = datetime(2026, 10, 25, 3, tzinfo=zone)
+    timestamps = tuple(t.astimezone(timezone.utc) for t in (folded_target, last_target))
+    issued = run(as_of=origin, results={"model": result(timestamps=timestamps)})
+    snapshot = Snapshot(
+        snapshot_id="unpublished-folded-target",
+        as_of=last_target,
+        observations=(
+            Observation(
+                series_id="s",
+                event_time=folded_target,
+                available_at=last_target + timedelta(days=1),
+                revision="1",
+                value=2,
+                unit="count",
+            ),
+            Observation(
+                series_id="s",
+                event_time=last_target,
+                available_at=last_target,
+                revision="1",
+                value=4,
+                unit="count",
+            ),
+        ),
+        assumptions=(),
+    )
+    evaluation = evaluate_run(issued, snapshot, graph())
+    assert evaluation.status == "pending"
+    assert evaluation.metrics["model"]["status"] == "pending"
+    assert evaluation.origin_count == 0

@@ -94,7 +94,7 @@ def evaluate_run(
             elif forecast.timestamps[-1] > actuals.as_of or any(
                 o.available_at > actuals.as_of
                 and o.series_id in forecast.series_ids
-                and o.event_time in forecast.timestamps
+                and o.event_time.astimezone(timezone.utc) in forecast.timestamps
                 for o in actuals.observations
             ):
                 state = "pending"
