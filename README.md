@@ -10,7 +10,7 @@ Timestral is the first forecasting-model candidate. Language-model agents interp
 - Roadmap approved on 24 October 2026; subagent-driven execution selected on 25 October 2026.
 - Core plan C1–C6 implemented on `feat/future-graph-core`; branch integration pending.
 - CSV CLI, point-in-time snapshots, typed DAG validation, seasonal-naive forecasts, immutable SQLite runs and durable events are available.
-- Timestral, probabilistic operators, agents, API and observatory UI are the next implementation plans.
+- The optional Timestral library adapter is implemented; acceptance remains pending license clarification and real CPU parity. Probabilistic operators, agents, API and observatory UI remain planned.
 - The repository is currently private. The code license and final public branding will be resolved before public release.
 
 ## Try the core
@@ -34,7 +34,7 @@ uv run pytest -q
 
 Repeating the same request returns the same stored run. The initial CLI accepts one explicitly described CSV source and the seasonal-naive provider. The library runtime supports separately bound snapshots and registered providers/operators; builtin numerical operators arrive in plan 02. SQLite files must live on local disk. Overlapping first requests may repeat computation; durable publication remains unique. Job leasing arrives in plan 03.
 
-See [core implementation and decisions](docs/implementation/core.md) for contracts, verification and limits.
+See [core implementation and decisions](docs/implementation/core.md) for contracts, verification and limits. For optional model installation, pinned revisions, separate code/weights licenses and the pending acceptance gate, see [Timestral provider status](docs/implementation/timestral.md).
 
 ## Local quality checks
 
