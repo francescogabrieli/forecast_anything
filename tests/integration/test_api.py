@@ -714,3 +714,185 @@ def test_evaluation_job_reads_real_later_source_actuals(tmp_path):
     evaluation = client.get("/v1/evaluations/" + job["result"]["evaluation_id"]).json()
     assert evaluation["status"] == "evaluated" and evaluation["origin_count"] == 1
     assert evaluation["discovery"] is None
+
+
+def test_domain_validation_errors_never_echo_submitted_credentials(tmp_path):
+    _, _, client = setup(tmp_path)
+    response = client.post(
+        "/v1/jobs",
+        json={
+            "kind": "run",
+            "key": "credential-error",
+            "graph": {
+                "graph_id": "invalid-secret-config",
+                "version": 1,
+                "nodes": [
+                    {
+                        "node_id": "source",
+                        "kind": "source",
+                        "inputs": [],
+                        "config": {
+                            "source_id": "sales",
+                            "series_ids": ["sales"],
+                            "units": ["count"],
+                            "frequency": "1d",
+                            "secret_ref": "private-ref",
+                            "extra": {"Authorization": "Bearer private-token"},
+                        },
+                    }
+                ],
+            },
+            "snapshot_ids": {},
+            "as_of": T.isoformat(),
+        },
+    )
+    assert response.status_code == 422
+    payload = response.json()
+    assert set(payload) == {"code", "details"}
+    assert payload["code"] == "invalid_config"
+    assert payload["details"]["errors"]
+    assert "private-ref" not in response.text
+    assert "private-token" not in response.text
+    assert all(set(error) == {"loc", "type"} for error in payload["details"]["errors"])
+
+
+@pytest.mark.parametrize("forecast_other", [False, True])
+def test_evaluation_uses_each_forecasts_history_source(tmp_path, forecast_other):
+    from pathlib import Path
+
+    ledger, runtime, client = setup(tmp_path)
+    runtime.clock = ledger.clock = lambda: T - timedelta(hours=12)
+    spec = source(tmp_path)
+    other = {**spec, "source_id": "other"}
+    registered = client.post("/v1/sources", json=spec).json()
+    other_registered = client.post("/v1/sources", json=other).json()
+    Worker(runtime, JobQueue(ledger)).run_due(runtime.clock())
+    first = client.get("/v1/jobs/" + registered["job_id"]).json()["result"]
+    second = client.get("/v1/jobs/" + other_registered["job_id"]).json()["result"]
+    candidate = client.get("/v1/candidates/" + first["candidate_ids"][0]).json()
+    graph = candidate["graph"]
+    graph["graph_id"] = "colliding-series-two-sources"
+    source_config = next(
+        node["config"] for node in graph["nodes"] if node["kind"] == "source"
+    )
+    graph["nodes"].append(
+        {
+            "node_id": "other-source",
+            "kind": "source",
+            "inputs": [],
+            "config": {**source_config, "source_id": "other"},
+        }
+    )
+    if forecast_other:
+        forecast = next(node for node in graph["nodes"] if node["kind"] == "forecast")
+        graph["nodes"].append(
+            {
+                "node_id": "other-forecast",
+                "kind": "forecast",
+                "inputs": ["other-source"],
+                "config": {
+                    **forecast["config"],
+                    "history": "other-source",
+                    "relation_type": {"other-source": "statistical"},
+                },
+            }
+        )
+    response = client.post(
+        "/v1/jobs",
+        json={
+            "kind": "run",
+            "key": "collision-run",
+            "graph": graph,
+            "snapshot_ids": {
+                "sales": first["source_snapshot_ids"][0],
+                "other": second["source_snapshot_ids"][0],
+            },
+            "as_of": runtime.clock().isoformat(),
+        },
+    )
+    assert response.status_code == 202, response.text
+    Worker(runtime, JobQueue(ledger)).run_due(runtime.clock())
+    run_id = client.get("/v1/jobs/" + response.json()["job_id"]).json()["result"][
+        "run_id"
+    ]
+    Path(spec["location"]).write_text(
+        "time,value\n2026-10-21,1\n2026-10-22,2\n2026-10-23,3\n2026-10-24,99\n"
+    )
+    runtime.clock = ledger.clock = lambda: T + timedelta(days=1)
+    refreshed = client.post("/v1/sources", json=other).json()
+    Worker(runtime, JobQueue(ledger)).run_due(runtime.clock())
+    actuals_id = client.get("/v1/jobs/" + refreshed["job_id"]).json()["result"][
+        "source_snapshot_ids"
+    ][0]
+    response = client.post(
+        "/v1/jobs",
+        json={
+            "kind": "evaluation",
+            "key": "wrong-collision-actuals",
+            "run_id": run_id,
+            "actuals_snapshot_id": actuals_id,
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == (
+        "ambiguous_actuals_bindings"
+        if forecast_other
+        else "source_snapshot_lineage_mismatch"
+    )
+    with ledger._connection() as connection:
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM jobs WHERE logical_key='api/wrong-collision-actuals'"
+            ).fetchone()[0]
+            == 0
+        )
+    refreshed_base = client.post("/v1/sources", json=spec).json()
+    Worker(runtime, JobQueue(ledger)).run_due(runtime.clock())
+    base_actuals = client.get("/v1/jobs/" + refreshed_base["job_id"]).json()["result"][
+        "source_snapshot_ids"
+    ][0]
+    own_response = client.post(
+        "/v1/jobs",
+        json={
+            "kind": "evaluation",
+            "key": "own-collision-actuals",
+            "run_id": run_id,
+            "actuals_snapshot_id": base_actuals,
+        },
+    )
+    assert own_response.status_code == (422 if forecast_other else 202)
+    if forecast_other:
+        assert own_response.json()["code"] == "ambiguous_actuals_bindings"
+
+
+def test_persisted_job_validation_errors_are_sanitized_on_read(tmp_path):
+    ledger, runtime, client = setup(tmp_path)
+    job = JobQueue(ledger).enqueue(
+        "legacy-invalid-plan",
+        {
+            "kind": "run",
+            "graph": {
+                "graph_id": "bad",
+                "version": 1,
+                "nodes": [
+                    {
+                        "node_id": "s",
+                        "kind": "source",
+                        "inputs": [],
+                        "config": {"secret_ref": "private-ref"},
+                    }
+                ],
+            },
+            "snapshots": {},
+            "as_of": T.isoformat(),
+        },
+    )
+    for seconds in (0, 31, 62):
+        now = T + timedelta(seconds=seconds)
+        runtime.clock = ledger.clock = lambda: now
+        Worker(runtime, JobQueue(ledger)).run_due(now)
+    response = client.get("/v1/jobs/" + job.job_id)
+    assert response.status_code == 200
+    assert response.json()["state"] == "failed"
+    assert response.json()["error"]["code"] == "invalid_config"
+    assert "private-ref" not in response.text

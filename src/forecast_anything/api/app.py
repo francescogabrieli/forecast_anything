@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from ..contracts import DomainError, ErrorResponse
 from ..runtime import Runtime
 from ..store import Ledger
+from .errors import public_error_details
 from .routes import router
 from .service import Observatory
 
@@ -51,12 +52,14 @@ def create_app(ledger: Ledger, runtime: Runtime, workspace_token: str) -> FastAP
             if error.code in {"idempotency_conflict", "immutable_identity"}
             else 422
         )
-        return JSONResponse(error.model_dump(mode="json"), status_code=status)
+        payload = error.model_dump(mode="json")
+        payload["details"] = public_error_details(payload["details"])
+        return JSONResponse(payload, status_code=status)
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request, error):
         # Inputs can include secret refs or authorization material; never echo them.
-        errors = [{"loc": list(e["loc"]), "type": e["type"]} for e in error.errors()]
+        errors = public_error_details(error.errors())
         return JSONResponse(
             {"code": "validation_error", "details": {"errors": errors}}, status_code=422
         )

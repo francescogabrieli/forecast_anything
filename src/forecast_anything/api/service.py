@@ -27,6 +27,7 @@ from ..sources.catalog import SourceCatalog
 from ..sources.profiling import inspect_source
 from ..watches import create_watch
 from ..worker import Worker
+from .errors import public_error_details
 
 
 def validate_run(runtime, graph, snapshots, as_of):
@@ -251,11 +252,28 @@ class Observatory:
                 raise DomainError("assumed_evaluation_forbidden", {})
             if run.state != "completed":
                 raise DomainError("run_lineage_mismatch", {})
-            source_ids = self.ledger.run_bindings(run.run_id)
+            # One actuals Snapshot has no per-forecast source discriminator.
+            # Derive target provenance from the stored graph, never from all
+            # source bindings (which can include unrelated/known-future inputs).
+            graph = self.ledger.get_graph(run.graph_id, run.graph_version)
+            configs = {node.node_id: parse_node_config(node) for node in graph.nodes}
+            bindings = self.ledger.run_bindings(run.run_id)
+            history_sources = set()
+            for node_id in run.results:
+                config = configs.get(node_id)
+                if isinstance(config, ForecastConfig):
+                    history = configs.get(config.history)
+                    if (
+                        not isinstance(history, SourceConfig)
+                        or history.source_id not in bindings
+                    ):
+                        raise DomainError("run_lineage_mismatch", {})
+                    history_sources.add(history.source_id)
+            if len(history_sources) != 1:
+                raise DomainError("ambiguous_actuals_bindings", {})
+            source_id = next(iter(history_sources))
             revisions = {
-                f"source_revision={r.revision}"
-                for name in source_ids
-                for r in self.catalog.history(name)
+                f"source_revision={r.revision}" for r in self.catalog.history(source_id)
             }
             if not revisions.intersection(actuals.assumptions):
                 raise DomainError("source_snapshot_lineage_mismatch", {})
@@ -278,5 +296,5 @@ class Observatory:
             state=job.state,
             attempt=job.attempt,
             result=current.get("result"),
-            error=current.get("error"),
+            error=public_error_details(current.get("error")),
         )
