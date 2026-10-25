@@ -1,8 +1,8 @@
 """Structural and typed compilation; no providers or numerical operators execute here.
 
 Relations are declared per input in ``config.relation_type``. Operator-specific
-values and semantic role bindings belong to ``parameters``; apply receives input
-values keyed by upstream node ID. Calendar checks establish declared compatibility,
+values and semantic role bindings belong to ``parameters``; runtime passes direct
+parameters and, when supplied, complete role-keyed input bindings to apply. Calendar checks establish declared compatibility,
 not actual timestamp or joint-sample alignment, which execution must also verify.
 """
 from __future__ import annotations
@@ -35,6 +35,7 @@ class ForecastConfig(DependentConfig):
     known_future: Identifier | None = None
     horizon: int = Field(gt=0, strict=True)
     frequency: Frequency
+    options: OpaqueDictionary = Field(default_factory=dict)
 
 
 class OperatorConfig(DependentConfig):
@@ -137,6 +138,9 @@ def compile_graph(spec: GraphSpec, capabilities: dict[str, Capabilities],
             for role, parent in bindings.items()
         ):
             _fail('invalid_binding', key)
+        if "bindings" in config.parameters and (len(set(bindings.values())) != len(bindings) or
+                         set(bindings.values()) != set(node.inputs)):
+            _fail('invalid_binding', key, reason='bindings must cover inputs exactly once')
         contract = operator_contracts.get(config.operator)
         if contract is None or contract.name != config.operator:
             _fail('unknown_operator', key, operator=config.operator)

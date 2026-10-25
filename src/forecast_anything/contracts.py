@@ -83,6 +83,7 @@ class ForecastRequest(Contract):
     horizon: Annotated[int, Field(gt=0)]
     frequency: Identifier
     known_future: Snapshot | None
+    options: OpaqueDictionary = Field(default_factory=dict)
 
 
 class ForecastResult(Contract):
