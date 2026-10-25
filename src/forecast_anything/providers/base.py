@@ -1,9 +1,16 @@
 """Provider protocol and shared validation for fixed UTC numerical calendars."""
-from datetime import timedelta, timezone
+
 import re
+from datetime import timedelta, timezone
 from typing import Protocol
 
-from ..contracts import Capabilities, DomainError, ForecastRequest, ForecastResult, Snapshot
+from ..contracts import (
+    Capabilities,
+    DomainError,
+    ForecastRequest,
+    ForecastResult,
+    Snapshot,
+)
 
 
 class ForecastProvider(Protocol):
@@ -15,7 +22,9 @@ def frequency_step(frequency: str) -> timedelta:
     if not re.fullmatch(r"[1-9][0-9]*[hd]", frequency):
         raise DomainError("unsupported_frequency", {"frequency": frequency})
     try:
-        return timedelta(**{"hours" if frequency[-1] == "h" else "days": int(frequency[:-1])})
+        return timedelta(
+            **{"hours" if frequency[-1] == "h" else "days": int(frequency[:-1])}
+        )
     except OverflowError as error:
         raise DomainError("unsupported_frequency", {"frequency": frequency}) from error
 
@@ -29,8 +38,12 @@ def observation_grid(snapshot: Snapshot, frequency: str):
     step = frequency_step(frequency)
     groups = {}
     for observation in snapshot.observations:
-        if observation.available_at.astimezone(timezone.utc) > snapshot.as_of.astimezone(timezone.utc):
-            raise DomainError("unavailable_observation", {"series_id": observation.series_id})
+        if observation.available_at.astimezone(
+            timezone.utc
+        ) > snapshot.as_of.astimezone(timezone.utc):
+            raise DomainError(
+                "unavailable_observation", {"series_id": observation.series_id}
+            )
         groups.setdefault(observation.series_id, []).append(observation)
     if not groups:
         raise DomainError("empty_history", {})
@@ -38,7 +51,7 @@ def observation_grid(snapshot: Snapshot, frequency: str):
     for series_id, observations in groups.items():
         observations.sort(key=lambda o: o.event_time.astimezone(timezone.utc))
         timestamps = tuple(o.event_time.astimezone(timezone.utc) for o in observations)
-        if any(b-a != step for a, b in zip(timestamps, timestamps[1:])):
+        if any(b - a != step for a, b in zip(timestamps, timestamps[1:])):
             raise DomainError("irregular_calendar", {"series_id": series_id})
         if len({o.unit for o in observations}) != 1:
             raise DomainError("incompatible_units", {"series_id": series_id})

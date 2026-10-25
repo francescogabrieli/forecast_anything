@@ -1,21 +1,44 @@
-from concurrent.futures import ThreadPoolExecutor
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from forecast_anything.contracts import DomainError, EventRecord, GraphSpec, Node, RunRecord, Snapshot
+from forecast_anything.contracts import (
+    DomainError,
+    EventRecord,
+    GraphSpec,
+    Node,
+    RunRecord,
+    Snapshot,
+)
 from forecast_anything.store import Ledger
 
 
 def run_record(run_id="r"):
-    return RunRecord(run_id=run_id, graph_id="g", graph_version=1,
-        as_of="2026-10-24T12:00:00Z", snapshot_ids=(), requested_provider={},
-        actual_provider={}, state="succeeded", results={}, evidence_ids=(),
-        scenario_id=None, parent_run_id=None)
+    return RunRecord(
+        run_id=run_id,
+        graph_id="g",
+        graph_version=1,
+        as_of="2026-10-24T12:00:00Z",
+        snapshot_ids=(),
+        requested_provider={},
+        actual_provider={},
+        state="succeeded",
+        results={},
+        evidence_ids=(),
+        scenario_id=None,
+        parent_run_id=None,
+    )
 
 
 def event(run_id="r", event_id="e"):
-    return EventRecord(cursor=999, event_id=event_id, kind="issued", run_id=run_id, payload={"ok": True})
+    return EventRecord(
+        cursor=999,
+        event_id=event_id,
+        kind="issued",
+        run_id=run_id,
+        payload={"ok": True},
+    )
 
 
 def test_graph_revision_is_immutable(tmp_path):
@@ -23,8 +46,13 @@ def test_graph_revision_is_immutable(tmp_path):
     graph = GraphSpec(graph_id="g", version=1, nodes=())
     assert ledger.put_graph(graph) == ("g", 1)
     assert ledger.get_graph("g", 1) == graph
-    changed = GraphSpec(graph_id="g", version=1, nodes=(
-        Node(node_id="source", kind="source", inputs=(), config={"source_id": "s"}),))
+    changed = GraphSpec(
+        graph_id="g",
+        version=1,
+        nodes=(
+            Node(node_id="source", kind="source", inputs=(), config={"source_id": "s"}),
+        ),
+    )
     with pytest.raises(DomainError):
         ledger.put_graph(changed)
     assert ledger.put_graph(graph) == ("g", 1)
@@ -32,7 +60,9 @@ def test_graph_revision_is_immutable(tmp_path):
 
 def test_snapshot_is_immutable(tmp_path):
     ledger = Ledger(tmp_path / "state.db")
-    snapshot = Snapshot(snapshot_id="s", as_of="2026-10-24T12:00:00Z", observations=(), assumptions=())
+    snapshot = Snapshot(
+        snapshot_id="s", as_of="2026-10-24T12:00:00Z", observations=(), assumptions=()
+    )
     assert ledger.put_snapshot(snapshot) == "s"
     assert ledger.put_snapshot(snapshot) == "s"
     with pytest.raises(DomainError):
@@ -44,7 +74,9 @@ def test_no_partial_commit(tmp_path):
     path = tmp_path / "state.db"
     ledger = Ledger(path)
     with sqlite3.connect(path) as connection:
-        connection.execute("CREATE TRIGGER fail_outbox BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'injected'); END")
+        connection.execute(
+            "CREATE TRIGGER fail_outbox BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'injected'); END"
+        )
     with pytest.raises((sqlite3.DatabaseError, DomainError)):
         ledger.append_run(run_record(), (event(),), "key")
     assert ledger.get_run_by_key("key") is None
@@ -61,12 +93,19 @@ def test_retry_returns_original(tmp_path):
     original = run_record()
     assert ledger.get_run_by_key("key") is None
     assert ledger.append_run(original, (event(),), "key") == original
-    assert ledger.append_run(original, (event().model_copy(update={"cursor": -1}),), "key") == original
+    assert (
+        ledger.append_run(original, (event().model_copy(update={"cursor": -1}),), "key")
+        == original
+    )
     assert ledger.get_run_by_key("key") == original
     with pytest.raises(DomainError):
-        ledger.append_run(original.model_copy(update={"state": "failed"}), (event(),), "key")
+        ledger.append_run(
+            original.model_copy(update={"state": "failed"}), (event(),), "key"
+        )
     with pytest.raises(DomainError):
-        ledger.append_run(original, (event().model_copy(update={"payload": {}}),), "key")
+        ledger.append_run(
+            original, (event().model_copy(update={"payload": {}}),), "key"
+        )
     with pytest.raises(DomainError):
         ledger.append_run(original.model_copy(update={"state": "failed"}), (), "other")
     assert len(ledger.events_after(0)) == 1
@@ -91,8 +130,12 @@ def test_restart_and_cursor(tmp_path):
 def test_concurrent_writers_and_retries(tmp_path):
     path = tmp_path / "state.db"
     Ledger(path)
+
     def append(index):
-        return Ledger(path).append_run(run_record(str(index)), (event(str(index), str(index)),), str(index))
+        return Ledger(path).append_run(
+            run_record(str(index)), (event(str(index), str(index)),), str(index)
+        )
+
     with ThreadPoolExecutor(max_workers=8) as pool:
         records = list(pool.map(append, list(range(12)) * 2))
     assert len(records) == 24

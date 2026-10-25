@@ -1,10 +1,21 @@
 """Version-one wire contracts shared by graph, providers, and execution."""
+
 from __future__ import annotations
 
 from math import isfinite
 from typing import Annotated, Any, Literal
 
-from pydantic import AfterValidator, BeforeValidator, AwareDatetime, BaseModel, ConfigDict, Field, FiniteFloat, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    AwareDatetime,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    FiniteFloat,
+    StringConstraints,
+    model_validator,
+)
 
 Identifier = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 Matrix = tuple[tuple[FiniteFloat, ...], ...]
@@ -12,14 +23,22 @@ Matrix = tuple[tuple[FiniteFloat, ...], ...]
 
 def canonical_representation(value: Any) -> Any:
     """Accept historical result-field aliases at the registration boundary."""
-    return {"quantiles": "marginal_quantiles", "paths": "joint_paths"}.get(value, value) if isinstance(value, str) else value
+    return (
+        {"quantiles": "marginal_quantiles", "paths": "joint_paths"}.get(value, value)
+        if isinstance(value, str)
+        else value
+    )
 
 
 Representation = Annotated[
     Literal["point", "marginal_quantiles", "joint_paths"],
     BeforeValidator(canonical_representation),
 ]
-REPRESENTATION_FIELDS = {"point": "point", "marginal_quantiles": "quantiles", "joint_paths": "paths"}
+REPRESENTATION_FIELDS = {
+    "point": "point",
+    "marginal_quantiles": "quantiles",
+    "joint_paths": "paths",
+}
 
 
 def _require_finite_nested(value: Any) -> Any:
@@ -117,7 +136,9 @@ class ForecastResult(Contract):
             raise ValueError("units must have one entry per series")
 
         def check_matrix(matrix: Matrix) -> None:
-            if len(matrix) != series_count or any(len(row) != horizon for row in matrix):
+            if len(matrix) != series_count or any(
+                len(row) != horizon for row in matrix
+            ):
                 raise ValueError("representation must have shape series × horizon")
 
         if self.point is not None:

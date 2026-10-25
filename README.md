@@ -36,6 +36,20 @@ Repeating the same request returns the same stored run. The initial CLI accepts 
 
 See [core implementation and decisions](docs/implementation/core.md) for contracts, verification and limits.
 
+## Local quality checks
+
+CI runs these checks on Python 3.12 and 3.14 for pull requests to `main`, pushes to `main`, and manual runs. With uv installed, run the same checks locally:
+
+```sh
+uv sync --locked --extra dev
+uv run --locked ruff check src tests
+uv run --locked ruff format --check src tests
+uv run --locked pytest -q
+uv build
+```
+
+Ruff checks core errors and import ordering (`E4`, `E7`, `E9`, `F`, `I`) and formats Python. The build produces a wheel and source distribution in `dist/`.
+
 ## Start here
 
 - [Approved design](docs/superpowers/specs/2026-10-24-forecast-anything-design.md)

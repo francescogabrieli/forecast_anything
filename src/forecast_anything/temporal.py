@@ -1,9 +1,10 @@
 """Canonical snapshots containing only observations available at an instant."""
+
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from hashlib import sha256
-import json
 
 from forecast_anything.contracts import DomainError, Observation, Snapshot
 
@@ -26,10 +27,12 @@ def freeze(
     visible = []
     for observation in observations:
         normalized = Observation(
-            **{**observation.model_dump(),
-               "event_time": observation.event_time.astimezone(timezone.utc),
-               "available_at": observation.available_at.astimezone(timezone.utc),
-               "value": 0.0 if observation.value == 0 else observation.value}
+            **{
+                **observation.model_dump(),
+                "event_time": observation.event_time.astimezone(timezone.utc),
+                "available_at": observation.available_at.astimezone(timezone.utc),
+                "value": 0.0 if observation.value == 0 else observation.value,
+            }
         )
         if normalized.available_at <= as_of:
             visible.append(normalized)
@@ -40,11 +43,14 @@ def freeze(
         revision_key = (*key, observation.revision)
         previous = revisions.get(revision_key)
         if previous is not None and previous != observation:
-            raise DomainError("conflicting_revision", {
-                "series_id": observation.series_id,
-                "event_time": observation.event_time.isoformat(),
-                "revision": observation.revision,
-            })
+            raise DomainError(
+                "conflicting_revision",
+                {
+                    "series_id": observation.series_id,
+                    "event_time": observation.event_time.isoformat(),
+                    "revision": observation.revision,
+                },
+            )
         revisions[revision_key] = observation
     # Group by availability so even superseded ambiguous ties are detected.
     availability: dict[tuple[str, datetime, datetime], Observation] = {}
@@ -53,11 +59,14 @@ def freeze(
         availability_key = (*key, observation.available_at)
         previous = availability.get(availability_key)
         if previous is not None and previous != observation:
-            raise DomainError("conflicting_availability", {
-                "series_id": observation.series_id,
-                "event_time": observation.event_time.isoformat(),
-                "available_at": observation.available_at.isoformat(),
-            })
+            raise DomainError(
+                "conflicting_availability",
+                {
+                    "series_id": observation.series_id,
+                    "event_time": observation.event_time.isoformat(),
+                    "available_at": observation.available_at.isoformat(),
+                },
+            )
         availability[availability_key] = observation
         selected = latest.get(key)
         if selected is None or observation.available_at > selected.available_at:
@@ -68,7 +77,13 @@ def freeze(
         "observations": [o.model_dump(mode="json") for o in selected_observations],
         "assumptions": list(assumptions),
     }
-    canonical = json.dumps(content, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+    canonical = json.dumps(
+        content,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
     return Snapshot(
         snapshot_id=sha256(canonical.encode("utf-8")).hexdigest(),
         as_of=as_of,
