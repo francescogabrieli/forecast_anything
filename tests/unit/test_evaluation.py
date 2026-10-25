@@ -379,7 +379,7 @@ def test_v1_ledger_migrates_without_changing_runs(tmp_path):
     ledger.append_evaluation(record)
     assert ledger.get_run("issued") == run()
     with sqlite3.connect(path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
 
 
 def test_frozen_split_rejects_extended_or_revised_calendar():

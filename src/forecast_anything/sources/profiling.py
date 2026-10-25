@@ -21,6 +21,7 @@ HTTP records_path is a separate optional dotted path to an array of records.
 from __future__ import annotations
 
 import math
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -155,6 +156,11 @@ def _profile(spec: SourceSpec, rows) -> SourceProfile:
                 valid = True
             elif semantic == "calendar":
                 valid = constant == "gregorian"
+            elif semantic == "frequency":
+                valid = isinstance(constant, str) and (
+                    constant in {"D", "H"}
+                    or re.fullmatch(r"[1-9][0-9]*[hd]", constant) is not None
+                )
             else:
                 valid = (
                     isinstance(constant, str)
@@ -163,10 +169,20 @@ def _profile(spec: SourceSpec, rows) -> SourceProfile:
                 )
             if not valid:
                 raise ValueError
+            proposed[semantic] = {"constant": constant}
         except (ValueError, TypeError, ZoneInfoNotFoundError):
             unresolved.append(semantic)
+    # An operational threshold is a declaration, never a statistic of samples.
+    limit = spec.mapping.get("operational_limit")
+    if isinstance(limit, dict) and set(limit) == {"constant"}:
+        value = limit["constant"]
+        if type(value) in (int, float) and math.isfinite(value):
+            proposed["operational_limit"] = limit
+        else:
+            unresolved.append("operational_limit")
     return SourceProfile(
         source_id=spec.source_id,
+        source_revision=source_revision(spec),
         fields=fields,
         proposed_mapping=proposed,
         unresolved=tuple(unresolved),

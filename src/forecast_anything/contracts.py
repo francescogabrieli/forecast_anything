@@ -107,6 +107,7 @@ class SourceProfile(Contract):
     """Sanitized agent-facing view, bounded independently of source size."""
 
     source_id: Identifier
+    source_revision: Identifier | None = None
     fields: dict[str, SourceField]
     proposed_mapping: dict[str, JsonValue]
     unresolved: tuple[str, ...]
@@ -262,6 +263,101 @@ def _immutable(value):
     return value
 
 
+class DiscoveryBudget(Contract):
+    max_candidates: Annotated[int, Field(ge=0, strict=True)] = 10
+    max_tool_calls: Annotated[int, Field(ge=0, strict=True)] = 20
+
+
+class VerificationProtocol(Contract):
+    """Frozen before final evaluation; no post-selection correction is assumed."""
+
+    criterion: Literal["mae", "brier"] = "mae"
+    target_node_id: Identifier = "question"
+    reference_node_id: Identifier = "reference"
+    selection_method: Literal["prespecified_holdout", "exploratory", "corrected"] = (
+        "prespecified_holdout"
+    )
+
+
+class Candidate(Contract):
+    candidate_id: Identifier
+    template_id: Identifier
+    source_ids: tuple[Identifier, ...]
+    graph: GraphSpec
+    reason: Identifier
+    protocol_id: Identifier
+    epoch_id: Identifier
+    protocol: VerificationProtocol = Field(default_factory=VerificationProtocol)
+    source_profiles: tuple[SourceProfile, ...] = ()
+    executable: bool = False
+    unresolved: tuple[str, ...] = ()
+
+
+class DiscoveryEpoch(Contract):
+    epoch_id: Identifier
+    source_snapshot_ids: tuple[Identifier, ...]
+    explored_candidate_ids: tuple[Identifier, ...]
+    final_origin_ids: tuple[Identifier, ...]
+    final_candidate_id: Identifier | None = None
+    tuning_origin_ids: tuple[Identifier, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_partitions(self) -> DiscoveryEpoch:
+        for values in (
+            self.source_snapshot_ids,
+            self.explored_candidate_ids,
+            self.final_origin_ids,
+            self.tuning_origin_ids,
+        ):
+            if len(set(values)) != len(values):
+                raise ValueError("discovery identities must be unique")
+        if set(self.final_origin_ids) & set(self.tuning_origin_ids):
+            raise ValueError("final origins cannot be used for tuning")
+        if self.final_candidate_id is not None and (
+            self.final_candidate_id not in self.explored_candidate_ids
+        ):
+            raise ValueError("final block owner must be a declared candidate")
+        return self
+
+
+class EligibilityDecision(Contract):
+    action: Literal["activate", "provisional", "reject"]
+    reason_codes: tuple[Identifier, ...]
+    candidate_id: Identifier | None = None
+    protocol_id: Identifier | None = None
+    epoch_id: Identifier | None = None
+    evaluation_ids: tuple[Identifier, ...] = ()
+    policy_version: Identifier = "discovery-v1"
+
+
+class EvaluationContext(Contract):
+    """Trusted evaluator attestation, never accepted as an agent proposal.
+
+    Origin IDs identify the frozen target window, independently of model/config.
+    The caller establishes temporal/semantic validity using Plan 02 evaluation.
+    Defaults fail closed when that verification has not been performed.
+    """
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
+
+    candidate_id: Identifier
+    protocol_id: Identifier
+    epoch_id: Identifier
+    origin_id: Identifier
+    partition: Literal["exploration", "selection", "final"]
+    source_snapshot_ids: tuple[Identifier, ...]
+    target_start: AwareDatetime
+    target_end: AwareDatetime
+    temporal_valid: bool = False
+    semantic_valid: bool = False
+
+    @model_validator(mode="after")
+    def validate_window(self) -> EvaluationContext:
+        if self.target_end < self.target_start:
+            raise ValueError("target window must be ordered")
+        return self
+
+
 class EvaluationRecord(Contract):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
 
@@ -272,6 +368,7 @@ class EvaluationRecord(Contract):
     metrics: Annotated[OpaqueDictionary, AfterValidator(_immutable)]
     origin_count: Annotated[int, Field(ge=0, strict=True)]
     assumptions: tuple[str, ...]
+    discovery: EvaluationContext | None = None
 
 
 class _ErrorPayload(Contract):
