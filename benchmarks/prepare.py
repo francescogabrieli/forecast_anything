@@ -193,6 +193,8 @@ def _energy(raw, config, calendar):
                 bucket = event.replace(minute=0, second=0, microsecond=0)
                 if not calendar[0] <= bucket <= calendar[-1]:
                     continue
+                if event.second != 0 or event.microsecond != 0:
+                    raise ValueError("misaligned meter minute")
                 if event in readings[bucket]:
                     raise ValueError("duplicate meter minute")
                 text = row["Global_active_power"].strip()
@@ -207,6 +209,7 @@ def _energy(raw, config, calendar):
     for bucket in calendar:
         samples = readings[bucket]
         valid = [v for v in samples.values() if v is not None]
+        # Aligned, unique timestamps within this hour are its exact minute slots.
         complete = len(samples) == len(valid) == 60
         values.append(sum(valid) / 60 if complete else None)
         quality.append(

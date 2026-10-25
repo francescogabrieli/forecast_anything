@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from forecast_anything.connectors.csv import load_csv
-from forecast_anything.contracts import GraphSpec, Node
+from forecast_anything.contracts import DomainError, GraphSpec, Node
 from forecast_anything.evaluation.records import evaluate_run
 from forecast_anything.evaluation.splits import build_splits
 from forecast_anything.providers.baseline import SeasonalNaiveProvider
@@ -129,9 +129,11 @@ def _write_origins(path, rows):
 
 def run_suite(manifest: Path, output: Path, providers: tuple[str, ...]) -> Path:
     manifest, output = Path(manifest), Path(output)
+    if "baseline" not in providers:
+        raise DomainError("baseline_required", {"providers": list(providers)})
     specification = load_manifest(manifest)
-    if not providers or len(set(providers)) != len(providers):
-        raise ValueError("providers must be nonempty and unique")
+    if len(set(providers)) != len(providers):
+        raise ValueError("providers must be unique")
     if set(providers) - {"baseline", "timestral"}:
         raise ValueError("unsupported benchmark provider")
     output.mkdir(parents=True, exist_ok=True)
@@ -344,7 +346,11 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--providers", nargs="+", default=["baseline", "timestral"])
     args = parser.parse_args()
-    print(run_suite(args.manifest, args.output, tuple(args.providers)))
+    try:
+        print(run_suite(args.manifest, args.output, tuple(args.providers)))
+    except DomainError as error:
+        print(error.model_dump_json(), file=sys.stderr)
+        raise SystemExit(2) from error
 
 
 if __name__ == "__main__":

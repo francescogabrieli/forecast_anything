@@ -252,3 +252,64 @@ def test_replay_preserves_issued_residuals_and_origin_assignments(tmp_path):
     }
     run_suite(MANIFEST, tmp_path, ("baseline",))
     assert all((tmp_path / name).read_bytes() == value for name, value in first.items())
+
+
+@pytest.mark.parametrize("providers", [(), ("timestral",)])
+def test_missing_baseline_is_rejected_before_preparation(tmp_path, providers):
+    from forecast_anything.contracts import DomainError
+
+    output = tmp_path / "uncreated"
+    with pytest.raises(DomainError) as raised:
+        run_suite(MANIFEST, output, providers)
+    assert raised.value.model_dump() == {
+        "code": "baseline_required",
+        "details": {"providers": list(providers)},
+    }
+    assert not output.exists()
+
+
+def test_cli_reports_structured_error_without_baseline(tmp_path):
+    import subprocess
+
+    output = tmp_path / "uncreated"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "benchmarks.run",
+            "--manifest",
+            str(MANIFEST),
+            "--output",
+            str(output),
+            "--providers",
+            "timestral",
+        ],
+        cwd=Path(__file__).resolve().parents[2],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert completed.returncode == 2
+    assert completed.stdout == ""
+    assert json.loads(completed.stderr) == {
+        "code": "baseline_required",
+        "details": {"providers": ["timestral"]},
+    }
+    assert not output.exists()
+
+
+def test_energy_rejects_sixty_timestamps_with_a_shifted_minute_slot(tmp_path):
+    source = tmp_path / "energy.csv"
+    source.write_text(
+        MANIFEST.with_name("energy.csv")
+        .read_text()
+        .replace("01/01/2020;00:00:00;1", "01/01/2020;00:00:30;1", 1)
+    )
+    specification = json.loads(MANIFEST.read_text())
+    config = specification["datasets"]["energy"]
+    config["source"]["path"] = str(source)
+    specification["datasets"] = {"energy": config}
+    manifest = tmp_path / "manifest.yaml"
+    manifest.write_text(json.dumps(specification))
+    with pytest.raises(ValueError, match="misaligned meter minute"):
+        prepare_suite(manifest, tmp_path / "data")
