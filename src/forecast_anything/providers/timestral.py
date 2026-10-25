@@ -1,0 +1,169 @@
+"""Optional CPU Timestral adapter; importing this module never imports Torch.
+
+Weights have a Modified MIT license with a restriction above USD 20 million
+in global consolidated monthly revenue. Review applicability before loading.
+"""
+
+import json
+from datetime import timezone
+from importlib.metadata import PackageNotFoundError, distribution
+from threading import Lock
+
+import numpy as np
+
+from ..contracts import Capabilities, DomainError, ForecastRequest, ForecastResult
+from .base import frequency_step, observation_grid
+
+
+class TimestralProvider:
+    """One lazily loaded checkpoint per provider/worker, with immutable provenance."""
+
+    def __init__(self, checkpoint: str, revision: str, code_revision: str):
+        if not all(
+            isinstance(v, str) and v.strip()
+            for v in (checkpoint, revision, code_revision)
+        ):
+            raise DomainError("invalid_model_provenance", {})
+        self._checkpoint = checkpoint
+        self._revision = revision
+        self._code_revision = code_revision
+        self._forecaster = None
+        self._load_lock = Lock()
+
+    @property
+    def checkpoint(self) -> str:
+        return self._checkpoint
+
+    @property
+    def revision(self) -> str:
+        return self._revision
+
+    @property
+    def code_revision(self) -> str:
+        return self._code_revision
+
+    def capabilities(self) -> Capabilities:
+        return Capabilities(
+            provider_id="timestral",
+            provider_revision=f"{self.checkpoint}@{self.revision};code={self.code_revision}",
+            representations=("point", "marginal_quantiles"),
+            supports_known_future=True,
+        )
+
+    def _load(self):
+        with self._load_lock:
+            if self._forecaster is None:
+                try:
+                    provenance = json.loads(
+                        distribution("timestral").read_text("direct_url.json") or "{}"
+                    )
+                except PackageNotFoundError as error:
+                    raise DomainError(
+                        "missing_optional_dependency", {"extra": "timestral"}
+                    ) from error
+                if (
+                    provenance.get("vcs_info", {}).get("commit_id")
+                    != self.code_revision
+                ):
+                    raise DomainError(
+                        "model_code_revision_mismatch", {"expected": self.code_revision}
+                    )
+                from timestral import TimestralForecaster
+
+                self._forecaster = TimestralForecaster.from_pretrained(
+                    self.checkpoint, revision=self.revision, device="cpu"
+                )
+        return self._forecaster
+
+    def forecast(self, request: ForecastRequest) -> ForecastResult:
+        request = ForecastRequest.model_validate(request.model_dump())
+        if request.options:
+            raise DomainError(
+                "unsupported_options", {"options": sorted(request.options)}
+            )
+        origin = request.snapshot.as_of.astimezone(timezone.utc)
+        # Check before grid validation or any optional import/download.
+        if any(
+            o.event_time.astimezone(timezone.utc) > origin
+            for o in request.snapshot.observations
+        ):
+            raise DomainError("future_history", {})
+        groups, calendar = observation_grid(request.snapshot, request.frequency)
+        series_ids = tuple(sorted(groups))
+        context = np.array(
+            [
+                [
+                    [o.value if o.value is not None else np.nan for o in groups[s]]
+                    for s in series_ids
+                ]
+            ],
+            dtype=np.float32,
+        )
+        if not np.isfinite(context).any(axis=-1).all():
+            raise DomainError("missing_observation", {})
+        step = frequency_step(request.frequency)
+        future = tuple(calendar[-1] + step * (i + 1) for i in range(request.horizon))
+        known = None
+        assumptions = request.snapshot.assumptions
+        if request.known_future is not None:
+            snapshot = request.known_future
+            if any(
+                o.available_at.astimezone(timezone.utc) > origin
+                for o in snapshot.observations
+            ):
+                raise DomainError("unavailable_observation", {})
+            cov_groups, cov_calendar = observation_grid(snapshot, request.frequency)
+            full_calendar = (*calendar, *future)
+            if cov_calendar not in (future, full_calendar):
+                raise DomainError("incompatible_calendar", {"input": "known_future"})
+            known = np.full(
+                (1, len(cov_groups), len(full_calendar)), np.nan, dtype=np.float32
+            )
+            offset = len(calendar) if cov_calendar == future else 0
+            for i, s in enumerate(sorted(cov_groups)):
+                known[0, i, offset:] = [
+                    o.value if o.value is not None else np.nan for o in cov_groups[s]
+                ]
+            assumptions = (*assumptions, *snapshot.assumptions)
+        output = self._load().forecast(
+            context,
+            prediction_length=request.horizon,
+            observation_mask=np.isfinite(context),
+            known_covariates=known,
+        )
+        # Official outputs are CPU tensors; fixtures may supply NumPy arrays.
+        values = output.quantiles
+        if hasattr(values, "detach"):
+            values = values.detach().cpu().numpy()
+        values = np.asarray(values)
+        levels = tuple(float(v) for v in output.quantile_levels)
+        if (
+            values.shape != (1, len(series_ids), request.horizon, len(levels))
+            or not np.isfinite(values).all()
+            or 0.5 not in levels
+            or len(set(levels)) != len(levels)
+            or any(not 0 < q < 1 for q in levels)
+            or any(b <= a for a, b in zip(levels, levels[1:]))
+            or (np.diff(values, axis=-1) < 0).any()
+        ):
+            raise DomainError("invalid_model_output", {})
+        quantiles = {
+            str(q): tuple(tuple(float(v) for v in row) for row in values[0, :, :, i])
+            for i, q in enumerate(levels)
+        }
+        caps = self.capabilities()
+        return ForecastResult(
+            provider_id=caps.provider_id,
+            provider_revision=caps.provider_revision,
+            series_ids=series_ids,
+            timestamps=future,
+            units=tuple(groups[s][0].unit for s in series_ids),
+            point=quantiles["0.5"],
+            quantiles=quantiles,
+            paths=None,
+            sample_group_id=None,
+            assumptions=(
+                *assumptions,
+                f"Timestral checkpoint={self.checkpoint}@{self.revision}; code={self.code_revision}; CPU fp32; official defaults; missing values remain NaN; marginal quantiles only",
+            ),
+        )
