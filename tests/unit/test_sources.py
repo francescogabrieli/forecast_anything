@@ -463,3 +463,56 @@ def test_catalog_database_rejects_history_rewrite(tmp_path):
         with pytest.raises(sqlite3.IntegrityError):
             connection.execute("UPDATE source_revisions SET assumptions_json = '[]'")
     assert len(catalog.history("s")) == 1
+
+
+@pytest.mark.parametrize("kind", ["csv", "http_json"])
+@pytest.mark.parametrize("artifact", ["profile", "snapshot"])
+def test_sensitive_column_credentials_cannot_reenter_through_mapping_constants(
+    tmp_path, monkeypatch, kind, artifact
+):
+    from forecast_anything.connectors import http_json
+
+    credential = "opaque-private-value"
+    mapping = {**MAPPING, "series_id": {"constant": credential}}
+    if kind == "csv":
+        source = csv_source(
+            tmp_path,
+            "date,published,edition,amount,api_key\n"
+            "2026-10-23,2026-10-23,a,1,opaque-private-value\n",
+            mapping,
+        )
+    else:
+
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+            def read(self, *args):
+                return b'[{"date":"2026-10-23","published":"2026-10-23","edition":"a","amount":1,"api_key":"opaque-private-value"}]'
+
+        class Opener:
+            def open(self, *args, **kwargs):
+                return Response()
+
+        monkeypatch.setattr(http_json, "build_opener", lambda *args: Opener())
+        source = SourceSpec(
+            source_id="remote",
+            kind="http_json",
+            location="https://example.test/data",
+            secret_ref=None,
+            mapping=mapping,
+            refresh_seconds=60,
+        )
+
+    # Both entry points must reject before they can return a credential-bearing
+    # artifact; their error payloads must also keep the credential private.
+    with pytest.raises(DomainError) as error:
+        if artifact == "profile":
+            inspect_source(source)
+        else:
+            ingest_source(source, AS_OF)
+    assert error.value.code == "invalid_source_mapping"
+    assert credential not in error.value.model_dump_json()

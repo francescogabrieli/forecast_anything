@@ -56,8 +56,26 @@ def sanitize_text(value: str, secrets: tuple[str, ...] = ()) -> str:
     return value
 
 
+def _reject_mapping_credentials(mapping: Any, secrets: tuple[str, ...]) -> None:
+    """Check literals before discarding the adapter's credential context."""
+    if isinstance(mapping, dict):
+        for key, value in mapping.items():
+            _reject_mapping_credentials(key, secrets)
+            _reject_mapping_credentials(value, secrets)
+    elif isinstance(mapping, (list, tuple)):
+        for value in mapping:
+            _reject_mapping_credentials(value, secrets)
+    elif isinstance(mapping, str) and any(
+        secret and secret in mapping for secret in secrets
+    ):
+        raise DomainError("invalid_source_mapping", {"reason": "credential_in_mapping"})
+
+
 def sanitize_rows(
-    rows: tuple[dict[str, Any], ...], secrets: tuple[str, ...] = ()
+    rows: tuple[dict[str, Any], ...],
+    secrets: tuple[str, ...] = (),
+    *,
+    mapping: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], ...]:
     secrets = (
         *secrets,
@@ -68,6 +86,7 @@ def sanitize_rows(
             if sensitive_key(key) and isinstance(value, str) and value
         ),
     )
+    _reject_mapping_credentials(mapping, secrets)
     return tuple(
         {
             key: sanitize_text(value, secrets) if isinstance(value, str) else value
@@ -167,10 +186,7 @@ def load_http_json(
     if any(secret in unquote(spec.location) for secret in secrets):
         raise DomainError("source_unavailable", {"reason": "credentials_in_url"})
     # No source-controlled credential may escape through mapping literals.
-    if any(
-        secret in json.dumps(spec.mapping, ensure_ascii=False) for secret in secrets
-    ):
-        raise DomainError("invalid_source_mapping", {"reason": "credential_in_mapping"})
+    _reject_mapping_credentials(spec.mapping, secrets)
     try:
         opener = build_opener(_OriginRedirect(origin, secrets))
         with opener.open(
@@ -211,4 +227,8 @@ def load_http_json(
         for value in row.values()
     ):
         raise DomainError("invalid_source_data", {"reason": "nonfinite_number"})
-    return sanitize_rows(tuple(data[:limit] if limit is not None else data), secrets)
+    return sanitize_rows(
+        tuple(data[:limit] if limit is not None else data),
+        secrets,
+        mapping=spec.mapping,
+    )

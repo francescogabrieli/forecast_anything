@@ -64,7 +64,9 @@ def _read(spec: SourceSpec, limit: int | None, resolver: SecretResolver | None):
         raise DomainError(
             "source_unavailable", {"reason": "csv_credentials_unsupported"}
         )
-    return sanitize_rows(load_csv_rows(Path(spec.location), limit=limit))
+    return sanitize_rows(
+        load_csv_rows(Path(spec.location), limit=limit), mapping=spec.mapping
+    )
 
 
 def _typed(value: Any) -> Any:
