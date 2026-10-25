@@ -126,7 +126,7 @@ Usare le segnalazioni e i ritorni degli utilizzatori per ordinare miglioramenti 
 
 ## Stato dell’esecuzione
 
-Il piano 01 (C1–C6) è implementato nel branch `feat/future-graph-core`, nella cartella canonica `Desktop/Projects/forecast_anything`, con un implementatore e una revisione indipendente per task. Il metodo subagent-driven e il branch nella cartella attuale sono stati scelti dall’utente il 25 ottobre 2026. La revisione complessiva e l’integrazione del branch precedono il piano successivo.
+Il piano 01 (C1–C6) è implementato nel branch `feat/future-graph-core`, nella cartella canonica `Desktop/Projects/forecast_anything`, con un implementatore e una revisione indipendente per task. Il metodo subagent-driven e il branch nella cartella attuale sono stati scelti dall’utente il 25 ottobre 2026. La revisione complessiva è completata; l’integrazione del branch precede il piano successivo.
 
 La CLI produce previsioni puntuali con baseline e conserva snapshot, grafi, emissioni ed eventi. [Stato del core e decisioni](implementation/core.md). I piani 02–04 restano da implementare; il prossimo task è M1, provider Timestral con verifica reale delle revisioni e prova di parità.
 

@@ -23,7 +23,7 @@ Branch: `feat/future-graph-core`. Base: `b7b6bed`. Integration pending.
 
 All six tasks used RED/GREEN tests and independent reviews. Review fixes covered nested nonfinite opaque values, provider/operator DST-fold result timestamps, and malformed CSV headers. Final review fixed capability/result-field vocabulary divergence. Current full-suite evidence: `uv run pytest -q` — 134 tests passed. Regression coverage exercises canonical names, legacy aliases, and joint-sample alignment failures.
 
-An installed wheel was imported from site-packages outside the source checkout. The actual CLI run/show/retry completed, returned seasonal_naive `[[20,30,20]]`, and persisted four events. The runtime imported without ML/LLM modules. Final verification is recorded below when branch review completes.
+An installed wheel was imported from site-packages outside the source checkout. The actual CLI run/show/retry completed, returned seasonal_naive `[[20,30,20]]`, and persisted four events. The runtime imported without ML/LLM modules. The wheel check preceded the final representation fix; the full suite and independent fix review cover that change.
 
 ## Representation capabilities
 
