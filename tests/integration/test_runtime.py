@@ -188,11 +188,13 @@ def test_provider_cannot_falsify_compiled_contract(tmp_path, field, value):
     assert ledger.events_after(0)[-1].kind == "run_failed"
 
 
+@pytest.mark.parametrize("representation", ["joint_paths", "paths"])
+@pytest.mark.parametrize("requirement", ["joint_paths", "paths"])
 @pytest.mark.parametrize("mismatch", ["group", "samples", "none"])
-def test_joint_paths_require_same_group_and_sample_count(tmp_path, mismatch):
+def test_joint_paths_require_same_group_and_sample_count(tmp_path, mismatch, representation, requirement):
     class Paths(SeasonalNaiveProvider):
         def capabilities(self):
-            return super().capabilities().model_copy(update={"representations": ("point", "paths")})
+            return super().capabilities().model_copy(update={"representations": ("point", representation)})
 
         def forecast(self, request):
             result = super().forecast(request.model_copy(update={"options": {"period": 2}}))
@@ -203,7 +205,7 @@ def test_joint_paths_require_same_group_and_sample_count(tmp_path, mismatch):
 
     class Combine:
         def contract(self):
-            return OperatorContract(name="combine", required_representation="paths", units_rule="same")
+            return OperatorContract(name="combine", required_representation=requirement, units_rule="same")
 
         def apply(self, inputs, config):
             left, right = inputs["left"], inputs["right"]
@@ -274,3 +276,35 @@ def test_provider_local_dst_fold_outputs_are_normalized_for_operator_calendar(tm
     assert run.results["scaled"].timestamps == expected
     assert run.results["scaled"].point == ((20, 40, 20),)
     assert ledger.get_run(run.run_id).results["scaled"].timestamps == expected
+
+
+@pytest.mark.parametrize("representation", ["marginal_quantiles", "quantiles"])
+def test_marginal_quantiles_run_without_claiming_joint_paths(tmp_path, representation):
+    class Quantiles(SeasonalNaiveProvider):
+        def capabilities(self):
+            return super().capabilities().model_copy(update={"representations": (representation,)})
+
+        def forecast(self, request):
+            result = super().forecast(request)
+            return result.model_copy(update={"point": None, "quantiles": {"0.5": result.point}})
+
+    ledger = Ledger(tmp_path/"ledger.sqlite")
+    runtime = Runtime(ledger, {"seasonal_naive": Quantiles(2)}, {}, lambda: T)
+    run = runtime.run(graph(), {"data": snapshot()}, T, "quantiles")
+    assert run.state == "completed"
+    assert run.results["prediction"].quantiles == {"0.5": ((10, 20, 10),)}
+    assert run.results["prediction"].paths is None
+
+    class NeedsPaths:
+        def contract(self):
+            return OperatorContract(name="paths", required_representation="joint_paths", units_rule="same")
+
+        def apply(self, inputs, config):
+            raise AssertionError("quantiles must not satisfy joint paths")
+
+    runtime.operators["paths"] = NeedsPaths()
+    node = Node(node_id="joint", kind="transform", inputs=("prediction",), config={
+        "operator": "paths", "relation_type": {"prediction": "statistical"}})
+    with pytest.raises(DomainError, match="unsupported_representation"):
+        runtime.run(graph(extra=(node,)), {"data": snapshot()}, T, "joint")
+    assert ledger.get_run_by_key("joint") is None

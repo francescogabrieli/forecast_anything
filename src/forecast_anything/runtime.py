@@ -7,7 +7,7 @@ from hashlib import sha256
 import json
 from typing import Callable
 
-from .contracts import (DomainError, EventRecord, ForecastRequest, ForecastResult,
+from .contracts import (Capabilities, OperatorContract, REPRESENTATION_FIELDS, DomainError, EventRecord, ForecastRequest, ForecastResult,
                         GraphSpec, RunRecord, Snapshot)
 from .graph import ForecastConfig, OperatorConfig, SourceConfig, compile_graph, parse_node_config
 from .providers.base import ForecastProvider, frequency_step, observation_grid
@@ -37,7 +37,7 @@ def _result(value) -> ForecastResult:
 
 
 def _require_representations(result, representations):
-    if any(rep not in {"point", "quantiles", "paths"} or not getattr(result, rep)
+    if any(rep not in REPRESENTATION_FIELDS or not getattr(result, REPRESENTATION_FIELDS[rep])
            for rep in representations):
         raise DomainError("unsupported_representation", {"required": list(representations)})
 
@@ -65,8 +65,8 @@ class Runtime:
                 raise DomainError("idempotency_conflict", {"key": key})
             return previous
 
-        capabilities = {name: provider.capabilities() for name, provider in self.providers.items()}
-        contracts = {name: operator.contract() for name, operator in self.operators.items()}
+        capabilities = {name: Capabilities.model_validate(provider.capabilities().model_dump()) for name, provider in self.providers.items()}
+        contracts = {name: OperatorContract.model_validate(operator.contract().model_dump()) for name, operator in self.operators.items()}
         compiled = compile_graph(spec, capabilities, contracts)
         nodes = {node.node_id: node for node in spec.nodes}
         configs = {key: parse_node_config(node) for key, node in nodes.items()}
@@ -150,7 +150,7 @@ class Runtime:
                         _require_representations(value, (contract.required_representation,))
                     if forecasts and any(value.timestamps != forecasts[0].timestamps for value in forecasts):
                         raise DomainError("incompatible_calendar", {"node_id": node_id})
-                    if contract.required_representation == "paths" and forecasts and any(
+                    if contract.required_representation == "joint_paths" and forecasts and any(
                         value.sample_group_id != forecasts[0].sample_group_id or len(value.paths) != len(forecasts[0].paths)
                         for value in forecasts
                     ):

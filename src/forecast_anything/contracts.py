@@ -4,10 +4,22 @@ from __future__ import annotations
 from math import isfinite
 from typing import Annotated, Any, Literal
 
-from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, Field, FiniteFloat, StringConstraints, model_validator
+from pydantic import AfterValidator, BeforeValidator, AwareDatetime, BaseModel, ConfigDict, Field, FiniteFloat, StringConstraints, model_validator
 
 Identifier = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 Matrix = tuple[tuple[FiniteFloat, ...], ...]
+
+
+def canonical_representation(value: Any) -> Any:
+    """Accept historical result-field aliases at the registration boundary."""
+    return {"quantiles": "marginal_quantiles", "paths": "joint_paths"}.get(value, value) if isinstance(value, str) else value
+
+
+Representation = Annotated[
+    Literal["point", "marginal_quantiles", "joint_paths"],
+    BeforeValidator(canonical_representation),
+]
+REPRESENTATION_FIELDS = {"point": "point", "marginal_quantiles": "quantiles", "joint_paths": "paths"}
 
 
 def _require_finite_nested(value: Any) -> Any:
@@ -68,13 +80,13 @@ class CompiledGraph(Contract):
 class Capabilities(Contract):
     provider_id: Identifier
     provider_revision: Identifier
-    representations: tuple[Identifier, ...]
+    representations: tuple[Representation, ...]
     supports_known_future: bool
 
 
 class OperatorContract(Contract):
     name: Identifier
-    required_representation: Identifier
+    required_representation: Representation
     units_rule: Identifier
 
 

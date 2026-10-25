@@ -70,6 +70,11 @@ def compile_graph(spec: GraphSpec, capabilities: dict[str, Capabilities],
     ``probability``. Transforms guarantee
     only their required representation; events produce point probabilities.
     """
+    # Revalidate registrations, including adapters using mutable models/model_copy.
+    capabilities = {name: Capabilities.model_validate(value.model_dump())
+                    for name, value in capabilities.items()}
+    operator_contracts = {name: OperatorContract.model_validate(value.model_dump())
+                          for name, value in operator_contracts.items()}
     nodes = {}
     for node in spec.nodes:
         if node.node_id in nodes:

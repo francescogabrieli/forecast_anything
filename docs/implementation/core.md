@@ -21,9 +21,15 @@ Branch: `feat/future-graph-core`. Base: `b7b6bed`. Integration pending.
 
 ## Verification
 
-All six tasks used RED/GREEN tests and independent reviews. Review fixes covered nested nonfinite opaque values, provider/operator DST-fold result timestamps, and malformed CSV headers. Current full-suite evidence: 123 tests passed. The final branch review may add further regression coverage.
+All six tasks used RED/GREEN tests and independent reviews. Review fixes covered nested nonfinite opaque values, provider/operator DST-fold result timestamps, and malformed CSV headers. Final review fixed capability/result-field vocabulary divergence. Current full-suite evidence: `uv run pytest -q` — 134 tests passed. Regression coverage exercises canonical names, legacy aliases, and joint-sample alignment failures.
 
 An installed wheel was imported from site-packages outside the source checkout. The actual CLI run/show/retry completed, returned seasonal_naive `[[20,30,20]]`, and persisted four events. The runtime imported without ML/LLM modules. Final verification is recorded below when branch review completes.
+
+## Representation capabilities
+
+Registered capabilities and operator requirements use `point`, `marginal_quantiles`, and `joint_paths`. They map explicitly to `ForecastResult.point`, `.quantiles`, and `.paths`; result field names remain unchanged. Historical registration aliases `quantiles` and `paths` normalize to the canonical capability names. Registration models expose canonical names in serialized output and schema, and compiler/runtime revalidate registrations to cover mutable models and `model_copy` adapters.
+
+Marginal quantiles never imply joint paths. Every joint-path operator input must provide paths; inputs must share timestamps, sample group ID, and sample count. Canonical and alias registrations follow the same checks. Generic transforms still propagate only their required capability.
 
 ## Current capability limits
 
