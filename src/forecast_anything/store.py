@@ -28,6 +28,7 @@ from .contracts import (
     Snapshot,
     Watch,
 )
+from .discovery.agent_storage import AgentStorageMixin
 
 if TYPE_CHECKING:
     from .jobs import LeaseGuard
@@ -39,6 +40,7 @@ MIGRATIONS = (
     "004_observatory.sql",
     "005_jobs.sql",
     "006_scenarios.sql",
+    "007_agent_operations.sql",
 )
 
 
@@ -46,7 +48,7 @@ def _json(value: object) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
-class Ledger:
+class Ledger(AgentStorageMixin):
     def __init__(self, path: Path, *, clock: Callable[[], datetime] | None = None):
         self.path = Path(path)
         self.clock = clock or (lambda: datetime.now(timezone.utc))
@@ -436,8 +438,20 @@ class Ledger:
         return DiscoveryBudget.model_validate_json(row[0])
 
     def get_discovery_epoch(self, epoch_id: str) -> DiscoveryEpoch:
-        return DiscoveryEpoch.model_validate_json(
+        frozen = DiscoveryEpoch.model_validate_json(
             self._get("discovery_epochs", {"epoch_id": epoch_id})
+        )
+        with self._connection() as connection:
+            additions = tuple(
+                row[0]
+                for row in connection.execute(
+                    "SELECT candidate_id FROM discovery_explored_appends "
+                    "WHERE epoch_id = ? ORDER BY rowid",
+                    (epoch_id,),
+                ).fetchall()
+            )
+        return frozen.model_copy(
+            update={"explored_candidate_ids": frozen.explored_candidate_ids + additions}
         )
 
     def register_candidate(
@@ -487,6 +501,15 @@ class Ledger:
         return Candidate.model_validate_json(
             self._get("discovery_candidates", {"candidate_id": candidate_id})
         )
+
+    def candidates_for_epoch(self, epoch_id: str) -> tuple[Candidate, ...]:
+        self.get_discovery_epoch(epoch_id)
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT content FROM discovery_candidates WHERE epoch_id = ? ORDER BY candidate_id",
+                (epoch_id,),
+            ).fetchall()
+        return tuple(Candidate.model_validate_json(row[0]) for row in rows)
 
     def discovery_usage(self, epoch_id: str) -> tuple[int, int]:
         self.get_discovery_epoch(epoch_id)

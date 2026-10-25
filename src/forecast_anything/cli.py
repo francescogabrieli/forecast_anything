@@ -99,15 +99,31 @@ def main() -> int:
                     ledger,
                     runtime,
                     os.environ.get("FORECAST_ANYTHING_WORKSPACE_TOKEN", ""),
+                    agent_token=os.environ.get("FORECAST_ANYTHING_AGENT_CORE_TOKEN"),
                 )
                 uvicorn.run(app, host=args.host, port=args.port, access_log=False)
                 return 0
+            from .discovery.agent_gateway import AgentGateway
             from .jobs import JobQueue
             from .worker import Worker
 
             if args.poll_seconds <= 0:
                 raise DomainError("invalid_poll_interval", {})
-            worker = Worker(runtime, JobQueue(ledger), lease_seconds=args.lease_seconds)
+            agent_url = os.environ.get("FORECAST_ANYTHING_AGENT_URL")
+            bridge_token = os.environ.get("FORECAST_ANYTHING_AGENT_BRIDGE_TOKEN")
+            if bool(agent_url) != bool(bridge_token):
+                raise DomainError("agent_gateway_config_incomplete", {})
+            gateway = (
+                AgentGateway(agent_url, token=bridge_token)
+                if agent_url and bridge_token
+                else None
+            )
+            worker = Worker(
+                runtime,
+                JobQueue(ledger),
+                discovery_gateway=gateway,
+                lease_seconds=args.lease_seconds,
+            )
             while True:
                 completed = worker.run_due(runtime.clock(), limit=args.limit)
                 if args.once:

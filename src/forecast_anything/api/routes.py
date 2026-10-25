@@ -29,6 +29,7 @@ from ..contracts import (
     WatchRequest,
     WatchView,
 )
+from ..discovery.agent_gateway import AgentOperationRequest, AgentOperationResponse
 from ..discovery.candidates import TEMPLATES
 from .scenarios import create_scenario
 
@@ -71,6 +72,10 @@ def router(service):
     @api.post("/jobs", response_model=JobView, status_code=202)
     def submit(request: JobRequest):
         return service.submit(request)
+
+    @api.post("/agent/operations", response_model=AgentOperationResponse)
+    def agent_operation(request: AgentOperationRequest):
+        return service.agent_operation(request)
 
     @api.get("/jobs/{job_id}", response_model=JobView)
     def job(job_id: str):

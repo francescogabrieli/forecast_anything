@@ -398,6 +398,16 @@ class Worker:
             lease_guard=job.guard,
         )
         ledger.register_candidate(candidate, lease_guard=job.guard)
+        if self.discovery_gateway is not None:
+            self.queue.enqueue(
+                f"discovery/agent/{epoch_id}",
+                {
+                    "kind": "discovery",
+                    "epoch_id": epoch_id,
+                    "source_ids": list(candidate.source_ids),
+                },
+                lease_guard=job.guard,
+            )
         watch_id = _digest(
             {"predecessor": old.watch_id, "candidate": candidate.candidate_id}
         )
@@ -536,6 +546,16 @@ class Worker:
             ledger.register_candidate(candidate, lease_guard=job.guard)
             if candidate.executable:
                 ledger.put_graph(candidate.graph)
+        if self.discovery_gateway is not None:
+            self.queue.enqueue(
+                f"discovery/agent/{payload['epoch_id']}",
+                {
+                    "kind": "discovery",
+                    "epoch_id": payload["epoch_id"],
+                    "source_ids": [profile.source_id],
+                },
+                lease_guard=job.guard,
+            )
         return {
             "epoch_id": payload["epoch_id"],
             "candidate_ids": [c.candidate_id for c in candidates],

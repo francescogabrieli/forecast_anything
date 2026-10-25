@@ -1,6 +1,79 @@
 {
   "components": {
     "schemas": {
+      "AgentOperationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "call_key": {
+            "minLength": 1,
+            "title": "Call Key",
+            "type": "string"
+          },
+          "epoch_id": {
+            "minLength": 1,
+            "title": "Epoch Id",
+            "type": "string"
+          },
+          "input": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Input",
+            "type": "object"
+          },
+          "job_id": {
+            "minLength": 1,
+            "title": "Job Id",
+            "type": "string"
+          },
+          "session_id": {
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          },
+          "tool": {
+            "enum": [
+              "inspectSource",
+              "proposeCandidates",
+              "explainRun"
+            ],
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "epoch_id",
+          "session_id",
+          "call_key",
+          "tool"
+        ],
+        "title": "AgentOperationRequest",
+        "type": "object"
+      },
+      "AgentOperationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "operation_id": {
+            "minLength": 1,
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "result": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "operation_id",
+          "result"
+        ],
+        "title": "AgentOperationResponse",
+        "type": "object"
+      },
       "Candidate": {
         "additionalProperties": false,
         "properties": {
@@ -1813,6 +1886,79 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/v1/agent/operations": {
+      "post": {
+        "operationId": "agent_operation_v1_agent_operations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentOperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentOperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Agent Operation"
       }
     },
     "/v1/candidates": {

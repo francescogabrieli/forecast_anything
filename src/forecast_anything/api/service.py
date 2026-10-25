@@ -1,6 +1,9 @@
 """Validated application boundary; routes never write SQL or trust agent lineage."""
 
+from hashlib import sha256
 from uuid import uuid4
+
+from pydantic import ValidationError
 
 from ..contracts import (
     CandidateRequest,
@@ -18,6 +21,7 @@ from ..contracts import (
     WatchRequest,
     WatchView,
 )
+from ..discovery.agent_gateway import AgentOperationRequest, AgentOperationResponse
 from ..discovery.candidates import CandidateProposal, compile_proposal
 from ..graph import ForecastConfig, SourceConfig, compile_graph, parse_node_config
 from ..jobs import JobQueue
@@ -25,6 +29,7 @@ from ..providers.base import frequency_step, observation_grid
 from ..runtime import _digest
 from ..sources.catalog import SourceCatalog
 from ..sources.profiling import inspect_source
+from ..store import _json
 from ..watches import create_watch
 from ..worker import Worker
 from .errors import public_error_details
@@ -91,6 +96,96 @@ class Observatory:
 
     def now(self):
         return max(self.runtime.clock(), self.ledger.clock())
+
+    def agent_operation(self, request: AgentOperationRequest) -> AgentOperationResponse:
+        """Serve a scoped Eve tool after durable core budget reservation."""
+        request = AgentOperationRequest.model_validate(request.model_dump())
+        operation_id, previous = self.ledger.reserve_agent_operation(
+            request.job_id,
+            request.epoch_id,
+            request.session_id,
+            request.call_key,
+            request.tool,
+            sha256(_json(request.input).encode()).hexdigest(),
+        )
+        if previous is not None:
+            return AgentOperationResponse(operation_id=operation_id, result=previous)
+        result = self._agent_tool_result(request)
+        return AgentOperationResponse(
+            operation_id=operation_id,
+            result=self.ledger.complete_agent_operation(operation_id, result),
+        )
+
+    def _agent_tool_result(self, request: AgentOperationRequest) -> dict:
+        job = self.queue.get(request.job_id)
+        source_ids = set(job.payload["source_ids"])
+        profiles = {}
+        for candidate in self.ledger.candidates_for_epoch(request.epoch_id):
+            for profile in candidate.source_profiles:
+                prior = profiles.setdefault(profile.source_id, profile)
+                if prior != profile:
+                    raise DomainError("ambiguous_source_profile", {})
+
+        if request.tool == "inspectSource":
+            source_id = request.input.get("source_id")
+            if (
+                set(request.input) != {"source_id"}
+                or not isinstance(source_id, str)
+                or source_id not in source_ids
+            ):
+                raise DomainError("invalid_agent_input", {})
+            if source_id not in profiles:
+                raise DomainError("unknown_source_profile", {})
+            return profiles[source_id].model_dump(mode="json")
+
+        if request.tool == "proposeCandidates":
+            proposals = request.input.get("proposals")
+            if (
+                set(request.input) != {"proposals"}
+                or not isinstance(proposals, list)
+                or len(proposals)
+                > self.ledger.discovery_budget(request.epoch_id).max_candidates
+            ):
+                raise DomainError("invalid_agent_input", {})
+            candidates = []
+            for raw in proposals:
+                try:
+                    proposal = CandidateProposal.model_validate(raw)
+                except ValidationError as error:
+                    raise DomainError("invalid_agent_input", {}) from error
+                if not set(proposal.source_ids).issubset(source_ids):
+                    raise DomainError("invalid_agent_input", {})
+                selected = tuple(
+                    profiles[name] for name in proposal.source_ids if name in profiles
+                )
+                candidate = compile_proposal(
+                    proposal, selected, epoch_id=request.epoch_id
+                )
+                self.ledger.register_agent_candidate(candidate)
+                if candidate.executable:
+                    self.ledger.put_graph(candidate.graph)
+                candidates.append(self.ledger.get_candidate(candidate.candidate_id))
+            unique = {candidate.candidate_id: candidate for candidate in candidates}
+            return {
+                "candidateIds": list(unique),
+                "candidates": [
+                    candidate.model_dump(mode="json") for candidate in unique.values()
+                ],
+            }
+
+        if request.tool == "explainRun":
+            run_id = request.input.get("run_id")
+            if set(request.input) != {"run_id"} or not isinstance(run_id, str):
+                raise DomainError("invalid_agent_input", {})
+            run = self.ledger.get_run(run_id)
+            bindings = self.ledger.run_bindings(run_id)
+            if not bindings or not set(bindings).issubset(source_ids):
+                raise DomainError("run_lineage_mismatch", {})
+            return {
+                "text": f"Run {run.run_id} recorded {len(run.evidence_ids)} evidence item(s).",
+                "evidenceIds": list(run.evidence_ids),
+            }
+        raise DomainError("unknown_agent_tool", {})
 
     @staticmethod
     def source_view(revision):

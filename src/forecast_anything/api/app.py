@@ -14,9 +14,20 @@ from .routes import router
 from .service import Observatory
 
 
-def create_app(ledger: Ledger, runtime: Runtime, workspace_token: str) -> FastAPI:
+def create_app(
+    ledger: Ledger,
+    runtime: Runtime,
+    workspace_token: str,
+    agent_token: str | None = None,
+) -> FastAPI:
     if not isinstance(workspace_token, str) or not workspace_token.strip():
         raise DomainError("workspace_token_required", {})
+    if agent_token is not None and (
+        not isinstance(agent_token, str)
+        or not agent_token.strip()
+        or hmac.compare_digest(agent_token, workspace_token)
+    ):
+        raise DomainError("invalid_agent_token", {})
     app = FastAPI(
         title="Forecast Anything",
         version="1.0.0",
@@ -33,8 +44,16 @@ def create_app(ledger: Ledger, runtime: Runtime, workspace_token: str) -> FastAP
     async def authenticate(request, call_next):
         if request.url.path != "/health":
             supplied = request.headers.get("authorization", "")
+            agent_route = request.url.path == "/v1/agent/operations"
+            if agent_route and agent_token is None:
+                return JSONResponse(
+                    {"code": "unauthorized", "details": {}},
+                    status_code=401,
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            expected = agent_token if agent_route else workspace_token
             if not hmac.compare_digest(
-                supplied.encode(), f"Bearer {workspace_token}".encode()
+                supplied.encode(), f"Bearer {expected}".encode()
             ):
                 return JSONResponse(
                     {"code": "unauthorized", "details": {}},
