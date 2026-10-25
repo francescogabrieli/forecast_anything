@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from importlib.resources import files
 from pathlib import Path
-from typing import Iterator
+from typing import TYPE_CHECKING, Callable, Iterator
 
 from .contracts import (
     Candidate,
@@ -28,11 +28,15 @@ from .contracts import (
     Watch,
 )
 
+if TYPE_CHECKING:
+    from .jobs import LeaseGuard
+
 MIGRATIONS = (
     "001_initial.sql",
     "002_evaluations.sql",
     "003_discovery.sql",
     "004_observatory.sql",
+    "005_jobs.sql",
 )
 
 
@@ -41,8 +45,9 @@ def _json(value: object) -> str:
 
 
 class Ledger:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, *, clock: Callable[[], datetime] | None = None):
         self.path = Path(path)
+        self.clock = clock or (lambda: datetime.now(timezone.utc))
         with self._connection() as connection:
             connection.execute("PRAGMA journal_mode = WAL")
             version = connection.execute("PRAGMA user_version").fetchone()[0]
@@ -65,21 +70,30 @@ class Ledger:
             connection.close()
 
     @contextmanager
-    def _transaction(self) -> Iterator[sqlite3.Connection]:
+    def _transaction(
+        self, lease_guard: LeaseGuard | None = None
+    ) -> Iterator[sqlite3.Connection]:
         with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             try:
+                if lease_guard is not None:
+                    self._assert_lease(connection, lease_guard)
                 yield connection
+                if lease_guard is not None:
+                    self._assert_lease(connection, lease_guard)
                 connection.commit()
             except BaseException:
                 connection.rollback()
                 raise
 
-    def put_snapshot(self, snapshot: Snapshot) -> str:
+    def put_snapshot(
+        self, snapshot: Snapshot, *, lease_guard: LeaseGuard | None = None
+    ) -> str:
         self._put(
             "snapshots",
             {"snapshot_id": snapshot.snapshot_id},
             _json(snapshot.model_dump(mode="json")),
+            lease_guard=lease_guard,
         )
         return snapshot.snapshot_id
 
@@ -101,10 +115,17 @@ class Ledger:
             self._get("graphs", {"graph_id": graph_id, "version": version})
         )
 
-    def _put(self, table: str, identity: dict, content: str) -> None:
+    def _put(
+        self,
+        table: str,
+        identity: dict,
+        content: str,
+        *,
+        lease_guard: LeaseGuard | None = None,
+    ) -> None:
         # Table and column names come exclusively from internal callers.
         where = " AND ".join(f"{name} = ?" for name in identity)
-        with self._transaction() as connection:
+        with self._transaction(lease_guard) as connection:
             row = connection.execute(
                 f"SELECT content FROM {table} WHERE {where}", tuple(identity.values())
             ).fetchone()
@@ -132,7 +153,11 @@ class Ledger:
         return row[0]
 
     def append_run(
-        self, run: RunRecord, events: tuple[EventRecord, ...], key: str
+        self,
+        run: RunRecord,
+        events: tuple[EventRecord, ...],
+        key: str,
+        lease_guard: LeaseGuard | None = None,
     ) -> RunRecord:
         """Commit a run and its ordered events once; cursors are always assigned here.
 
@@ -147,7 +172,7 @@ class Ledger:
         ]
         events_content = _json(event_values)
         try:
-            with self._transaction() as connection:
+            with self._transaction(lease_guard) as connection:
                 previous = connection.execute(
                     "SELECT content, events_content FROM runs WHERE idempotency_key = ?",
                     (key,),
@@ -169,15 +194,52 @@ class Ledger:
             raise DomainError("immutable_identity", {"run_id": run.run_id}) from error
         return RunRecord.model_validate_json(content)
 
+    def _assert_lease(
+        self, connection, guard: LeaseGuard, *, now: datetime | None = None
+    ) -> None:
+        now = self.clock() if now is None else now
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise DomainError("naive_timestamp", {})
+        row = connection.execute(
+            "SELECT state, lease_token, lease_until FROM jobs WHERE job_id = ?",
+            (guard.job_id,),
+        ).fetchone()
+        if (
+            row is None
+            or row[0] != "running"
+            or row[1] != guard.lease_token
+            or row[2] <= now.timestamp()
+        ):
+            raise DomainError("lease_lost", {"job_id": guard.job_id})
+
+    def run_bindings(self, run_id: str) -> dict[str, str]:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT events_content FROM runs WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()
+        if row is None:
+            raise DomainError("not_found", {"run_id": run_id})
+        return next(
+            (
+                e["payload"]["source_bindings"]
+                for e in json.loads(row[0])
+                if e["kind"] == "run_started"
+            ),
+            {},
+        )
+
     def get_run(self, run_id: str) -> RunRecord:
         return RunRecord.model_validate_json(self._get("runs", {"run_id": run_id}))
 
-    def append_evaluation(self, record: EvaluationRecord) -> str:
+    def append_evaluation(
+        self, record: EvaluationRecord, *, lease_guard: LeaseGuard | None = None
+    ) -> str:
         record = EvaluationRecord.model_validate(record.model_dump())
         if record.discovery is not None:
             self._validate_discovery_evaluation(record)
         content = _json(record.model_dump(mode="json"))
-        with self._transaction() as connection:
+        with self._transaction(lease_guard) as connection:
             previous = connection.execute(
                 "SELECT content FROM evaluations WHERE evaluation_id = ?",
                 (record.evaluation_id,),
@@ -296,7 +358,11 @@ class Ledger:
         )
 
     def put_discovery_epoch(
-        self, epoch: DiscoveryEpoch, budget: DiscoveryBudget
+        self,
+        epoch: DiscoveryEpoch,
+        budget: DiscoveryBudget,
+        *,
+        lease_guard: LeaseGuard | None = None,
     ) -> str:
         """Freeze search configuration, budget and target reservations atomically.
 
@@ -309,7 +375,7 @@ class Ledger:
             _json(epoch.model_dump(mode="json")),
             _json(budget.model_dump()),
         )
-        with self._transaction() as connection:
+        with self._transaction(lease_guard) as connection:
             previous = connection.execute(
                 "SELECT content, budget FROM discovery_epochs WHERE epoch_id = ?",
                 (epoch.epoch_id,),
@@ -358,19 +424,30 @@ class Ledger:
                     )
         return epoch.epoch_id
 
+    def discovery_budget(self, epoch_id: str) -> DiscoveryBudget:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT budget FROM discovery_epochs WHERE epoch_id = ?", (epoch_id,)
+            ).fetchone()
+        if row is None:
+            raise DomainError("unknown_discovery_epoch", {})
+        return DiscoveryBudget.model_validate_json(row[0])
+
     def get_discovery_epoch(self, epoch_id: str) -> DiscoveryEpoch:
         return DiscoveryEpoch.model_validate_json(
             self._get("discovery_epochs", {"epoch_id": epoch_id})
         )
 
-    def register_candidate(self, candidate: Candidate) -> str:
+    def register_candidate(
+        self, candidate: Candidate, *, lease_guard: LeaseGuard | None = None
+    ) -> str:
         from .discovery.candidates import validate_candidate
 
         candidate = Candidate.model_validate(candidate.model_dump())
         if "candidate_identity_mismatch" in validate_candidate(candidate):
             raise DomainError("candidate_identity_mismatch", {})
         content = _json(candidate.model_dump(mode="json"))
-        with self._transaction() as connection:
+        with self._transaction(lease_guard) as connection:
             previous = connection.execute(
                 "SELECT content FROM discovery_candidates WHERE candidate_id = ?",
                 (candidate.candidate_id,),
@@ -419,11 +496,13 @@ class Ledger:
                 for table in ("discovery_candidates", "discovery_tool_calls")
             )
 
-    def consume_discovery_tool_call(self, epoch_id: str, call_id: str) -> None:
+    def consume_discovery_tool_call(
+        self, epoch_id: str, call_id: str, *, lease_guard: LeaseGuard | None = None
+    ) -> None:
         """Reserve a call before dispatch; retry the same operation ID after restart."""
         if not isinstance(call_id, str) or not call_id.strip():
             raise DomainError("invalid_tool_call_id", {})
-        with self._transaction() as connection:
+        with self._transaction(lease_guard) as connection:
             row = connection.execute(
                 "SELECT budget FROM discovery_epochs WHERE epoch_id = ?", (epoch_id,)
             ).fetchone()
@@ -486,7 +565,13 @@ class Ledger:
             ).fetchall()
         return tuple(EligibilityDecision.model_validate_json(row[0]) for row in rows)
 
-    def put_watch(self, watch: Watch, *, now: datetime | None = None) -> str:
+    def put_watch(
+        self,
+        watch: Watch,
+        *,
+        now: datetime | None = None,
+        lease_guard: LeaseGuard | None = None,
+    ) -> str:
         """Create a candidate watch; qualification and controls require events.
 
         The stored Candidate and epoch supply authoritative question/dependency
@@ -522,7 +607,7 @@ class Ledger:
         ):
             raise DomainError("invalid_initial_watch", {})
         content = _json(watch.model_dump(mode="json"))
-        with self._transaction() as connection:
+        with self._transaction(lease_guard) as connection:
             if watch.supersedes_watch_id is not None:
                 predecessor = connection.execute(
                     "SELECT content FROM watches WHERE watch_id = ?",
@@ -577,7 +662,13 @@ class Ledger:
         return tuple(Watch.model_validate_json(row[0]) for row in rows)
 
     def advance_watch(
-        self, watch_id: str, event: dict, now: datetime, *, event_id: str
+        self,
+        watch_id: str,
+        event: dict,
+        now: datetime,
+        *,
+        event_id: str,
+        lease_guard: LeaseGuard | None = None,
     ) -> Watch:
         """Atomically apply an idempotent transition and retain the issued state.
 
@@ -598,7 +689,7 @@ class Ledger:
         if isinstance(event.get("next_due_at"), datetime):
             event["next_due_at"] = event["next_due_at"].isoformat()
         event_content = _json(event)
-        with self._transaction() as connection:
+        with self._transaction(lease_guard) as connection:
             previous = connection.execute(
                 "SELECT event_content, content FROM watch_history WHERE watch_id = ? AND event_id = ?",
                 (watch_id, event_id),

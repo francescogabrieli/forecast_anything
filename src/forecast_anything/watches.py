@@ -228,8 +228,8 @@ def summarize_change(previous: RunRecord, current: RunRecord) -> dict:
     if (
         (previous.graph_id, previous.graph_version, previous.scenario_id)
         != (current.graph_id, current.graph_version, current.scenario_id)
-        or previous.state != "succeeded"
-        or current.state != "succeeded"
+        or previous.state != "completed"
+        or current.state != "completed"
         or current.as_of < previous.as_of
     ):
         raise DomainError("incomparable_runs", {})

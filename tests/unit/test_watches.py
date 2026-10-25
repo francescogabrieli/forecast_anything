@@ -23,7 +23,7 @@ from forecast_anything.contracts import (
 from forecast_anything.discovery.candidates import CandidateProposal, compile_proposal
 from forecast_anything.discovery.policy import assess_candidate
 from forecast_anything.evaluation.records import evaluate_run
-from forecast_anything.store import Ledger
+from forecast_anything.store import MIGRATIONS, Ledger
 from forecast_anything.watches import (
     advance_watch,
     create_watch,
@@ -420,7 +420,7 @@ def run(run_id, timestamps, point, series=("sales",), units=("count",), **change
             snapshot_ids=(f"snapshot-{run_id}",),
             requested_provider={},
             actual_provider={},
-            state="succeeded",
+            state="completed",
             results={"question": result},
             evidence_ids=(),
             scenario_id=None,
@@ -897,5 +897,7 @@ def test_migration_upgrades_v3_and_preserves_ledger_records(tmp_path):
     ledger = Ledger(path)
     assert ledger.get_snapshot("old").snapshot_id == "old"
     with sqlite3.connect(path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 4
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == len(
+            MIGRATIONS
+        )
     assert Ledger(path).list_watches() == ()

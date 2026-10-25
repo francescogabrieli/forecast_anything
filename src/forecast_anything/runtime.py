@@ -6,7 +6,7 @@ import json
 from copy import deepcopy
 from datetime import datetime, timezone
 from hashlib import sha256
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from .contracts import (
     REPRESENTATION_FIELDS,
@@ -29,6 +29,9 @@ from .graph import (
 from .operators.base import Operator
 from .providers.base import ForecastProvider, frequency_step, observation_grid
 from .store import Ledger
+
+if TYPE_CHECKING:
+    from .jobs import LeaseGuard
 
 
 def _digest(value: dict) -> str:
@@ -89,7 +92,13 @@ class Runtime:
         )
 
     def run(
-        self, spec: GraphSpec, snapshots: dict[str, Snapshot], as_of: datetime, key: str
+        self,
+        spec: GraphSpec,
+        snapshots: dict[str, Snapshot],
+        as_of: datetime,
+        key: str,
+        lease_guard: LeaseGuard | None = None,
+        previous_run_id: str | None = None,
     ) -> RunRecord:
         if as_of.tzinfo is None or as_of.utcoffset() is None:
             raise DomainError("naive_timestamp", {"field": "as_of"})
@@ -109,6 +118,11 @@ class Runtime:
                     for name, value in snapshots.items()
                 },
                 "as_of": as_of.isoformat(),
+                **(
+                    {"previous_run_id": previous_run_id}
+                    if previous_run_id is not None
+                    else {}
+                ),
             }
         )
         run_id = _digest({"key": key, "request": fingerprint})
@@ -137,6 +151,38 @@ class Runtime:
                 "invalid_snapshot_bindings",
                 {"expected": sorted(source_keys), "actual": sorted(snapshots)},
             )
+        reusable = {}
+        if previous_run_id is not None:
+            prior = self.ledger.get_run(previous_run_id)
+            if (prior.graph_id, prior.graph_version, prior.as_of, prior.state) == (
+                spec.graph_id,
+                spec.version,
+                as_of,
+                "completed",
+            ) and self.ledger.get_graph(prior.graph_id, prior.graph_version) == spec:
+                old_bindings = self.ledger.run_bindings(previous_run_id)
+                affected = set()
+                for node_id in compiled.order:
+                    config = configs[node_id]
+                    node = nodes[node_id]
+                    if isinstance(config, SourceConfig):
+                        if (
+                            old_bindings.get(config.source_id)
+                            != snapshots[config.source_id].snapshot_id
+                        ):
+                            affected.add(node_id)
+                    elif isinstance(config, ForecastConfig):
+                        result = prior.results.get(node_id)
+                        capability = capabilities[config.provider]
+                        if result is None or (
+                            result.provider_id,
+                            result.provider_revision,
+                        ) != (capability.provider_id, capability.provider_revision):
+                            affected.add(node_id)
+                    if any(parent in affected for parent in node.inputs):
+                        affected.add(node_id)
+                    if node_id not in affected and node_id in prior.results:
+                        reusable[node_id] = prior.results[node_id]
         values, calendars, requests = {}, {}, {}
         # All actual source metadata and request calendars are checked before inference.
         for node_id in compiled.order:
@@ -234,7 +280,9 @@ class Runtime:
                     capability = capabilities[config.provider]
                     actual[node_id] = capability.provider_id
                     result = _result(
-                        self.providers[config.provider].forecast(
+                        reusable[node_id]
+                        if node_id in reusable
+                        else self.providers[config.provider].forecast(
                             requests[node_id].model_copy(deep=True)
                         )
                     )
@@ -297,7 +345,9 @@ class Runtime:
                         k: v for k, v in config.parameters.items() if k != "bindings"
                     }
                     result = _result(
-                        self.operators[config.operator].apply(
+                        reusable[node_id]
+                        if node_id in reusable
+                        else self.operators[config.operator].apply(
                             deepcopy(inputs), deepcopy(parameters)
                         )
                     )
@@ -409,6 +459,6 @@ class Runtime:
             results=results,
             evidence_ids=(),
             scenario_id=None,
-            parent_run_id=None,
+            parent_run_id=previous_run_id,
         )
-        return self.ledger.append_run(run, tuple(events), key)
+        return self.ledger.append_run(run, tuple(events), key, lease_guard=lease_guard)
