@@ -15,6 +15,7 @@ from pydantic import (
     FiniteFloat,
     JsonValue,
     StringConstraints,
+    computed_field,
     model_validator,
 )
 
@@ -480,3 +481,116 @@ class DomainError(Exception):
 
     def model_dump_json(self, **kwargs: Any) -> str:
         return self._payload.model_dump_json(**kwargs)
+
+
+class SourceView(Contract):
+    source_id: Identifier
+    revision: Identifier
+    kind: Literal["csv", "http_json"]
+    refresh_seconds: int
+
+
+class SourceRegistration(SourceView):
+    profile: SourceProfile
+    job_id: Identifier
+    epoch_id: Identifier
+
+
+class CandidateRequest(Contract):
+    template_id: Identifier
+    source_ids: tuple[Identifier, ...]
+    reason: Identifier
+    selection_method: Literal["prespecified_holdout", "exploratory", "corrected"] = (
+        "prespecified_holdout"
+    )
+
+
+class WatchRequest(Contract):
+    candidate_id: Identifier
+    next_due_at: AwareDatetime
+
+
+class WatchPatch(Contract):
+    muted: Annotated[bool, Field(strict=True)] | None = None
+    priority: Annotated[int, Field(ge=0, le=5, strict=True)] | None = None
+
+    @model_validator(mode="after")
+    def require_control(self):
+        if not self.model_fields_set or any(
+            getattr(self, key) is None for key in self.model_fields_set
+        ):
+            raise ValueError("at least one non-null control is required")
+        return self
+
+
+class WatchView(Watch):
+    @computed_field
+    @property
+    def operational(self) -> bool:
+        return super().operational
+
+
+class RunJobRequest(Contract):
+    kind: Literal["run"]
+    key: Identifier
+    graph: GraphSpec
+    snapshot_ids: dict[Identifier, Identifier]
+    as_of: AwareDatetime
+    previous_run_id: Identifier | None = None
+
+
+class EvaluationJobRequest(Contract):
+    kind: Literal["evaluation"]
+    key: Identifier
+    run_id: Identifier
+    actuals_snapshot_id: Identifier
+
+
+class ResumeJobRequest(Contract):
+    kind: Literal["watch_resume"]
+    key: Identifier
+    watch_id: Identifier
+
+
+JobRequest = Annotated[
+    RunJobRequest | EvaluationJobRequest | ResumeJobRequest, Field(discriminator="kind")
+]
+
+
+class JobView(Contract):
+    job_id: Identifier
+    state: Identifier
+    attempt: int
+    result: OpaqueDictionary | None = None
+    error: OpaqueDictionary | None = None
+
+
+class ScenarioRequest(Contract):
+    base_graph_id: Identifier
+    base_version: Annotated[int, Field(gt=0, strict=True)]
+    label: Identifier
+    source_overrides: dict[Identifier, Snapshot]
+
+
+class ScenarioRecord(Contract):
+    scenario_id: Identifier
+    graph_id: Identifier
+    version: int
+    parent_run_id: Identifier
+    label: Identifier
+    snapshot_ids: dict[Identifier, Identifier]
+
+
+class ScenarioView(ScenarioRecord):
+    job_id: Identifier
+
+
+class CapabilitiesView(Contract):
+    providers: dict[str, Capabilities]
+    operators: dict[str, OperatorContract]
+    templates: tuple[str, ...]
+
+
+class ErrorResponse(Contract):
+    code: Identifier
+    details: OpaqueDictionary

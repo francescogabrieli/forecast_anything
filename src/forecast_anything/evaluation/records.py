@@ -125,7 +125,9 @@ def evaluate_run(
             observed[node_id] = answer
         return answer
 
-    if run.scenario_id is not None:
+    if run.scenario_id is not None or any(
+        a.startswith("assumed:") for a in actuals.assumptions
+    ):
         status = "insufficient_evidence"
         assumptions.append("hypothetical scenario has no observed realization binding")
     else:

@@ -30,6 +30,8 @@ jobs:
         run: uv run --locked ruff check src tests
       - name: Check Python formatting
         run: uv run --locked ruff format --check src tests
+      - name: Check exported contract drift
+        run: uv run --locked python scripts/export_contracts.py contracts/v1 --check
       - name: Run tests
         run: uv run --locked pytest -q
       - name: Build wheel and source distribution

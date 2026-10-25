@@ -2,8 +2,10 @@
 
 import argparse
 import json
+import os
 import sqlite3
 import sys
+import time
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
@@ -66,8 +68,52 @@ def main() -> int:
     show = commands.add_parser("show", help="Read a stored immutable emission")
     show.add_argument("run_id")
     show.add_argument("--db", type=Path, required=True)
+    serve = commands.add_parser("serve", help="Serve the authenticated local API")
+    serve.add_argument("--db", type=Path, required=True)
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8000)
+    worker = commands.add_parser("worker", help="Process the shared durable queue")
+    worker.add_argument("--db", type=Path, required=True)
+    worker.add_argument("--once", action="store_true")
+    worker.add_argument("--limit", type=int, default=10)
+    worker.add_argument("--poll-seconds", type=float, default=1)
+    worker.add_argument("--lease-seconds", type=int, default=60)
     args = parser.parse_args()
     try:
+        if args.command in {"serve", "worker"}:
+            from .operators import register_builtin_operators
+
+            ledger = Ledger(args.db)
+            runtime = Runtime(
+                ledger,
+                {"seasonal_naive": SeasonalNaiveProvider(1)},
+                register_builtin_operators(),
+                lambda: datetime.now(timezone.utc),
+            )
+            if args.command == "serve":
+                import uvicorn
+
+                from .api.app import create_app
+
+                app = create_app(
+                    ledger,
+                    runtime,
+                    os.environ.get("FORECAST_ANYTHING_WORKSPACE_TOKEN", ""),
+                )
+                uvicorn.run(app, host=args.host, port=args.port, access_log=False)
+                return 0
+            from .jobs import JobQueue
+            from .worker import Worker
+
+            if args.poll_seconds <= 0:
+                raise DomainError("invalid_poll_interval", {})
+            worker = Worker(runtime, JobQueue(ledger), lease_seconds=args.lease_seconds)
+            while True:
+                completed = worker.run_due(runtime.clock(), limit=args.limit)
+                if args.once:
+                    print(json.dumps({"job_ids": completed}))
+                    return 0
+                time.sleep(args.poll_seconds)
         record = (
             _run(args)
             if args.command == "run"
@@ -75,6 +121,8 @@ def main() -> int:
         )
         print(record.model_dump_json())
         return 0 if record.state == "completed" else 1
+    except KeyboardInterrupt:
+        return 0
     except DomainError as error:
         print(error.model_dump_json(), file=sys.stderr)
     except ValidationError as error:

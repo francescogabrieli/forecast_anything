@@ -11,6 +11,7 @@ from uuid import uuid4
 from .connectors.http_json import SecretResolver
 from .contracts import (
     Candidate,
+    DiscoveryBudget,
     DiscoveryEpoch,
     DomainError,
     EvaluationContext,
@@ -18,7 +19,7 @@ from .contracts import (
     Snapshot,
     SourceProfile,
 )
-from .discovery.candidates import CandidateProposal, compile_proposal
+from .discovery.candidates import TEMPLATES, CandidateProposal, compile_proposal
 from .evaluation.records import evaluate_run
 from .jobs import Job, JobQueue
 from .runtime import Runtime, _digest
@@ -35,9 +36,13 @@ class Worker:
         *,
         secret_resolver: SecretResolver | None = None,
         discovery_gateway=None,
+        lease_seconds: int = 60,
     ):
         if runtime.ledger.path.resolve() != queue.ledger.path.resolve():
             raise DomainError("queue_ledger_mismatch", {})
+        if type(lease_seconds) is not int or lease_seconds <= 0:
+            raise DomainError("invalid_lease", {})
+        self.lease_seconds = lease_seconds
         self.runtime, self.queue = runtime, queue
         self.owner = uuid4().hex
         self.catalog = SourceCatalog(runtime.ledger.path)
@@ -49,9 +54,9 @@ class Worker:
         stopped = Event()
 
         def renew():
-            while not stopped.wait(20):
+            while not stopped.wait(self.lease_seconds / 3):
                 try:
-                    self.queue.renew(job, self.runtime.clock(), 60)
+                    self.queue.renew(job, self.runtime.clock(), self.lease_seconds)
                 except Exception:
                     # Commit-time fencing remains authoritative after a lost renewal.
                     return
@@ -74,7 +79,7 @@ class Worker:
         self._schedule_sources(self._now(now))
         completed = []
         for _ in range(limit):
-            job = self.queue.claim(self.owner, self._now(now), 60)
+            job = self.queue.claim(self.owner, self._now(now), self.lease_seconds)
             if job is None:
                 break
             with self._lease(job):
@@ -115,6 +120,7 @@ class Worker:
                 job.emission_key,
                 lease_guard=job.guard,
                 previous_run_id=payload.get("previous_run_id"),
+                scenario_id=payload.get("scenario_id"),
             )
             if run.state == "failed":
                 raise DomainError("run_failed", {"run_id": run.run_id})
@@ -142,6 +148,8 @@ class Worker:
             return self._refresh_source(job, now)
         if payload.get("kind") == "discover_refresh":
             return self._discover_refresh(job, now)
+        if payload.get("kind") == "discovery_templates":
+            return self._discover_templates(job, now)
         if payload.get("kind") == "discovery":
             return self._poll_discovery(job, now)
         if payload.get("kind") == "watch_resume":
@@ -472,4 +480,64 @@ class Worker:
         return {
             "session_id": payload["session_id"],
             "candidate_ids": [c.candidate_id for c in candidates],
+        }
+
+    def _discover_templates(self, job: Job, now: datetime) -> dict:
+        payload = dict(job.payload)
+        registered = self.catalog.get(payload["source_id"])
+        if registered.revision != payload["revision"]:
+            raise DomainError("source_revision_changed", {})
+        profile = inspect_source(registered.spec, secret_resolver=self.secret_resolver)
+        if profile != SourceProfile.model_validate(payload["profile"]):
+            raise DomainError("source_profile_changed", {})
+        if "frozen_snapshot" not in payload:
+            snap = (
+                None
+                if profile.unresolved
+                else ingest_source(
+                    registered.spec, now, secret_resolver=self.secret_resolver
+                )
+            )
+            payload["frozen_snapshot"] = snap.model_dump(mode="json") if snap else None
+            self.queue.checkpoint(job, payload, self.runtime.clock())
+        snap = (
+            Snapshot.model_validate(payload["frozen_snapshot"])
+            if payload["frozen_snapshot"]
+            else None
+        )
+        candidates = tuple(
+            compile_proposal(
+                CandidateProposal(
+                    template_id=template,
+                    source_ids=(profile.source_id,),
+                    reason=f"Registered {template} question for {profile.source_id}.",
+                ),
+                (profile,),
+                epoch_id=payload["epoch_id"],
+            )
+            for template in TEMPLATES
+            if template != "declared_limit"
+            or "operational_limit" in profile.proposed_mapping
+        )
+        ledger = self.runtime.ledger
+        if snap:
+            ledger.put_snapshot(snap, lease_guard=job.guard)
+        ledger.put_discovery_epoch(
+            DiscoveryEpoch(
+                epoch_id=payload["epoch_id"],
+                source_snapshot_ids=(snap.snapshot_id,) if snap else (),
+                explored_candidate_ids=tuple(c.candidate_id for c in candidates),
+                final_origin_ids=(),
+            ),
+            DiscoveryBudget(),
+            lease_guard=job.guard,
+        )
+        for candidate in candidates:
+            ledger.register_candidate(candidate, lease_guard=job.guard)
+            if candidate.executable:
+                ledger.put_graph(candidate.graph)
+        return {
+            "epoch_id": payload["epoch_id"],
+            "candidate_ids": [c.candidate_id for c in candidates],
+            "source_snapshot_ids": [snap.snapshot_id] if snap else [],
         }

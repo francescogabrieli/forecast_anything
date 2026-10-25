@@ -24,6 +24,7 @@ from .contracts import (
     EventRecord,
     GraphSpec,
     RunRecord,
+    ScenarioRecord,
     Snapshot,
     Watch,
 )
@@ -37,6 +38,7 @@ MIGRATIONS = (
     "003_discovery.sql",
     "004_observatory.sql",
     "005_jobs.sql",
+    "006_scenarios.sql",
 )
 
 
@@ -742,3 +744,60 @@ class Ledger:
             }
             for sequence, event_id, occurred_at, event, content in rows
         )
+
+    def latest_run(self, graph_id: str, version: int) -> RunRecord:
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT content FROM runs ORDER BY rowid DESC"
+            ).fetchall()
+        for (content,) in rows:
+            run = RunRecord.model_validate_json(content)
+            if (run.graph_id, run.graph_version, run.state) == (
+                graph_id,
+                version,
+                "completed",
+            ):
+                return run
+        raise DomainError("not_found", {"graph_id": graph_id})
+
+    def put_scenario(self, record: ScenarioRecord) -> None:
+        record = ScenarioRecord.model_validate(record.model_dump())
+        parent = self.get_run(record.parent_run_id)
+        graph = self.get_graph(record.graph_id, record.version)
+        base = self.get_graph(parent.graph_id, parent.graph_version)
+        if (
+            parent.state != "completed"
+            or parent.scenario_id is not None
+            or graph.nodes != base.nodes
+            or graph.graph_id == base.graph_id
+        ):
+            raise DomainError("invalid_scenario_lineage", {})
+        bindings = self.run_bindings(parent.run_id)
+        if set(bindings) != set(record.snapshot_ids):
+            raise DomainError("invalid_snapshot_bindings", {})
+        for name, snapshot_id in record.snapshot_ids.items():
+            snapshot = self.get_snapshot(snapshot_id)
+            if (
+                snapshot_id != bindings[name]
+                and f"assumed:{record.scenario_id}" not in snapshot.assumptions
+            ):
+                raise DomainError("invalid_scenario_assumptions", {})
+        self._put(
+            "scenarios",
+            {"scenario_id": record.scenario_id},
+            _json(record.model_dump(mode="json")),
+        )
+
+    def get_scenario(self, scenario_id: str) -> ScenarioRecord:
+        return ScenarioRecord.model_validate_json(
+            self._get("scenarios", {"scenario_id": scenario_id})
+        )
+
+    def scenario_for_graph(self, graph_id: str, version: int) -> ScenarioRecord | None:
+        with self._connection() as connection:
+            rows = connection.execute("SELECT content FROM scenarios").fetchall()
+        for (content,) in rows:
+            record = ScenarioRecord.model_validate_json(content)
+            if (record.graph_id, record.version) == (graph_id, version):
+                return record
+        return None

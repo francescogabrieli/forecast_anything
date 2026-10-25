@@ -99,6 +99,7 @@ class Runtime:
         key: str,
         lease_guard: LeaseGuard | None = None,
         previous_run_id: str | None = None,
+        scenario_id: str | None = None,
     ) -> RunRecord:
         if as_of.tzinfo is None or as_of.utcoffset() is None:
             raise DomainError("naive_timestamp", {"field": "as_of"})
@@ -110,6 +111,25 @@ class Runtime:
             name: Snapshot.model_validate(value.model_dump())
             for name, value in snapshots.items()
         }
+        scenario = self.ledger.scenario_for_graph(spec.graph_id, spec.version)
+        if scenario_id is not None:
+            if (
+                scenario is None
+                or scenario.scenario_id != scenario_id
+                or scenario.parent_run_id != previous_run_id
+                or scenario.snapshot_ids
+                != {name: snap.snapshot_id for name, snap in snapshots.items()}
+                or self.ledger.get_graph(spec.graph_id, spec.version) != spec
+            ):
+                raise DomainError("invalid_scenario_lineage", {})
+            parent = self.ledger.get_run(previous_run_id)
+            if as_of != parent.as_of:
+                raise DomainError("invalid_scenario_lineage", {})
+        elif scenario is not None or any(
+            any(a.startswith("assumed:") for a in snapshot.assumptions)
+            for snapshot in snapshots.values()
+        ):
+            raise DomainError("scenario_required", {})
         fingerprint = _digest(
             {
                 "graph": spec.model_dump(mode="json"),
@@ -118,6 +138,7 @@ class Runtime:
                     for name, value in snapshots.items()
                 },
                 "as_of": as_of.isoformat(),
+                **({"scenario_id": scenario_id} if scenario_id else {}),
                 **(
                     {"previous_run_id": previous_run_id}
                     if previous_run_id is not None
@@ -458,7 +479,7 @@ class Runtime:
             state=state,
             results=results,
             evidence_ids=(),
-            scenario_id=None,
+            scenario_id=scenario_id,
             parent_run_id=previous_run_id,
         )
         return self.ledger.append_run(run, tuple(events), key, lease_guard=lease_guard)

@@ -114,6 +114,13 @@ class SourceCatalog:
             raise DomainError("source_not_found", {})
         return self._decode(row)
 
+    def list(self) -> tuple[SourceRevision, ...]:
+        with sqlite3.connect(self.path) as connection:
+            ids = connection.execute(
+                "SELECT DISTINCT source_id FROM source_revisions ORDER BY source_id"
+            ).fetchall()
+        return tuple(self.get(source_id) for (source_id,) in ids)
+
 
 # Delayed imports keep the required public functions available here as well as
 # profiling.py, without a catalog/profiling import cycle.
