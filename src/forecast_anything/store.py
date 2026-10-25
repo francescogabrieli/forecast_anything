@@ -223,6 +223,24 @@ class Ledger:
         context = record.discovery
         candidate = self.get_candidate(context.candidate_id)
         epoch = self.get_discovery_epoch(context.epoch_id)
+        if context.partition == "final":
+            if (
+                context.origin_id not in epoch.final_origin_ids
+                or epoch.final_candidate_id != candidate.candidate_id
+            ):
+                raise DomainError("unreserved_discovery_origin", {})
+        else:
+            with self._connection() as connection:
+                final_reservation = connection.execute(
+                    "SELECT 1 FROM discovery_origins WHERE origin_id = ? AND role = 'final'",
+                    (context.origin_id,),
+                ).fetchone()
+            if final_reservation is not None:
+                raise DomainError("holdout_reuse", {"origin_id": context.origin_id})
+            if context.origin_id not in epoch.tuning_origin_ids:
+                raise DomainError("unreserved_discovery_origin", {})
+        # Epoch reservations are immutable. A declared tuning reservation also
+        # prevents another epoch from reserving that origin as final later.
         run = self.get_run(record.run_id)
         actuals = self.get_snapshot(record.actuals_snapshot_id)
         target = run.results.get(candidate.protocol.target_node_id)

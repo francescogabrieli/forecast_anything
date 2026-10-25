@@ -279,6 +279,29 @@ class VerificationProtocol(Contract):
     )
 
 
+class CandidateCostEstimate(Contract):
+    """Static execution work, not a latency or monetary quote.
+
+    Unknown/unsupported execution has no numeric value; zero is never a stand-in
+    for an unavailable estimate. The compiler owns the estimate and its basis.
+    """
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
+
+    status: Literal["known", "unavailable"] = "unavailable"
+    value: Annotated[int, Field(ge=0, strict=True)] | None = None
+    unit: Literal["provider_calls_per_run"] = "provider_calls_per_run"
+    basis: Identifier = "not_estimated"
+
+    @model_validator(mode="after")
+    def validate_availability(self) -> CandidateCostEstimate:
+        if (self.status == "known") != (self.value is not None):
+            raise ValueError(
+                "known cost requires a value; unavailable cost requires null"
+            )
+        return self
+
+
 class Candidate(Contract):
     candidate_id: Identifier
     template_id: Identifier
@@ -288,6 +311,7 @@ class Candidate(Contract):
     protocol_id: Identifier
     epoch_id: Identifier
     protocol: VerificationProtocol = Field(default_factory=VerificationProtocol)
+    estimated_cost: CandidateCostEstimate = Field(default_factory=CandidateCostEstimate)
     source_profiles: tuple[SourceProfile, ...] = ()
     executable: bool = False
     unresolved: tuple[str, ...] = ()

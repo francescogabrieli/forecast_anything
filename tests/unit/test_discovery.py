@@ -106,6 +106,89 @@ def evidence_for(c, epoch, loss=1.0, reference=2.0, **context_changes):
     )
 
 
+def stored_origin_evaluation(ledger, c, epoch, origin_id, partition):
+    """Real stored emission/actuals so reservation tests reach persistence."""
+    from forecast_anything.contracts import (
+        ForecastResult,
+        Observation,
+        RunRecord,
+        Snapshot,
+    )
+    from forecast_anything.evaluation.records import evaluate_run
+
+    issued_at = datetime(2026, 1, 2, tzinfo=timezone.utc)
+    target = issued_at + timedelta(days=1)
+    forecast = ForecastResult(
+        provider_id="seasonal_naive",
+        provider_revision="1",
+        series_ids=("sales",),
+        timestamps=(target,),
+        units=("count",),
+        point=((1.0,),),
+        quantiles=None,
+        paths=None,
+        sample_group_id=None,
+        assumptions=(),
+    )
+    issued = RunRecord(
+        run_id=f"run:{c.candidate_id}",
+        graph_id=c.graph.graph_id,
+        graph_version=1,
+        as_of=issued_at,
+        snapshot_ids=epoch.source_snapshot_ids,
+        requested_provider={
+            "forecast": "seasonal_naive",
+            "reference": "seasonal_naive",
+        },
+        actual_provider={"forecast": "seasonal_naive", "reference": "seasonal_naive"},
+        state="succeeded",
+        results={
+            "forecast": forecast,
+            "reference": forecast,
+            "question": forecast.model_copy(
+                update={"provider_id": "operator:sum_aligned"}
+            ),
+        },
+        evidence_ids=(),
+        scenario_id=None,
+        parent_run_id=None,
+    )
+    ledger.append_run(issued, (), f"request:{c.candidate_id}")
+    actuals = Snapshot(
+        snapshot_id=f"actuals:{c.candidate_id}",
+        as_of=target,
+        observations=(
+            Observation(
+                series_id="sales",
+                event_time=target,
+                available_at=target,
+                revision="1",
+                value=1,
+                unit="count",
+            ),
+        ),
+        assumptions=(),
+    )
+    ledger.put_snapshot(actuals)
+    record = evaluate_run(issued, actuals, c.graph)
+    return record.model_copy(
+        update={
+            "discovery": EvaluationContext(
+                candidate_id=c.candidate_id,
+                protocol_id=c.protocol_id,
+                epoch_id=epoch.epoch_id,
+                origin_id=origin_id,
+                partition=partition,
+                source_snapshot_ids=epoch.source_snapshot_ids,
+                target_start=target,
+                target_end=target,
+                temporal_valid=True,
+                semantic_valid=True,
+            )
+        }
+    )
+
+
 def start_epoch(ledger, epoch, budget):
     from forecast_anything.contracts import Snapshot
 
@@ -342,6 +425,27 @@ def test_holdout_cannot_be_reused_for_tuning(tmp_path):
             first.model_copy(update={"epoch_id": "new-final"}),
             DiscoveryBudget(),
         )
+
+    # A second epoch cannot bypass the reservation by omitting its tuning
+    # declaration and attaching the reserved origin to a persisted evaluation.
+    other = compile_proposal(
+        CandidateProposal(
+            template_id="forecast_change", source_ids=("sales",), reason="retune"
+        ),
+        (profile(),),
+        epoch_id="other-epoch",
+    )
+    other_epoch = epoch_for(other, final_origin_ids=(), final_candidate_id=None)
+    start_epoch(ledger, other_epoch, DiscoveryBudget())
+    ledger.register_candidate(other)
+    for partition in ("exploration", "selection"):
+        record = stored_origin_evaluation(
+            ledger, other, other_epoch, "origin-0", partition
+        )
+        with pytest.raises(DomainError, match="holdout_reuse"):
+            ledger.append_evaluation(record)
+        with pytest.raises(DomainError, match="not_found"):
+            ledger.get_evaluation(record.evaluation_id)
 
 
 def test_rejected_candidate_is_preserved(tmp_path):
@@ -613,3 +717,81 @@ def test_evaluation_context_cannot_be_mutated_after_validation():
     record = evidence_for(c, epoch_for(c))[0]
     with pytest.raises(ValidationError):
         record.discovery.temporal_valid = False
+
+
+@pytest.mark.parametrize("partition", ["exploration", "selection"])
+def test_persisted_tuning_evaluation_requires_declared_origin(tmp_path, partition):
+    ledger = Ledger(tmp_path / "ledger.db")
+    c = candidate()
+    epoch = epoch_for(c, tuning_origin_ids=("tuning-1",))
+    start_epoch(ledger, epoch, DiscoveryBudget())
+    ledger.register_candidate(c)
+    undeclared = stored_origin_evaluation(ledger, c, epoch, "undeclared", partition)
+    with pytest.raises(DomainError, match="unreserved_discovery_origin"):
+        ledger.append_evaluation(undeclared)
+    declared = undeclared.model_copy(
+        update={
+            "discovery": undeclared.discovery.model_copy(
+                update={"origin_id": "tuning-1"}
+            )
+        }
+    )
+    ledger.append_evaluation(declared)
+    assert Ledger(ledger.path).get_evaluation(declared.evaluation_id) == declared
+
+
+def test_persisted_final_evaluation_requires_frozen_final_origin(tmp_path):
+    ledger = Ledger(tmp_path / "ledger.db")
+    c = candidate()
+    epoch = epoch_for(c, tuning_origin_ids=("tuning-1",))
+    start_epoch(ledger, epoch, DiscoveryBudget())
+    ledger.register_candidate(c)
+    unreserved = stored_origin_evaluation(ledger, c, epoch, "tuning-1", "final")
+    with pytest.raises(DomainError, match="unreserved_discovery_origin"):
+        ledger.append_evaluation(unreserved)
+    reserved = unreserved.model_copy(
+        update={
+            "discovery": unreserved.discovery.model_copy(
+                update={"origin_id": "origin-0"}
+            )
+        }
+    )
+    ledger.append_evaluation(reserved)
+    assert Ledger(ledger.path).get_evaluation(reserved.evaluation_id) == reserved
+
+
+@pytest.mark.parametrize(
+    "template", ["expected_deviation", "forecast_change", "unknown", "declared_limit"]
+)
+def test_compiler_cost_estimates_survive_ledger_roundtrip(tmp_path, template):
+    source = profile(
+        proposed_mapping={
+            **profile().proposed_mapping,
+            "operational_limit": {"constant": 12},
+        }
+    )
+    c = candidate(template, source)
+    ledger = Ledger(tmp_path / "ledger.db")
+    start_epoch(ledger, epoch_for(c), DiscoveryBudget())
+    ledger.register_candidate(c)
+    restored = Ledger(ledger.path).get_candidate(c.candidate_id)
+    if template in {"expected_deviation", "forecast_change"}:
+        assert restored.estimated_cost.status == "known"
+        assert restored.estimated_cost.value == 2
+        assert restored.estimated_cost.unit == "provider_calls_per_run"
+    else:
+        assert restored.estimated_cost.status == "unavailable"
+        assert restored.estimated_cost.value is None
+        assert restored.estimated_cost.basis == "unsupported_proposal"
+    assert restored.estimated_cost == c.estimated_cost
+
+
+def test_candidate_cannot_override_trusted_compiler_cost(tmp_path):
+    ledger = Ledger(tmp_path / "ledger.db")
+    c = candidate()
+    start_epoch(ledger, epoch_for(c), DiscoveryBudget())
+    forged = c.model_copy(
+        update={"estimated_cost": c.estimated_cost.model_copy(update={"value": 0})}
+    )
+    with pytest.raises(DomainError, match="candidate_identity_mismatch"):
+        ledger.register_candidate(forged)

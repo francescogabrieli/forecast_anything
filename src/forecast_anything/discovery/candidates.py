@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..contracts import (
     Candidate,
+    CandidateCostEstimate,
     Contract,
     DiscoveryBudget,
     DomainError,
@@ -245,6 +246,15 @@ def compile_proposal(
         protocol_id=_digest({"protocol": identity, "version": 1}),
         epoch_id=epoch_id,
         protocol=protocol,
+        estimated_cost=(
+            CandidateCostEstimate(
+                status="known",
+                value=sum(node.kind == "forecast" for node in graph.nodes),
+                basis="static_graph_forecast_count; excludes source I/O, latency, money and verification replay",
+            )
+            if not unresolved
+            else CandidateCostEstimate(basis="unsupported_proposal")
+        ),
         source_profiles=selected,
         executable=not unresolved,
         unresolved=tuple(unresolved),
@@ -268,6 +278,7 @@ def validate_candidate(candidate: Candidate) -> tuple[str, ...]:
         candidate.protocol_id,
         candidate.graph,
         candidate.protocol,
+        candidate.estimated_cost,
         candidate.executable,
         candidate.unresolved,
     ) != (
@@ -275,6 +286,7 @@ def validate_candidate(candidate: Candidate) -> tuple[str, ...]:
         expected.protocol_id,
         expected.graph,
         expected.protocol,
+        expected.estimated_cost,
         expected.executable,
         expected.unresolved,
     ):
