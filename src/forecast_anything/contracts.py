@@ -1,12 +1,29 @@
 """Version-one wire contracts shared by graph, providers, and execution."""
 from __future__ import annotations
 
+from math import isfinite
 from typing import Annotated, Any, Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, FiniteFloat, StringConstraints, model_validator
+from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, Field, FiniteFloat, StringConstraints, model_validator
 
 Identifier = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 Matrix = tuple[tuple[FiniteFloat, ...], ...]
+
+
+def _require_finite_nested(value: Any) -> Any:
+    """Validate opaque JSON-like data without changing its structure."""
+    if isinstance(value, float) and not isfinite(value):
+        raise ValueError("opaque dictionary numbers must be finite")
+    if isinstance(value, dict):
+        for item in value.values():
+            _require_finite_nested(item)
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        for item in value:
+            _require_finite_nested(item)
+    return value
+
+
+OpaqueDictionary = Annotated[dict[str, Any], AfterValidator(_require_finite_nested)]
 
 
 class Contract(BaseModel):
@@ -33,7 +50,7 @@ class Node(Contract):
     node_id: Identifier
     kind: Literal["source", "forecast", "transform", "event"]
     inputs: tuple[Identifier, ...]
-    config: dict[str, Any]
+    config: OpaqueDictionary
 
 
 class GraphSpec(Contract):
@@ -126,12 +143,12 @@ class EventRecord(Contract):
     event_id: Identifier
     kind: Identifier
     run_id: Identifier
-    payload: dict[str, Any]
+    payload: OpaqueDictionary
 
 
 class _ErrorPayload(Contract):
     code: Identifier
-    details: dict[str, Any]
+    details: OpaqueDictionary
 
 
 class DomainError(Exception):

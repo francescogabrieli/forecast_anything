@@ -87,3 +87,22 @@ def test_operational_contracts_and_schema():
     error = DomainError(code="bad_input", details={"node": "n"})
     assert error.model_dump() == {"code": "bad_input", "details": {"node": "n"}}
     assert isinstance(error, Exception)
+
+
+@pytest.mark.parametrize("number", [float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize("boundary", ["config", "payload", "details"])
+def test_opaque_dictionaries_reject_nested_nonfinite_values(boundary, number):
+    nested = {"arbitrary": [{"nested": ("preserved", number)}]}
+    with pytest.raises(ValidationError):
+        if boundary == "config":
+            Node(node_id="n", kind="source", inputs=(), config=nested)
+        elif boundary == "payload":
+            EventRecord(cursor=1, event_id="e", kind="custom", run_id="r", payload=nested)
+        else:
+            DomainError(code="custom", details=nested)
+
+
+def test_opaque_dictionary_preserves_finite_nested_structure():
+    nested = {"arbitrary": [{"nested": ("preserved", 3.5, None)}]}
+    node = Node(node_id="n", kind="source", inputs=(), config=nested)
+    assert node.config == nested
