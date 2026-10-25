@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "prepared_directory": ".local/data",
+  "providers": {
+    "timestral": {
+      "authorization": "pending_license"
+    }
+  },
+  "scenarios": [
+    {
+      "id": "synthetic_deliveries",
+      "kind": "synthetic_scenario",
+      "description": "Hypothetical deliveries only; never observed targets",
+      "values": [
+        5,
+        8
+      ]
+    }
+  ],
+  "datasets": {
+    "retail": {
+      "source": {
+        "path": "retail.csv",
+        "format": "csv",
+        "kind": "synthetic_fixture",
+        "license": "CC0-1.0",
+        "url": "fixture://retail"
+      },
+      "series_id": "retail",
+      "unit": "items",
+      "frequency": "1d",
+      "start": "2020-01-01T00:00:00Z",
+      "end": "2020-02-01T00:00:00Z",
+      "horizon": 2,
+      "period": 2,
+      "context": 4,
+      "recipe": "retail",
+      "assumed_available_at": "period_end_UTC",
+      "timezone_assumption": "source wall clock treated as UTC; original timezone not certified",
+      "selection_rule": "fixed before holdout inspection"
+    },
+    "energy": {
+      "source": {
+        "path": "energy.csv",
+        "format": "csv",
+        "kind": "synthetic_fixture",
+        "license": "CC0-1.0",
+        "url": "fixture://energy"
+      },
+      "series_id": "energy",
+      "unit": "kW",
+      "frequency": "1h",
+      "start": "2020-01-01T00:00:00Z",
+      "end": "2020-01-02T07:00:00Z",
+      "horizon": 2,
+      "period": 2,
+      "context": 4,
+      "recipe": "energy",
+      "assumed_available_at": "period_end_UTC",
+      "timezone_assumption": "source wall clock treated as UTC; original timezone not certified",
+      "selection_rule": "fixed before holdout inspection"
+    },
+    "activity": {
+      "source": {
+        "path": "activity.csv",
+        "format": "csv",
+        "kind": "synthetic_fixture",
+        "license": "CC0-1.0",
+        "url": "fixture://activity"
+      },
+      "series_id": "activity",
+      "unit": "views",
+      "frequency": "1d",
+      "start": "2020-01-01T00:00:00Z",
+      "end": "2020-02-01T00:00:00Z",
+      "horizon": 2,
+      "period": 2,
+      "context": 4,
+      "recipe": "activity",
+      "assumed_available_at": "period_end_UTC",
+      "timezone_assumption": "source wall clock treated as UTC; original timezone not certified",
+      "selection_rule": "fixed before holdout inspection"
+    }
+  }
+}
