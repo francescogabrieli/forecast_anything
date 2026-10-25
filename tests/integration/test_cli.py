@@ -91,3 +91,14 @@ def test_cli_errors_and_failed_run(tmp_path):
     missing = cli('show', 'absent', '--db', tmp_path / 'runs.db')
     assert missing.returncode != 0
     assert json.loads(missing.stderr)['code'] == 'not_found'
+
+
+def test_cli_malformed_csv_header_is_structured_error(tmp_path):
+    data = tmp_path / 'malformed.csv'
+    data.write_text('"series_id,event_time,available_at,revision,value,unit\n')
+    result = cli('run', ROOT / 'examples/minimal/graph.json', '--data', data,
+                 '--as-of', '2026-10-24T00:00:00Z', '--db', tmp_path / 'runs.db')
+    assert result.returncode == 2
+    assert result.stdout == ''
+    assert 'Traceback' not in result.stderr
+    assert json.loads(result.stderr)['code'] == 'invalid_csv'

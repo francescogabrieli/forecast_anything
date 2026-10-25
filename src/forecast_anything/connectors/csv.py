@@ -16,10 +16,10 @@ def load_csv(path: Path) -> tuple[Observation, ...]:
     observations = []
     with Path(path).open(encoding='utf-8-sig', newline='') as stream:
         reader = csv.DictReader(stream, strict=True)
-        header = reader.fieldnames or []
-        if len(header) != len(fields) or set(header) != fields:
-            raise DomainError('invalid_csv_header', {'required': sorted(fields), 'actual': header})
         try:
+            header = reader.fieldnames or []
+            if len(header) != len(fields) or set(header) != fields:
+                raise DomainError('invalid_csv_header', {'required': sorted(fields), 'actual': header})
             for row_number, row in enumerate(reader, start=2):
                 if None in row or any(value is None for value in row.values()):
                     raise DomainError('invalid_csv_row', {'row': row_number, 'reason': 'column count'})
