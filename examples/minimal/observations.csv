@@ -1,0 +1,5 @@
+series_id,event_time,available_at,revision,value,unit
+demand,2026-10-21T00:00:00Z,2026-10-21T00:00:00Z,1,10,kWh
+demand,2026-10-22T00:00:00Z,2026-10-22T00:00:00Z,1,20,kWh
+demand,2026-10-23T00:00:00Z,2026-10-23T00:00:00Z,1,30,kWh
+demand,2026-10-23T00:00:00Z,2026-10-25T00:00:00Z,2,99,kWh

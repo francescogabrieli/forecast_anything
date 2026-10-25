@@ -16,3 +16,6 @@ default-groups = []
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+
+[project.scripts]
+forecast-anything = "forecast_anything.cli:main"
