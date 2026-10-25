@@ -354,6 +354,72 @@ class EligibilityDecision(Contract):
     policy_version: Identifier = "discovery-v1"
 
 
+class Watch(Contract):
+    """Current relevance state; Candidate and decision retain their issued lineage.
+
+    Evidence applicability is current metadata, independent of immutable scores.
+    A minimal watch can be displayed without lineage, but cannot be qualified.
+    """
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
+
+    watch_id: Identifier
+    candidate_id: Identifier
+    lifecycle: Literal["candidate", "evaluating", "active", "paused", "unsupported"]
+    quality: Literal["provisional", "usable", "stale", "degraded"]
+    graph_id: Identifier
+    graph_version: int
+    policy_version: Identifier
+    next_due_at: AwareDatetime
+    muted: bool
+    priority: Annotated[int, Field(ge=0, le=5, strict=True)] = 3
+    candidate: Candidate | None = None
+    eligibility_decision: EligibilityDecision | None = None
+    source_snapshot_ids: tuple[Identifier, ...] = ()
+    evidence_applicable: bool = False
+    reevaluation_required: bool = True
+    invalidated_evaluation_ids: tuple[Identifier, ...] = ()
+    candidate_invalidated: bool = False
+    supersedes_watch_id: Identifier | None = None
+
+    @model_validator(mode="after")
+    def validate_lineage(self) -> Watch:
+        if self.supersedes_watch_id == self.watch_id:
+            raise ValueError("watch cannot supersede itself")
+        if self.candidate is not None and (
+            self.candidate_id != self.candidate.candidate_id
+            or (self.graph_id, self.graph_version)
+            != (self.candidate.graph.graph_id, self.candidate.graph.version)
+        ):
+            raise ValueError("watch candidate lineage mismatch")
+        if self.eligibility_decision is not None and (
+            self.eligibility_decision.candidate_id != self.candidate_id
+            or self.eligibility_decision.policy_version != self.policy_version
+            or self.candidate is None
+            or (
+                self.eligibility_decision.protocol_id,
+                self.eligibility_decision.epoch_id,
+            )
+            != (self.candidate.protocol_id, self.candidate.epoch_id)
+        ):
+            raise ValueError("watch decision lineage mismatch")
+        return self
+
+    @property
+    def operational(self) -> bool:
+        """Only current, qualified, unmuted watches may emit operational alerts."""
+        return (
+            self.lifecycle == "active"
+            and self.quality == "usable"
+            and not self.muted
+            and self.evidence_applicable
+            and not self.reevaluation_required
+            and not self.candidate_invalidated
+            and self.eligibility_decision is not None
+            and self.eligibility_decision.action == "activate"
+        )
+
+
 class EvaluationContext(Contract):
     """Trusted evaluator attestation, never accepted as an agent proposal.
 

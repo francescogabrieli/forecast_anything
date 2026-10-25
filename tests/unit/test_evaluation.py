@@ -361,6 +361,8 @@ def test_evaluation_ledger_requires_existing_evidence(tmp_path):
 def test_v1_ledger_migrates_without_changing_runs(tmp_path):
     from importlib.resources import files
 
+    from forecast_anything.store import MIGRATIONS
+
     path = tmp_path / "v1.db"
     with sqlite3.connect(path) as connection:
         connection.executescript(
@@ -379,7 +381,9 @@ def test_v1_ledger_migrates_without_changing_runs(tmp_path):
     ledger.append_evaluation(record)
     assert ledger.get_run("issued") == run()
     with sqlite3.connect(path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == len(
+            MIGRATIONS
+        )
 
 
 def test_frozen_split_rejects_extended_or_revised_calendar():
