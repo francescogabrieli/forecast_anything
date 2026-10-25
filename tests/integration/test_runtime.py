@@ -241,3 +241,36 @@ def test_second_emission_preserves_first_canonical_bytes(tmp_path):
     assert first.run_id != second.run_id
     assert second.results["prediction"].point == ((20, 30, 20),)
     assert ledger.get_run(first.run_id).model_dump_json() == original
+
+
+def test_provider_local_dst_fold_outputs_are_normalized_for_operator_calendar(tmp_path):
+    from zoneinfo import ZoneInfo
+    origin = datetime(2026, 10, 25, tzinfo=timezone.utc)
+    data = freeze(tuple(Observation(series_id="s", event_time=origin-timedelta(hours=4-i),
+        available_at=origin, revision="1", value=v, unit="count")
+        for i, v in enumerate((10, 20, 10, 20))), origin)
+
+    class LocalOutput(SeasonalNaiveProvider):
+        def forecast(self, request):
+            result = super().forecast(request)
+            return result.model_copy(update={"timestamps": tuple(
+                t.astimezone(ZoneInfo("Europe/Rome")) for t in result.timestamps)})
+
+    class LocalScale(Scale):
+        def apply(self, inputs, config):
+            result = super().apply(inputs, config)
+            return result.model_copy(update={"timestamps": tuple(
+                t.astimezone(ZoneInfo("Europe/Rome")) for t in result.timestamps)})
+
+    node = Node(node_id="scaled", kind="transform", inputs=("prediction",), config={
+        "operator": "scale", "relation_type": {"prediction": "physical"},
+        "parameters": {"bindings": {"inflow": "prediction"}, "factor": 2}})
+    ledger = Ledger(tmp_path/"ledger.sqlite")
+    run = Runtime(ledger, {"seasonal_naive": LocalOutput(2)}, {"scale": LocalScale()}, lambda: origin).run(
+        graph(extra=(node,)), {"data": data}, origin, "fold")
+    assert run.state == "completed"
+    expected = (origin, origin+timedelta(hours=1), origin+timedelta(hours=2))
+    assert run.results["prediction"].timestamps == expected
+    assert run.results["scaled"].timestamps == expected
+    assert run.results["scaled"].point == ((20, 40, 20),)
+    assert ledger.get_run(run.run_id).results["scaled"].timestamps == expected

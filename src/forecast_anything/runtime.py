@@ -23,6 +23,8 @@ def _digest(value: dict) -> str:
 def _result(value) -> ForecastResult:
     # Revalidation catches mutable models and malicious adapters using model_copy.
     result = ForecastResult.model_validate(value.model_dump())
+    # Compare absolute instants: same-ZoneInfo datetime comparisons ignore fold.
+    result.timestamps = tuple(timestamp.astimezone(timezone.utc) for timestamp in result.timestamps)
     if not result.series_ids or len(set(result.series_ids)) != len(result.series_ids):
         raise DomainError("invalid_result", {"reason": "series IDs must be nonempty and unique"})
     if not result.timestamps or any(b <= a for a, b in zip(result.timestamps, result.timestamps[1:])):
