@@ -54,6 +54,7 @@ Ruff checks core errors and import ordering (`E4`, `E7`, `E9`, `F`, `I`) and for
 
 - [Approved design](docs/superpowers/specs/2026-10-24-forecast-anything-design.md)
 - [Complete roadmap](docs/roadmap.md)
+- [Quality and CI roadmap](docs/quality-roadmap.md)
 - [Core and temporal ledger](docs/superpowers/plans/2026-10-24-01-core.md)
 - [Models, composition and evidence](docs/superpowers/plans/2026-10-24-02-models-and-evidence.md)
 - [Autonomous observatory and agents](docs/superpowers/plans/2026-10-24-03-observatory-and-agents.md)

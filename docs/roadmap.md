@@ -44,6 +44,10 @@ Queste sono decisioni del piano, non preferenze già espresse dall’utente:
 
 Ogni piano definisce file, interfacce, verifiche e commit. L’ordine dei piani è vincolante; il lavoro indipendente al loro interno può essere parallelizzato soltanto dopo aver fissato le interfacce condivise.
 
+## Controlli di qualità del repository
+
+La CI attuale verifica installazione bloccata, Ruff, test e build su Python 3.12 e 3.14. La progressione dei controlli — incluso un limite proposto di 450 righe per file Python — segue i rischi di ogni fase ed è descritta nella [roadmap qualità e CI](quality-roadmap.md).
+
 ## Passaggio 1 — Prima le proprietà su cui costruire tutto
 
 Implementare il contratto comune, gli snapshot point-in-time, la validazione delle dipendenze, le emissioni immutabili e gli eventi durevoli. La prima previsione usa una baseline e una fonte CSV normalizzata.
