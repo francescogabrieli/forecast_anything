@@ -558,3 +558,102 @@ def test_marginal_quantiles_run_without_claiming_joint_paths(tmp_path, represent
     with pytest.raises(DomainError, match="unsupported_representation"):
         runtime.run(graph(extra=(node,)), {"data": snapshot()}, T, "joint")
     assert ledger.get_run_by_key("joint") is None
+
+
+@pytest.mark.parametrize(
+    "representations", [("point", "joint_paths"), ("joint_paths",)]
+)
+@pytest.mark.parametrize(
+    "fault",
+    [None, "group", "count", "calendar", "shape", "dropped_paths", "event_window"],
+)
+def test_builtin_transform_event_runtime_contract(tmp_path, representations, fault):
+    from forecast_anything.operators import register_builtin_operators
+
+    class Fixture(SeasonalNaiveProvider):
+        def capabilities(self):
+            return (
+                super()
+                .capabilities()
+                .model_copy(update={"representations": representations})
+            )
+
+        def forecast(self, request):
+            answer = super().forecast(request)
+            return answer.model_copy(
+                update={
+                    "point": answer.point if "point" in representations else None,
+                    "paths": (((2, 0, 0),), ((0, 2, 0),)),
+                    "sample_group_id": "world",
+                }
+            )
+
+    operators = register_builtin_operators()
+    delegate = operators["any_exceed" if fault == "event_window" else "sum_aligned"]
+
+    class Corrupt:
+        def contract(self):
+            return delegate.contract()
+
+        def apply(self, inputs, config):
+            answer = delegate.apply(inputs, config)
+            changes = (
+                {
+                    "group": {"sample_group_id": "other"},
+                    "count": {"paths": answer.paths[:1]},
+                    "calendar": {
+                        "timestamps": tuple(
+                            t + timedelta(hours=1) for t in answer.timestamps
+                        )
+                    },
+                    "shape": {"paths": (((1,),),)},
+                    "dropped_paths": {"paths": None, "sample_group_id": None},
+                    "event_window": {"timestamps": (T + timedelta(hours=5),)},
+                }
+                if fault != "event_window"
+                else {"event_window": {"timestamps": (T + timedelta(hours=5),)}}
+            )
+            return answer.model_copy(update=changes[fault]) if fault else answer
+
+    operators[delegate.contract().name] = Corrupt()
+    extra = (
+        Node(
+            node_id="sum",
+            kind="transform",
+            inputs=("prediction",),
+            config={
+                "operator": "sum_aligned",
+                "relation_type": {"prediction": "accounting"},
+            },
+        ),
+        Node(
+            node_id="event",
+            kind="event",
+            inputs=("sum",),
+            config={
+                "operator": "any_exceed",
+                "relation_type": {"sum": "statistical"},
+                "parameters": {
+                    "bindings": {"value": "sum"},
+                    "threshold": 1,
+                    "comparator": "gt",
+                },
+            },
+        ),
+    )
+    ledger = Ledger(tmp_path / "ledger.sqlite")
+    run = Runtime(ledger, {"seasonal_naive": Fixture(2)}, operators, lambda: T).run(
+        graph(extra=extra), {"data": snapshot()}, T, "builtins"
+    )
+    if fault:
+        assert run.state == "failed"
+        assert (
+            ("sum" not in run.results)
+            if fault != "event_window"
+            else ("event" not in run.results)
+        )
+    else:
+        assert run.state == "completed"
+        assert run.results["sum"].paths == (((2, 0, 0),), ((0, 2, 0),))
+        assert run.results["event"].point == ((1,),)
+        assert run.results["event"].timestamps == (T + timedelta(hours=2),)

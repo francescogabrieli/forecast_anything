@@ -90,7 +90,8 @@ def compile_graph(
     Trusted units rules ``same``, ``dimensionless``, and ``probability`` require
     known equal input units; outputs respectively retain units, ``1``, or
     ``probability``. Transforms guarantee
-    only their required representation; events produce point probabilities.
+    their common accepted representations only when explicitly declared to preserve
+    them; legacy transforms retain the required representation and events point.
     """
     # Revalidate registrations, including adapters using mutable models/model_copy.
     capabilities = {
@@ -171,7 +172,7 @@ def compile_graph(
             if any(calendars[parent][0] != config.frequency for parent in bindings):
                 _fail("incompatible_calendar", key)
             units[key] = units[config.history]
-            calendars[key] = (config.frequency, config.horizon)
+            calendars[key] = (config.frequency, (0, config.horizon))
             representations[key] = set(capability.representations)
             continue
         bindings = config.parameters.get("bindings", {})
@@ -195,10 +196,10 @@ def compile_graph(
             _fail("unknown_operator", key, operator=config.operator)
         if not node.inputs:
             _fail("invalid_config", key, reason="operator requires inputs")
-        if any(
-            contract.required_representation not in representations[parent]
-            for parent in node.inputs
-        ):
+        common = contract.accepted_inputs().intersection(
+            *(representations[parent] for parent in node.inputs)
+        )
+        if not common:
             _fail(
                 "unsupported_representation",
                 key,
@@ -217,9 +218,14 @@ def compile_graph(
             contract.units_rule, tuple(input_units)
         )
         calendars[key] = calendars[node.inputs[0]]
-        representations[key] = (
-            {"point"} if node.kind == "event" else {contract.required_representation}
-        )
+        if (
+            node.kind == "event"
+            and contract.output_representation == "point"
+            and contract.units_rule == "probability"
+        ):
+            frequency, (start, horizon) = calendars[key]
+            calendars[key] = (frequency, (start + horizon - 1, 1))
+        representations[key] = contract.output_representations(common, node.kind)
     return CompiledGraph(
         spec=spec,
         order=tuple(order),

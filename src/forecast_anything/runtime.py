@@ -214,7 +214,7 @@ class Runtime:
             for node_id, config in configs.items()
             if isinstance(config, ForecastConfig)
         }
-        actual, results = {}, {}
+        actual, results, guaranteed = {}, {}, {}
         state = "completed"
         for node_id in compiled.order:
             config = configs[node_id]
@@ -254,6 +254,7 @@ class Runtime:
                             "invalid_provider_output", {"node_id": node_id}
                         )
                     _require_representations(result, capability.representations)
+                    guaranteed[node_id] = set(capability.representations)
                     bindings = {"history": config.history}
                     if config.known_future:
                         bindings["known_future"] = config.known_future
@@ -268,17 +269,22 @@ class Runtime:
                         for value in inputs.values()
                         if isinstance(value, ForecastResult)
                     ]
-                    for value in forecasts:
-                        _require_representations(
-                            value, (contract.required_representation,)
+                    common = contract.accepted_inputs().intersection(
+                        *(guaranteed[parent] for parent in node.inputs)
+                    )
+                    if not common or len(forecasts) != len(inputs):
+                        raise DomainError(
+                            "unsupported_representation", {"node_id": node_id}
                         )
+                    for value in forecasts:
+                        _require_representations(value, common)
                     if forecasts and any(
                         value.timestamps != forecasts[0].timestamps
                         for value in forecasts
                     ):
                         raise DomainError("incompatible_calendar", {"node_id": node_id})
                     if (
-                        contract.required_representation == "joint_paths"
+                        "joint_paths" in common
                         and forecasts
                         and any(
                             value.sample_group_id != forecasts[0].sample_group_id
@@ -295,14 +301,38 @@ class Runtime:
                             deepcopy(inputs), deepcopy(parameters)
                         )
                     )
-                    _require_representations(
-                        result,
-                        (
-                            "point"
-                            if node.kind == "event"
-                            else contract.required_representation,
-                        ),
-                    )
+                    output_reps = contract.output_representations(common, node.kind)
+                    _require_representations(result, output_reps)
+                    guaranteed[node_id] = output_reps
+                    if (
+                        "joint_paths" in output_reps
+                        and "joint_paths" in common
+                        and (
+                            result.sample_group_id != forecasts[0].sample_group_id
+                            or len(result.paths) != len(forecasts[0].paths)
+                        )
+                    ):
+                        raise DomainError("incompatible_samples", {"node_id": node_id})
+                    if contract.output_representation == "preserve" and any(
+                        result.series_ids != value.series_ids for value in forecasts
+                    ):
+                        raise DomainError("incompatible_series", {"node_id": node_id})
+                    if (
+                        node.kind == "event"
+                        and contract.output_representation == "point"
+                        and contract.units_rule == "probability"
+                    ):
+                        if (
+                            len(result.series_ids) != 1
+                            or result.timestamps != (forecasts[0].timestamps[-1],)
+                            or result.paths is not None
+                            or result.quantiles is not None
+                            or result.sample_group_id is not None
+                            or not 0 <= result.point[0][0] <= 1
+                        ):
+                            raise DomainError(
+                                "invalid_event_output", {"node_id": node_id}
+                            )
                     input_units = {
                         unit
                         for value in inputs.values()

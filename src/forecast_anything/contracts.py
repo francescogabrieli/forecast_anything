@@ -107,6 +107,32 @@ class OperatorContract(Contract):
     name: Identifier
     required_representation: Representation
     units_rule: Identifier
+    # Optional v1 additions: omission retains Plan 01 negotiation and wire meaning.
+    accepted_representations: tuple[Representation, ...] | None = None
+    output_representation: Representation | Literal["preserve"] | None = None
+
+    @model_validator(mode="after")
+    def validate_negotiation(self) -> OperatorContract:
+        accepted = self.accepted_representations
+        if accepted is not None and (
+            not accepted
+            or len(set(accepted)) != len(accepted)
+            or self.required_representation not in accepted
+        ):
+            raise ValueError(
+                "accepted representations must be unique and include required fallback"
+            )
+        return self
+
+    def accepted_inputs(self) -> set[str]:
+        return set(self.accepted_representations or (self.required_representation,))
+
+    def output_representations(self, common: set[str], kind: str) -> set[str]:
+        if self.output_representation == "preserve":
+            return common
+        if self.output_representation is not None:
+            return {self.output_representation}
+        return {"point" if kind == "event" else self.required_representation}
 
 
 class ForecastRequest(Contract):
