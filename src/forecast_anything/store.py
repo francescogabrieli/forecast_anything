@@ -13,7 +13,14 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Iterator
 
-from .contracts import DomainError, EventRecord, GraphSpec, RunRecord, Snapshot
+from .contracts import (
+    DomainError,
+    EvaluationRecord,
+    EventRecord,
+    GraphSpec,
+    RunRecord,
+    Snapshot,
+)
 
 
 def _json(value: object) -> str:
@@ -26,12 +33,19 @@ class Ledger:
         with self._connection() as connection:
             connection.execute("PRAGMA journal_mode = WAL")
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version > 1:
+            if version > 2:
                 raise DomainError("unsupported_schema", {"version": version})
             if version == 0:
                 migration = (
                     files("forecast_anything")
                     .joinpath("migrations/001_initial.sql")
+                    .read_text()
+                )
+                connection.executescript(migration)
+            if version < 2:
+                migration = (
+                    files("forecast_anything")
+                    .joinpath("migrations/002_evaluations.sql")
                     .read_text()
                 )
                 connection.executescript(migration)
@@ -153,6 +167,45 @@ class Ledger:
 
     def get_run(self, run_id: str) -> RunRecord:
         return RunRecord.model_validate_json(self._get("runs", {"run_id": run_id}))
+
+    def append_evaluation(self, record: EvaluationRecord) -> str:
+        record = EvaluationRecord.model_validate(record.model_dump())
+        content = _json(record.model_dump(mode="json"))
+        with self._transaction() as connection:
+            previous = connection.execute(
+                "SELECT content FROM evaluations WHERE evaluation_id = ?",
+                (record.evaluation_id,),
+            ).fetchone()
+            if previous is not None:
+                if previous[0] != content:
+                    raise DomainError(
+                        "immutable_identity", {"evaluation_id": record.evaluation_id}
+                    )
+                return record.evaluation_id
+            try:
+                connection.execute(
+                    "INSERT INTO evaluations VALUES (?, ?, ?, ?)",
+                    (
+                        record.evaluation_id,
+                        record.run_id,
+                        record.actuals_snapshot_id,
+                        content,
+                    ),
+                )
+            except sqlite3.IntegrityError as error:
+                raise DomainError(
+                    "missing_evaluation_reference",
+                    {
+                        "run_id": record.run_id,
+                        "actuals_snapshot_id": record.actuals_snapshot_id,
+                    },
+                ) from error
+        return record.evaluation_id
+
+    def get_evaluation(self, evaluation_id: str) -> EvaluationRecord:
+        return EvaluationRecord.model_validate_json(
+            self._get("evaluations", {"evaluation_id": evaluation_id})
+        )
 
     def get_run_by_key(self, key: str) -> RunRecord | None:
         with self._connection() as connection:

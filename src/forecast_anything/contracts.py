@@ -206,6 +206,35 @@ class EventRecord(Contract):
     payload: OpaqueDictionary
 
 
+class _ImmutableDict(dict):
+    def _deny(self, *args, **kwargs):
+        raise TypeError("evaluation metrics are immutable")
+
+    __setitem__ = __delitem__ = clear = pop = popitem = setdefault = update = (
+        __ior__
+    ) = _deny
+
+
+def _immutable(value):
+    if isinstance(value, dict):
+        return _ImmutableDict({key: _immutable(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_immutable(item) for item in value)
+    return value
+
+
+class EvaluationRecord(Contract):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
+
+    evaluation_id: Identifier
+    run_id: Identifier
+    actuals_snapshot_id: Identifier
+    status: Literal["pending", "evaluated", "insufficient_evidence"]
+    metrics: Annotated[OpaqueDictionary, AfterValidator(_immutable)]
+    origin_count: Annotated[int, Field(ge=0, strict=True)]
+    assumptions: tuple[str, ...]
+
+
 class _ErrorPayload(Contract):
     code: Identifier
     details: OpaqueDictionary
