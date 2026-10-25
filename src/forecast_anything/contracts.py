@@ -13,6 +13,7 @@ from pydantic import (
     ConfigDict,
     Field,
     FiniteFloat,
+    JsonValue,
     StringConstraints,
     model_validator,
 )
@@ -75,6 +76,44 @@ class Snapshot(Contract):
     as_of: AwareDatetime
     observations: tuple[Observation, ...]
     assumptions: tuple[str, ...]
+
+
+class SourceSpec(Contract):
+    """Registered source configuration. Mapping is explicit; see profiling module.
+
+    secret_ref names a source-scoped injected credential, never a literal token.
+    Locations and secret references must not be passed to agents or logs.
+    """
+
+    source_id: Identifier
+    kind: Literal["csv", "http_json"]
+    location: Annotated[str, StringConstraints(min_length=1)] = Field(repr=False)
+    secret_ref: Identifier | None = Field(default=None, repr=False)
+    mapping: dict[str, JsonValue] = Field(default_factory=dict)
+    refresh_seconds: Annotated[int, Field(gt=0, strict=True)]
+
+
+class SourceField(Contract):
+    data_type: Literal[
+        "string", "integer", "number", "boolean", "datetime", "null", "mixed"
+    ]
+    nullable: bool
+
+
+SourceSampleValue = str | bool | int | FiniteFloat | None
+
+
+class SourceProfile(Contract):
+    """Sanitized agent-facing view, bounded independently of source size."""
+
+    source_id: Identifier
+    fields: dict[str, SourceField]
+    proposed_mapping: dict[str, JsonValue]
+    unresolved: tuple[str, ...]
+    assumptions: tuple[str, ...]
+    sample_rows: Annotated[
+        tuple[dict[str, SourceSampleValue], ...], Field(max_length=100)
+    ] = ()
 
 
 class Node(Contract):

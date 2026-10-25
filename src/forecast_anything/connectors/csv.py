@@ -46,3 +46,35 @@ def load_csv(path: Path) -> tuple[Observation, ...]:
                 "invalid_csv", {"line": reader.line_num, "message": str(error)}
             ) from error
     return tuple(observations)
+
+
+def load_csv_rows(
+    path: Path, *, limit: int | None = None
+) -> tuple[dict[str, str], ...]:
+    """Read tabular source data without interpreting or executing its cells.
+
+    Unlike load_csv, this accepts arbitrary columns for explicit source mapping.
+    Errors deliberately omit paths, headers and values: these may hold secrets.
+    """
+    rows = []
+    try:
+        with Path(path).open(encoding="utf-8-sig", newline="") as stream:
+            reader = csv.DictReader(stream, strict=True)
+            header = reader.fieldnames or []
+            if (
+                not header
+                or len(header) != len(set(header))
+                or any(not h for h in header)
+            ):
+                raise DomainError(
+                    "invalid_source_data", {"reason": "invalid_csv_header"}
+                )
+            for row_number, row in enumerate(reader, start=2):
+                if limit is not None and len(rows) >= limit:
+                    break
+                if None in row or any(value is None for value in row.values()):
+                    raise DomainError("invalid_source_row", {"row": row_number})
+                rows.append(row)
+    except (OSError, UnicodeError, csv.Error):
+        raise DomainError("source_unavailable", {"reason": "csv_read_failed"}) from None
+    return tuple(rows)
