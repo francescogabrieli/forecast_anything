@@ -1,6 +1,6 @@
 # Forecast Anything — roadmap completa
 
-24 ottobre 2026 · Specifica e roadmap approvate · Esecuzione non ancora avviata.
+Specifica e roadmap approvate il 24 ottobre 2026 · Piano 01 implementato il 25 ottobre 2026 · Integrazione del branch da approvare.
 
 Questa roadmap ordina risultati e dipendenze, senza assegnare date. Non è un elenco di funzionalità da costruire tutte prima di imparare qualcosa: ogni passaggio produce evidenze utilizzabili per decidere il successivo.
 
@@ -43,6 +43,10 @@ Queste sono decisioni del piano, non preferenze già espresse dall’utente:
 4. [Esperienza, packaging e pubblicazione](superpowers/plans/2026-10-24-04-experience-and-release.md): quattro task; termina con una release candidata utilizzabile.
 
 Ogni piano definisce file, interfacce, verifiche e commit. L’ordine dei piani è vincolante; il lavoro indipendente al loro interno può essere parallelizzato soltanto dopo aver fissato le interfacce condivise.
+
+## Controlli di qualità del repository
+
+La CI attuale verifica installazione bloccata, Ruff, test e build su Python 3.12 e 3.14. La progressione dei controlli — incluso un limite proposto di 450 righe per file Python — segue i rischi di ogni fase ed è descritta nella [roadmap qualità e CI](quality-roadmap.md).
 
 ## Passaggio 1 — Prima le proprietà su cui costruire tutto
 
@@ -124,17 +128,11 @@ Creare issue contribuibili su connettori e dataset ben delimitati, con contratto
 
 Usare le segnalazioni e i ritorni degli utilizzatori per ordinare miglioramenti e integrazioni. Le estensioni accettate devono riutilizzare i contratti del grafo. La fase successiva può includere Afterplot, nuovi motori, nuovi operatori e, quando giustificato dai carichi, persistenza e worker distribuiti.
 
-## Primo punto di esecuzione
+## Stato dell’esecuzione
 
-Il primo task è C1 del piano 01. Si prepara un checkout dedicato e si scrivono prima i test dei contratti; non si parte da un’interfaccia spettacolare o da una rete di agenti priva del nucleo.
+Il piano 01 (C1–C6) è implementato nel branch `feat/future-graph-core`, nella cartella canonica `Desktop/Projects/forecast_anything`, con un implementatore e una revisione indipendente per task. Il metodo subagent-driven e il branch nella cartella attuale sono stati scelti dall’utente il 25 ottobre 2026. La revisione complessiva è completata; l’integrazione del branch precede il piano successivo.
 
-Il repository è stato collegato a francescogabrieli/forecast_anything e il lavoro è stato trasferito nella cartella Desktop/Projects/forecast_anything il 24 ottobre 2026. Specifica e piani sono ora nei percorsi docs/superpowers. All’avvio dell’implementazione va applicata la skill Superpowers using-git-worktrees per scegliere il checkout di lavoro senza alterare la specifica approvata.
-
-## Stato e passaggio all’esecuzione
-
-La specifica e la roadmap sono state approvate dall’utente in chat il 24 ottobre 2026. La consegna corrente contiene documenti; l’implementazione parte dopo la scelta della modalità di esecuzione.
-
-La modalità proposta è subagent-driven: un task alla volta con implementatore e revisore, condividendo contratti fissati. Offre controlli indipendenti sui confini delicati tra tempo, probabilità e autonomia; comporta più contesti rispetto all’esecuzione nativa. In modalità nativa l’implementazione resta a un solo agente, con revisione complessiva finale.
+La CLI produce previsioni puntuali con baseline e conserva snapshot, grafi, emissioni ed eventi. [Stato del core e decisioni](implementation/core.md). I piani 02–04 restano da implementare; il prossimo task è M1, provider Timestral con verifica reale delle revisioni e prova di parità.
 
 ## Fonti tecniche per le scelte del piano
 

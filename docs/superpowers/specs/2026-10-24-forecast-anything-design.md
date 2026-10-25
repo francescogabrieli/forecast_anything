@@ -2,7 +2,7 @@
 
 Data: 24 ottobre 2026
 
-Stato: approvata dall’utente in chat il 24 ottobre 2026; anche la roadmap è confermata. Passaggio successivo: scelta della modalità di esecuzione.
+Stato: approvata dall’utente in chat il 24 ottobre 2026; anche la roadmap è confermata. Modalità subagent-driven e nuovo branch nella cartella canonica scelti il 25 ottobre 2026. Il piano 01 è implementato; l’integrazione del branch è da approvare.
 
 Nome di lavoro: Forecast Anything; disponibilità e nome definitivo da verificare.
 
