@@ -69,7 +69,9 @@ def candidate(template="forecast_change", epoch_id="epoch"):
 
 
 def watch(template="forecast_change", watch_id="w"):
-    return create_watch(candidate(template), watch_id=watch_id, next_due_at=NOW)
+    return create_watch(
+        candidate(template), watch_id=watch_id, next_due_at=NOW + timedelta(days=1)
+    )
 
 
 def decision(w, action="activate", **changes):
@@ -182,7 +184,7 @@ def test_unsupported_stays_unsupported():
 
 
 def test_stale_after_missing_refresh():
-    w = active_watch()
+    w = active_watch(next_due_at=NOW)
     result = advance_watch(w, {"kind": "refresh_expired"}, NOW + timedelta(seconds=1))
     assert (result.lifecycle, result.quality, result.operational) == (
         "active",
@@ -193,6 +195,57 @@ def test_stale_after_missing_refresh():
     assert result.next_due_at == w.next_due_at
     with pytest.raises(DomainError):
         advance_watch(w, {"kind": "refresh_expired"}, NOW - timedelta(seconds=1))
+
+
+@pytest.mark.parametrize("deadline", [None, NOW, NOW + timedelta(days=1)])
+def test_expired_decision_replay_requires_effective_future_deadline(deadline):
+    w = active_watch(next_due_at=NOW + timedelta(days=1))
+    expired_at = NOW + timedelta(days=1)
+    stale = advance_watch(w, {"kind": "refresh_expired"}, expired_at)
+    event = {"kind": "evidence_qualified", "decision": w.eligibility_decision}
+    if deadline is not None:
+        event["next_due_at"] = deadline
+    with pytest.raises(DomainError, match="invalid_refresh_deadline"):
+        advance_watch(stale, event, expired_at)
+    assert not stale.operational
+    assert stale.quality == "stale"
+    assert stale.next_due_at == expired_at
+
+
+def test_initial_activation_requires_effective_future_deadline():
+    w = watch().model_copy(update={"next_due_at": NOW})
+    with pytest.raises(DomainError, match="invalid_refresh_deadline"):
+        advance_watch(w, {"kind": "evidence_qualified", "decision": decision(w)}, NOW)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {},
+        {"candidate_id": "other"},
+        {"protocol_id": "other"},
+        {"epoch_id": "other"},
+        {"policy_version": "other"},
+    ],
+)
+def test_future_deadline_restores_only_matching_qualification(changes):
+    w = active_watch(next_due_at=NOW + timedelta(days=1))
+    expired_at = NOW + timedelta(days=1)
+    stale = advance_watch(w, {"kind": "refresh_expired"}, expired_at)
+    event = {
+        "kind": "evidence_qualified",
+        "decision": decision(w, **changes),
+        "next_due_at": expired_at + timedelta(days=1),
+    }
+    if changes:
+        with pytest.raises(DomainError, match="decision_lineage_mismatch"):
+            advance_watch(stale, event, expired_at)
+        assert not stale.operational
+    else:
+        restored = advance_watch(stale, event, expired_at)
+        assert restored.operational
+        assert restored.next_due_at == NOW + timedelta(days=2)
+        assert restored.eligibility_decision == stale.eligibility_decision
 
 
 @pytest.mark.parametrize(
@@ -584,7 +637,7 @@ def test_stored_transition_requires_ledger_validated_decision(tmp_path):
     assert ledger.watch_history("w")[-1]["watch"].eligibility_decision == d
 
 
-def test_qualified_stored_evidence_activates_and_survives_revision_unchanged(tmp_path):
+def qualified_stored_watch(tmp_path):
     ledger = Ledger(tmp_path / "qualified.db")
     c = candidate()
     ledger.put_snapshot(
@@ -657,6 +710,12 @@ def test_qualified_stored_evidence_activates_and_survives_revision_unchanged(tmp
         event_id="qualification",
     )
     assert activated.operational
+    return ledger, activated, records, d
+
+
+def test_qualified_stored_evidence_activates_and_survives_revision_unchanged(tmp_path):
+    ledger, activated, records, d = qualified_stored_watch(tmp_path)
+    c = activated.candidate
     revised = ledger.advance_watch(
         "qualified",
         {
@@ -680,6 +739,52 @@ def test_qualified_stored_evidence_activates_and_survives_revision_unchanged(tmp
     assert reopened.get_run("issued-0").results["question"].point == ((1,),)
     assert reopened.eligibility_decisions(c.candidate_id) == (d,)
     assert reopened.watch_history("qualified")[1]["watch"] == activated
+
+
+@pytest.mark.parametrize("include_old_deadline", [False, True])
+def test_durable_expired_decision_replay_cannot_restore_operational_watch(
+    tmp_path, include_old_deadline
+):
+    ledger, activated, _, d = qualified_stored_watch(tmp_path)
+    expired_at = activated.next_due_at
+    stale = ledger.advance_watch(
+        "qualified", {"kind": "refresh_expired"}, expired_at, event_id="expired"
+    )
+    history = ledger.watch_history("qualified")
+    replay = {"kind": "evidence_qualified", "decision": d}
+    if include_old_deadline:
+        replay["next_due_at"] = activated.next_due_at
+    with pytest.raises(DomainError, match="invalid_refresh_deadline"):
+        ledger.advance_watch(
+            "qualified", replay, expired_at, event_id="replayed-qualification"
+        )
+    reopened = Ledger(ledger.path)
+    assert reopened.get_watch("qualified") == stale
+    assert not reopened.get_watch("qualified").operational
+    assert reopened.watch_history("qualified") == history
+    future = expired_at + timedelta(days=1)
+    for field in ("candidate_id", "protocol_id", "epoch_id", "policy_version"):
+        with pytest.raises(DomainError, match="unrecorded_eligibility_decision"):
+            reopened.advance_watch(
+                "qualified",
+                {
+                    "kind": "evidence_qualified",
+                    "decision": d.model_copy(update={field: "other"}),
+                    "next_due_at": future,
+                },
+                expired_at,
+                event_id=f"wrong-{field}",
+            )
+    restored = reopened.advance_watch(
+        "qualified",
+        {"kind": "evidence_qualified", "decision": d, "next_due_at": future},
+        expired_at,
+        event_id="valid-requalification",
+    )
+    assert restored.operational
+    assert restored.next_due_at == future
+    assert restored.eligibility_decision == d
+    assert Ledger(ledger.path).watch_history("qualified")[-1]["watch"] == restored
 
 
 def test_initial_watch_cannot_bypass_qualification_or_replace_history(tmp_path):

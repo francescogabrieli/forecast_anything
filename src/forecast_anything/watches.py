@@ -103,6 +103,8 @@ def advance_watch(watch: Watch, event: dict, now: datetime) -> Watch:
             if deadline <= now:
                 raise DomainError("invalid_refresh_deadline", {})
             updates["next_due_at"] = deadline
+        if qualified and updates.get("next_due_at", watch.next_due_at) <= now:
+            raise DomainError("invalid_refresh_deadline", {})
     elif kind == "insufficient_evidence":
         updates = dict(
             lifecycle=(
