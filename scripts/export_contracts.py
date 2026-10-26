@@ -14,6 +14,15 @@ from forecast_anything.runtime import Runtime
 from forecast_anything.store import Ledger
 
 
+def _normalize_openapi(openapi: dict) -> dict:
+    for path in openapi.get("paths", {}).values():
+        for operation in path.values():
+            response = operation.get("responses", {}).get("422")
+            if response is not None:
+                response["description"] = "Unprocessable Content"
+    return openapi
+
+
 def export_contracts(output: Path) -> None:
     with TemporaryDirectory() as temporary:
         ledger = Ledger(Path(temporary) / "schema.db")
@@ -31,7 +40,8 @@ def export_contracts(output: Path) -> None:
             and model.__module__ == contracts.__name__
         }
         output.mkdir(parents=True, exist_ok=True)
-        for name, value in (("schemas.json", schemas), ("openapi.json", app.openapi())):
+        openapi = _normalize_openapi(app.openapi())
+        for name, value in (("schemas.json", schemas), ("openapi.json", openapi)):
             (output / name).write_text(
                 json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
                 encoding="utf-8",
