@@ -48,8 +48,14 @@ Esempio di asserzione rappresentativa da includere nei test del task:
 def test_profile_does_not_invent_units(tmp_path):
     path = tmp_path / "source.csv"
     path.write_text("date,value\n2026-10-24,1\n")
-    source = SourceSpec(source_id="s", kind="csv", location=str(path), secret_ref=None,
-                        mapping={}, refresh_seconds=60)
+    source = SourceSpec(
+        source_id="s",
+        kind="csv",
+        location=str(path),
+        secret_ref=None,
+        mapping={},
+        refresh_seconds=60,
+    )
     assert "unit" in inspect_source(source).unresolved
 ~~~
 
@@ -89,8 +95,17 @@ Esempio di asserzione rappresentativa da includere nei test del task:
 ~~~python
 def test_refresh_expired_is_visible():
     t = datetime(2026, 10, 24, tzinfo=timezone.utc)
-    watch = Watch(watch_id="w", candidate_id="c", lifecycle="active", quality="usable",
-                  graph_id="g", graph_version=1, policy_version="1", next_due_at=t, muted=False)
+    watch = Watch(
+        watch_id="w",
+        candidate_id="c",
+        lifecycle="active",
+        quality="usable",
+        graph_id="g",
+        graph_version=1,
+        policy_version="1",
+        next_due_at=t,
+        muted=False,
+    )
     assert advance_watch(watch, {"kind": "refresh_expired"}, t).quality == "stale"
 ~~~
 
@@ -112,7 +127,8 @@ Esempio di asserzione rappresentativa da includere nei test del task:
 def test_job_key_is_idempotent(tmp_path):
     queue = JobQueue(Ledger(tmp_path / "state.db"))
     assert queue.enqueue("refresh/s/1", {"source_id": "s"}).job_id == (
-        queue.enqueue("refresh/s/1", {"source_id": "s"}).job_id)
+        queue.enqueue("refresh/s/1", {"source_id": "s"}).job_id
+    )
 ~~~
 
 - [ ] **2. Run:** uv run pytest tests/integration/test_worker.py -q; fallimento atteso per worker mancante.

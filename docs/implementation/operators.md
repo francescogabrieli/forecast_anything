@@ -4,6 +4,7 @@ Plan 02 M2 supplies an explicit library registry:
 
 ```python
 from forecast_anything.operators import register_builtin_operators
+
 operators = register_builtin_operators()
 ```
 

@@ -27,7 +27,9 @@ def run_example(name: str, database: Path):
     directory = EXAMPLES[name]
     manifest = json.loads((directory / "assumptions.json").read_text(encoding="utf-8"))
     as_of = datetime.fromisoformat(manifest["as_of"].replace("Z", "+00:00"))
-    graph = GraphSpec.model_validate_json((directory / "graph.json").read_text(encoding="utf-8"))
+    graph = GraphSpec.model_validate_json(
+        (directory / "graph.json").read_text(encoding="utf-8")
+    )
     observations = load_csv(directory / "observations.csv")
     source_nodes = [node for node in graph.nodes if node.kind == "source"]
     if len(source_nodes) != 1:

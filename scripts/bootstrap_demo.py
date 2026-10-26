@@ -31,7 +31,9 @@ def bootstrap_demo(workspace: Path) -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("workspace", type=Path, help="directory for the private demo state")
+    parser.add_argument(
+        "workspace", type=Path, help="directory for the private demo state"
+    )
     args = parser.parse_args()
     print(bootstrap_demo(args.workspace))
     return 0
