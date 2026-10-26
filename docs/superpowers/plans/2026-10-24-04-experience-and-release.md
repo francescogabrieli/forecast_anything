@@ -57,7 +57,7 @@ it("keeps ambiguous units inactive", async () => {
 - [x] **2. Suite console:** test dei componenti passati.
 - [x] **3. Implementare client e percorso di collegamento.** Mostrare interpretazione, assunzioni e campi irrisolti con parole comprensibili; impedire “attivo” quando il backend segnala ambiguità bloccanti. Il token di workspace è mantenuto in memoria e non inserito in URL, log o analytics.
 - [x] **4. Ripetere e generare i tipi:** exporter, controllo drift dei contratti e typecheck passati.
-- [ ] **5. Commit dei file del task:** feat: connect sources through the observatory.
+- [x] **5. Commit dei file del task:** feat: connect sources through the observatory. Integrato con PR #2.
 
 ## Task U2: scoperte, grafo, evidenze e scenari
 
@@ -78,8 +78,8 @@ it("does not draw uncertainty for a point-only forecast", () => {
 
 - [x] **2. Run:** suite console passata.
 - [x] **3. Implementare una console con fonti, scoperte, grafo e dettaglio.** Grafo SVG navigabile anche da tastiera, con ordine deterministico derivato dal grafo. I tipi di informazione hanno etichette testuali, non solo colori. RunDetails mostra «Previsione scaduta» quando watch.quality=stale; le bande presenti hanno nome accessibile «Intervallo previsto». Gli scenari chiamano POST scenarios e visualizzano differenze sui timestamp comuni; nessuna aritmetica probabilistica viene rifatta nel browser.
-- [ ] **4. Verificare end-to-end:** npx playwright test tests/e2e/observatory.spec.ts. Collegare due fixture, far valutare una candidata, ricevere una segnalazione, cambiare una fonte e vedere i nodi interessati; disconnettere e riprendere gli eventi; confrontare uno scenario senza modificare il run base. Usare backend vero e provider deterministico dichiarato. Provare tastiera, viewport stretta e contrasto degli stati. (E2E esistente copre run reale baseline, stream interrotto e ripreso via replay, interazione tastiera, viewport mobile e scenario; flusso a due fixture/valutazione/segnalazione resta da chiudere.)
-- [ ] **5. Commit:** feat: explore connected futures and their evidence.
+- [x] **4. Verificare end-to-end:** completato nel piano [E2E a due sorgenti](2026-10-26-console-two-source-e2e.md): fixture CSV locali, API/worker reali e provider deterministico; valutazione persistita, notifica watch dopo revisione fonte, replay SSE senza duplicati, scenario immutabile, tastiera e viewport stretta verificati.
+- [x] **5. Commit:** feat: explore connected futures and their evidence. E2E completato e integrato con PR #3.
 
 ## Task U3: installazione e tre esempi trasversali
 
@@ -99,7 +99,7 @@ def test_bootstrap_keeps_existing_configuration(tmp_path):
 
 - [x] **2. Run:** test demo ed esempi passati; smoke degli esempi ripetuto.
 - [x] **3. Implementare immagini e comando di avvio.** Immagine API leggera e worker con provider opzionali installabili; nessun peso incorporato. Il profilo demo usa baseline reale e discovery a template, dichiarandolo. compose.timestral.yaml sostituisce la configurazione dello stesso worker, scarica la revisione fissata alla prima scelta e riutilizza la cache; non avvia un secondo worker concorrente. L’override agenti richiede un provider configurato; il README distingue chiaramente demo, replay e agente LLM reale. L’override agenti applica una policy di rete del processo: il servizio agenti resta su rete interna senza uscita diretta, il proxy dedicato consente il provider configurato, e core/Postgres sono raggiunti sulla rete interna. Build delle immagini base e smoke Compose baseline passati; gli overlay agenti/Timestral sono stati validati in configurazione, non avviati con servizi esterni.
-- [ ] **4. Verificare su ambiente pulito:** smoke dello stack base completato. Restano da provare lo stack con Eve e LLM configurato, lo smoke Timestral dopo licenza/parità, e il test con cinque persone della roadmap. Il core è verificato anche da wheel Python senza Docker.
+- [ ] **4. Verificare su ambiente pulito:** smoke dello stack base e della wheel completati. Lo smoke live GPT-6 Luna limitato ha percorso Eve fino a `inspect_source` su dati sintetici locali (518 token in ingresso, 23 in uscita); non verifica qualità o prontezza di produzione. Restano la validazione dello stack Compose Eve/LLM su ambiente pulito, lo smoke Timestral dopo la decisione su licenza/parità e il test osservato con cinque persone.
 - [ ] **5. Commit:** build: package a reproducible forecasting observatory.
 
 ## Task U4: release candidata e progetto contribuibile
@@ -120,8 +120,8 @@ def test_installed_release_has_passed_smoke():
 ~~~
 
 - [x] **2. Build e verifica:** `uv build` e `scripts/check_release.py --dist dist` passati; verificata l’installazione pulita della wheel fuori dal checkout.
-- [ ] **3. Preparare materiale pubblico e CI.** README, licenza proposta Apache-2.0, attribution, issue template, CI e workflow manuale per artefatto candidato sono presenti. Restano smoke reali dei modelli con artefatti e tre issue iniziali; la pubblicazione segue la risoluzione di nome/owner/registry e il passaggio 5 della roadmap.
-- [ ] **4. Ripetere il controllo su wheel e immagini:** wheel e immagine baseline verificate. La validazione d’avvio completa dello stack Eve/LLM e le tre issue iniziali sono ancora aperte; nessuno smoke Timestral è stato eseguito.
+- [ ] **3. Preparare materiale pubblico e CI.** README, licenza proposta Apache-2.0, attribution, issue template, CI e workflow manuale per artefatto candidato sono presenti. Lo smoke GPT-6 Luna limitato è completato; restano il gate Timestral dopo la decisione su licenza/parità e la creazione di tre issue iniziali. La pubblicazione segue la risoluzione di nome/owner/registry e il passaggio 5 della roadmap.
+- [ ] **4. Ripetere il controllo su wheel e immagini:** wheel e immagine baseline verificate. Restano la validazione d’avvio completa dello stack Eve/LLM, la creazione delle tre issue iniziali e lo smoke Timestral dopo la decisione su licenza/parità.
 - [ ] **5. Commit:** release: prepare the public forecasting infrastructure.
 
 ## Consegna
