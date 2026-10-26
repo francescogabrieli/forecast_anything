@@ -56,4 +56,17 @@ describe("durable discovery bridge", () => {
     expect(driver.send.mock.calls[0]![2]).toBe(driver.send.mock.calls[1]![2]);
   });
 
+  it("does not report completion when the core rejects a proposal tool call", async () => {
+    const record = { sessionId: "session-3", epochId: "epoch-3", sourceIds: ["source-3"], idempotencyKey: "job-3" };
+    const bridge = new DiscoveryBridge({
+      create: async () => ({ id: record.sessionId }),
+      send: async () => {},
+      events: async () => [
+        { type: "action.result", data: { status: "failed", result: { kind: "tool-result", toolName: "propose_candidates", output: { code: "budget_exhausted" } } } },
+        { type: "turn.completed", data: {} },
+      ],
+    }, { put: async () => {}, get: async () => record });
+    await expect(bridge.poll(record.sessionId)).resolves.toEqual({ state: "failed", candidates: [] });
+  });
+
 });

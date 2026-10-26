@@ -50,7 +50,7 @@ export class DiscoveryBridge {
     return { sessionId };
   }
   async poll(sessionId: string): Promise<{ state: "pending" | "completed" | "failed"; candidates: Candidate[] }> {
-    const raw = this.store.get ? await this.store.get(sessionId) : undefined;
+    const raw = await this.store.get(sessionId);
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new BridgeError("unknown_session");
     const record = raw as DiscoveryRecord;
     if (record.sessionId !== sessionId || !record.idempotencyKey || !record.epochId || !Array.isArray(record.sourceIds)) {
@@ -66,11 +66,18 @@ export class DiscoveryBridge {
       if (!event || typeof event !== "object") continue;
       const entry = event as { type?: string; data?: unknown };
       if (entry.type === "turn.completed") completed = true;
-      if (entry.type === "turn.failed" || entry.type === "session.failed") failed = true;
+      if (entry.type === "turn.failed" || entry.type === "turn.cancelled" || entry.type === "session.failed") failed = true;
       if (entry.type !== "action.result" || !entry.data || typeof entry.data !== "object") continue;
       const data = entry.data as { status?: string; result?: unknown };
-      if (data.status !== "completed" || !data.result || typeof data.result !== "object") continue;
+      if (!data.result || typeof data.result !== "object") continue;
       const result = data.result as { kind?: string; toolName?: string; output?: unknown };
+      if (result.kind === "tool-result" &&
+          ["inspect_source", "propose_candidates", "explain_run"].includes(result.toolName ?? "") &&
+          data.status !== "completed") {
+        failed = true;
+        continue;
+      }
+      if (data.status !== "completed") continue;
       if (result.kind !== "tool-result" || result.toolName !== "propose_candidates") continue;
       const output = result.output as { candidateIds?: unknown; candidates?: unknown };
       if (!output || !Array.isArray(output.candidateIds) || !Array.isArray(output.candidates) ||
