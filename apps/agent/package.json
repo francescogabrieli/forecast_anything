@@ -1,0 +1,33 @@
+{
+  "name": "@forecast-anything/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "build": "eve build",
+    "contracts:generate": "node scripts/generate-schema.mjs",
+    "contracts:check": "node scripts/generate-schema.mjs --check"
+  },
+  "dependencies": {
+    "@ai-sdk/mistral": "4.0.72",
+    "@workflow/world-postgres": "5.0.5",
+    "ai": "7.0.153",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "eve": "0.83.0",
+    "pg": "8.23.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/pg": "8.23.1",
+    "json-schema-to-typescript": "16.0.0",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}
