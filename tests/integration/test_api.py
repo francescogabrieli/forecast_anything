@@ -90,6 +90,44 @@ def test_workspace_token_is_required(tmp_path):
     assert client.get("/v1/sources").status_code == 401
 
 
+def test_console_cors_allows_only_configured_origins(tmp_path):
+    ledger = Ledger(tmp_path / "cors.db", clock=lambda: T)
+    runtime = Runtime(
+        ledger,
+        {"seasonal_naive": SeasonalNaiveProvider(1)},
+        register_builtin_operators(),
+        lambda: T,
+    )
+    client = TestClient(
+        create_app(
+            ledger,
+            runtime,
+            "test-token",
+            console_origins=("http://127.0.0.1:4173",),
+        )
+    )
+    allowed = client.options(
+        "/v1/events/stream",
+        headers={
+            "Origin": "http://127.0.0.1:4173",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization",
+        },
+    )
+    assert allowed.status_code == 200
+    assert allowed.headers["access-control-allow-origin"] == "http://127.0.0.1:4173"
+    denied = client.options(
+        "/v1/events/stream",
+        headers={
+            "Origin": "https://untrusted.example",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization",
+        },
+    )
+    assert denied.status_code == 400
+    assert "access-control-allow-origin" not in denied.headers
+
+
 @pytest.mark.parametrize(
     "path",
     [
@@ -97,6 +135,7 @@ def test_workspace_token_is_required(tmp_path):
         "/v1/events/stream",
         "/v1/capabilities",
         "/v1/sources/s/profile",
+        "/v1/sources/preview",
         "/openapi.json",
         "/docs",
     ],
@@ -896,3 +935,34 @@ def test_persisted_job_validation_errors_are_sanitized_on_read(tmp_path):
     assert response.json()["state"] == "failed"
     assert response.json()["error"]["code"] == "invalid_config"
     assert "private-ref" not in response.text
+
+
+def test_source_preview_does_not_register_or_enqueue(tmp_path):
+    ledger, _, client = setup(tmp_path)
+    spec = source(tmp_path)
+    spec["mapping"].pop("unit")
+
+    response = client.post("/v1/sources/preview", json=spec)
+
+    assert response.status_code == 200, response.text
+    profile = response.json()
+    assert "unit" in profile["unresolved"]
+    assert profile["source_id"] == "sales"
+    assert client.get("/v1/sources").json() == []
+    with ledger._connection() as connection:
+        assert connection.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
+
+
+def test_source_preview_mapping_is_saved_and_read_back(tmp_path):
+    _, _, client = setup(tmp_path)
+    spec = source(tmp_path)
+
+    preview = client.post("/v1/sources/preview", json=spec)
+    assert preview.status_code == 200, preview.text
+    saved = client.post("/v1/sources", json=spec)
+    assert saved.status_code == 201, saved.text
+    reread = client.get("/v1/sources/sales/profile")
+
+    assert reread.status_code == 200
+    assert reread.json() == preview.json()
+    assert saved.json()["profile"] == reread.json()

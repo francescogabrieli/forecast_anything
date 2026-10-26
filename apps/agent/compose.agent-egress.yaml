@@ -1,0 +1,45 @@
+# Overlay this file after the project Compose file. The agent service joins
+# only the internal network; only this proxy receives an outbound network.
+services:
+  agent:
+    environment:
+      HTTP_PROXY: http://agent-egress-proxy:3128
+      HTTPS_PROXY: http://agent-egress-proxy:3128
+      NODE_USE_ENV_PROXY: "1"
+      NO_PROXY: localhost,127.0.0.1,::1,core,api,worker,workflow-postgres,postgres
+    networks: !override
+      - agent_internal
+    depends_on:
+      agent-egress-proxy:
+        condition: service_healthy
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+
+  agent-egress-proxy:
+    build:
+      context: ./apps/agent/egress-proxy
+    networks:
+      - agent_internal
+      - agent_outbound
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 3128), timeout=1).close()"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+networks:
+  agent_internal:
+    name: forecast-agent-internal
+    internal: true
+  agent_outbound:
+    name: forecast-agent-outbound

@@ -1,0 +1,43 @@
+name: Connector proposal
+description: Propose a bounded source integration using the existing temporal contracts.
+title: "[Connector] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read docs/connectors.md before proposing a source. Do not include credentials, protected URLs or private data. A proposal does not imply support or permission to redistribute a dataset.
+  - type: input
+    id: source
+    attributes:
+      label: Source and transport
+      description: Public documentation link and whether existing CSV/HTTP JSON support can read it.
+    validations:
+      required: true
+  - type: textarea
+    id: semantics
+    attributes:
+      label: Explicit observation semantics
+      description: Identify series, event time, availability time, revisions, value, units, frequency, timezone and missing-value rules. Mark unknowns and assumptions.
+    validations:
+      required: true
+  - type: textarea
+    id: fixture
+    attributes:
+      label: Synthetic fixture and expected snapshot
+      description: Provide a small example, expected normalized observations and a late-correction case. Use public or synthetic data only.
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Access, limits and attribution
+      description: Authentication approach without secrets, response/request bounds, pagination, redirects, refresh limits, data license and redistribution restrictions.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Proposed acceptance checks
+      description: Include unresolved mappings, failure handling, credential protection and reuse of the existing runtime. State any required contract changes.
+    validations:
+      required: true

@@ -1,0 +1,7 @@
+series_id,event_time,available_at,revision,value,unit
+retail_items,2026-10-16T00:00:00Z,2026-10-16T00:00:00Z,1,10,items
+retail_items,2026-10-17T00:00:00Z,2026-10-17T00:00:00Z,1,16,items
+retail_items,2026-10-18T00:00:00Z,2026-10-18T00:00:00Z,1,14,items
+retail_items,2026-10-19T00:00:00Z,2026-10-19T00:00:00Z,1,12,items
+retail_items,2026-10-20T00:00:00Z,2026-10-20T00:00:00Z,1,18,items
+retail_items,2026-10-21T00:00:00Z,2026-10-21T00:00:00Z,1,15,items

@@ -1,5 +1,6 @@
 import { BridgeError, type DiscoveryRecord } from "./bridge.js";
 import { createCoreClient, type CoreClientOptions } from "./client.js";
+import { coreOperationFetch } from "./egress.js";
 import { PostgresDiscoveryStore } from "./store.js";
 
 type EveToolIdentity = { session: { id: string }; callId: string };
@@ -26,7 +27,8 @@ export async function coreClientForTool(identity: EveToolIdentity, options: Tool
   if (!coreUrl || !agentToken) throw new BridgeError("missing_core_configuration");
   const clientOptions: CoreClientOptions = {
     coreUrl, agentToken, jobId: record.idempotencyKey, epochId: record.epochId,
-    sessionId: record.sessionId, callKey: identity.callId, fetcher: options.fetcher,
+    sessionId: record.sessionId, callKey: identity.callId,
+    fetcher: coreOperationFetch(coreUrl, options.fetcher ?? globalThis.fetch),
   };
   return { client: createCoreClient(clientOptions), sourceIds: record.sourceIds, epochId: record.epochId };
 }

@@ -6,13 +6,22 @@ import json
 from typing import Literal
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from pydantic import Field, ValidationError
 
 from ..contracts import Candidate, Contract, DomainError, Identifier, JsonValue
 
 _MAX_RESPONSE_BYTES = 1_000_000
+
+
+class _RejectRedirects(HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        return None
+
+
+# A bridge redirect is never trusted with the bearer, even on the same host.
+urlopen = build_opener(_RejectRedirects()).open
 
 
 class AgentOperationRequest(Contract):
@@ -36,6 +45,10 @@ class AgentGateway:
         self, base_url: str, *, token: str, timeout_seconds: float = 10
     ) -> None:
         parsed = urlsplit(base_url)
+        try:
+            port = parsed.port
+        except ValueError as error:
+            raise DomainError("invalid_agent_gateway_config", {}) from error
         if (
             not isinstance(token, str)
             or not token.strip()
@@ -48,6 +61,7 @@ class AgentGateway:
             or (
                 parsed.scheme == "http"
                 and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}
+                and not (parsed.hostname == "agent" and port == 3000)
             )
             or not isinstance(timeout_seconds, (int, float))
             or timeout_seconds <= 0

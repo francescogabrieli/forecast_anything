@@ -1,8 +1,63 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { selectOpenAIModelId } from "../src/model-config.js";
 import { createCoreClient } from "../src/client.js";
 
+describe("OpenAI orchestration model selection", () => {
+  it("defaults to GPT-6 Luna", () => {
+    expect(selectOpenAIModelId(undefined)).toBe("gpt-6-luna");
+  });
+
+  it("uses an explicitly configured model ID", () => {
+    expect(selectOpenAIModelId(" gpt-6-luna ")).toBe("gpt-6-luna");
+  });
+
+  it("falls back when the configured model ID is blank", () => {
+    expect(selectOpenAIModelId("   ")).toBe("gpt-6-luna");
+  });
+});
+
 describe("agent core client", () => {
+  it("rejects plaintext credentials to a remote core before any HTTP", () => {
+    const fetcher = vi.fn();
+    expect(() => createCoreClient({
+      coreUrl: "http://core.example.test:8000", agentToken: "secret", jobId: "job-1",
+      epochId: "epoch-1", sessionId: "session-1", callKey: "call-1", fetcher,
+    })).toThrowError(expect.objectContaining({ code: "invalid_core_url" }));
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it.each(["http://127.0.0.1:8000", "https://core.example.test"])(
+    "allows a configured safe core origin %s", async (coreUrl) => {
+      const fetcher = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => Response.json({
+        operation_id: "op-1", result: { candidateIds: [], candidates: [] },
+      }));
+      const client = createCoreClient({
+        coreUrl, agentToken: "secret", jobId: "job-1", epochId: "epoch-1",
+        sessionId: "session-1", callKey: "call-1", fetcher,
+      });
+      await client.submitProposal({ template_id: "expected_deviation", source_ids: ["source-1"], reason: "Test" });
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(String(fetcher.mock.calls[0]![0])).toBe(`${coreUrl}/v1/agent/operations`);
+    },
+  );
+
+  it("allows only the named internal Docker core origin over plain HTTP", async () => {
+    const fetcher = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => Response.json({
+      operation_id: "op-1", result: { candidateIds: [], candidates: [] },
+    }));
+    const client = createCoreClient({
+      coreUrl: "http://core:8000", agentToken: "secret", jobId: "job-1",
+      epochId: "epoch-1", sessionId: "session-1", callKey: "call-1", fetcher,
+    });
+    await client.submitProposal({ template_id: "expected_deviation", source_ids: ["source-1"], reason: "Test" });
+    expect(String(fetcher.mock.calls[0]![0])).toBe("http://core:8000/v1/agent/operations");
+    expect(() => createCoreClient({
+      coreUrl: "http://core:8001", agentToken: "secret", jobId: "job-1",
+      epochId: "epoch-1", sessionId: "session-1", callKey: "call-1", fetcher,
+    })).toThrowError(expect.objectContaining({ code: "invalid_core_url" }));
+  });
+
   it("rejects a numeric answer as a candidate before HTTP", async () => {
     const fetcher = vi.fn();
     const client = createCoreClient({

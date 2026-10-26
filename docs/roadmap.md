@@ -130,9 +130,11 @@ Usare le segnalazioni e i ritorni degli utilizzatori per ordinare miglioramenti 
 
 ## Stato dell’esecuzione
 
-Il piano 01 (C1–C6) è implementato nel branch `feat/future-graph-core`, nella cartella canonica `Desktop/Projects/forecast_anything`, con un implementatore e una revisione indipendente per task. Il metodo subagent-driven e il branch nella cartella attuale sono stati scelti dall’utente il 25 ottobre 2026. La revisione complessiva è completata; l’integrazione del branch precede il piano successivo.
+Il piano 01 (C1–C6) è implementato. Sul branch corrente `feat/timestral-provider`, i task A1–A5 e il codice A6 del piano 03 sono presenti; sono verificati catalogo/fonti, discovery, policy, job durevoli, API, Eve, bridge autenticato, budget e ripresa dopo un’interruzione. Il test di recovery interrompe un turno dopo `inspectSource`, riavvia Eve e Postgres e verifica la stessa sessione, lo stesso operation ID, la proposta candidata e l’utilizzo del budget. Per non attendere quattro ore, la fixture simula la scadenza della lease di Graphile Worker; la policy reale di lock scaduto resta quindi una dipendenza operativa da considerare. La prova automatica dimostra che proposte promosse o respinte dipendono da evidenze registrate e non da numeri generati dal modello.
 
-La CLI produce previsioni puntuali con baseline e conserva snapshot, grafi, emissioni ed eventi. [Stato del core e decisioni](implementation/core.md). I piani 02–04 restano da implementare; il prossimo task è M1, provider Timestral con verifica reale delle revisioni e prova di parità.
+Il 26 ottobre 2026 è stata approvata la configurazione GPT-6 Luna per l’orchestrazione Eve e Mistral soltanto per Timestral; la verifica offline di adapter, rete, build e persistenza è aggiornata su Python 3.12/3.14 e Node 24. L’utente ha poi autorizzato commit e push del branch. Lo smoke live GPT a pagamento resta aperto e richiede approvazione separata di richiesta sintetica e costo; il test offline non lo sostituisce.
+
+Il piano 02 ha il codice integrato, ma la licenza/parità reale Timestral e il confronto Timestral M4 restano irrisolti; non si scaricano pesi senza la relativa decisione. Il piano 04 (console, installazione e release candidata) non è iniziato. [Stato del core e decisioni](implementation/core.md).
 
 ## Fonti tecniche per le scelte del piano
 

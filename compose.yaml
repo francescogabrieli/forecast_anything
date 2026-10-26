@@ -1,0 +1,57 @@
+services:
+  core:
+    build:
+      context: .
+      target: api
+    command: ["serve", "--db", "/data/state.db", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      FORECAST_ANYTHING_WORKSPACE_TOKEN: ${FORECAST_ANYTHING_WORKSPACE_TOKEN:?Run scripts/bootstrap_demo.py first and pass --env-file}
+      FORECAST_ANYTHING_CONSOLE_ORIGINS: ${FORECAST_ANYTHING_CONSOLE_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+    volumes:
+      - type: bind
+        source: ${FORECAST_ANYTHING_DATA_DIR:-./.local/demo}
+        target: /data
+        bind:
+          create_host_path: false
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health', timeout=2).close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    init: true
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      target: worker
+    command: ["worker", "--db", "/data/state.db"]
+    # Exactly one worker consumes this workspace's durable queue.
+    scale: 1
+    environment:
+      FORECAST_ANYTHING_PROVIDER: seasonal_naive
+    volumes:
+      - type: bind
+        source: ${FORECAST_ANYTHING_DATA_DIR:-./.local/demo}
+        target: /data
+        bind:
+          create_host_path: false
+    depends_on:
+      core:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+
+  console:
+    build:
+      context: .
+      target: console
+    ports:
+      - "127.0.0.1:5173:8080"
+    depends_on:
+      core:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped

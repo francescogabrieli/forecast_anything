@@ -388,7 +388,10 @@ def test_discovery_checkpoint_survives_restart_without_resetting_budget(tmp_path
     worker = Worker(runtime, queue, discovery_gateway=Gateway())
     worker.run_due(T, limit=1)
     assert queue.get(job.job_id).payload["session_id"] == "session-1"
-    assert ledger.discovery_usage("original") == (1, 2)
+    assert ledger.discovery_usage("original") == (1, 0)
+    for index in range(3):
+        ledger.consume_discovery_tool_call("original", f"real-tool/{index}")
+    assert ledger.discovery_usage("original") == (1, 3)
     ledger, _, runtime = setup(tmp_path, lambda: T + timedelta(seconds=30))
 
     class ResumedGateway:

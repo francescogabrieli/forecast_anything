@@ -21,6 +21,30 @@ from .store import Ledger
 from .temporal import freeze
 
 
+def configured_providers():
+    """Register the baseline and only opt-in, pinned providers from the environment."""
+    providers = {"seasonal_naive": SeasonalNaiveProvider(1)}
+    enabled = os.environ.get("FORECAST_ANYTHING_TIMESTRAL_ENABLED", "").strip()
+    if enabled not in {"", "0", "1"}:
+        raise DomainError("invalid_provider_configuration", {})
+    if enabled == "1":
+        values = {
+            "checkpoint": os.environ.get("FORECAST_ANYTHING_TIMESTRAL_CHECKPOINT"),
+            "revision": os.environ.get("FORECAST_ANYTHING_TIMESTRAL_REVISION"),
+            "code_revision": os.environ.get(
+                "FORECAST_ANYTHING_TIMESTRAL_CODE_REVISION"
+            ),
+        }
+        if not all(
+            isinstance(value, str) and value.strip() for value in values.values()
+        ):
+            raise DomainError("incomplete_timestral_configuration", {})
+        from .providers.timestral import TimestralProvider
+
+        providers["timestral"] = TimestralProvider(**values)
+    return providers
+
+
 def _run(args):
     origin = datetime.fromisoformat(args.as_of)
     if origin.tzinfo is None or origin.utcoffset() is None:
@@ -51,7 +75,7 @@ def _run(args):
     ).hexdigest()
     return Runtime(
         Ledger(args.db),
-        {"seasonal_naive": SeasonalNaiveProvider(period=1)},
+        configured_providers(),
         {},
         lambda: datetime.now(timezone.utc),
     ).run(spec, snapshots, origin, key)
@@ -86,7 +110,7 @@ def main() -> int:
             ledger = Ledger(args.db)
             runtime = Runtime(
                 ledger,
-                {"seasonal_naive": SeasonalNaiveProvider(1)},
+                configured_providers(),
                 register_builtin_operators(),
                 lambda: datetime.now(timezone.utc),
             )
@@ -100,6 +124,13 @@ def main() -> int:
                     runtime,
                     os.environ.get("FORECAST_ANYTHING_WORKSPACE_TOKEN", ""),
                     agent_token=os.environ.get("FORECAST_ANYTHING_AGENT_CORE_TOKEN"),
+                    console_origins=tuple(
+                        origin.strip()
+                        for origin in os.environ.get(
+                            "FORECAST_ANYTHING_CONSOLE_ORIGINS", ""
+                        ).split(",")
+                        if origin.strip()
+                    ),
                 )
                 uvicorn.run(app, host=args.host, port=args.port, access_log=False)
                 return 0

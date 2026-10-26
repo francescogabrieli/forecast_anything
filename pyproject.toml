@@ -5,6 +5,10 @@ build-backend = "hatchling.build"
 [project]
 name = "forecast-anything"
 version = "0.1.0"
+description = "A local forecasting observatory with typed Future Graphs and immutable evidence."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2,<3",
@@ -42,3 +46,15 @@ indent-style = "space"
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.hatch.build.targets.wheel.force-include]
+"examples/minimal" = "forecast_anything/examples/minimal"
+"contracts/v1" = "forecast_anything/contracts/v1"
+"LICENSE" = "forecast_anything/LICENSE"
+"NOTICE" = "forecast_anything/NOTICE"
+
+[tool.hatch.build.targets.sdist.force-include]
+"examples/minimal" = "examples/minimal"
+"contracts/v1" = "contracts/v1"
+"LICENSE" = "LICENSE"
+"NOTICE" = "NOTICE"

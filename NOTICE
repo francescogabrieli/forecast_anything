@@ -1,0 +1,32 @@
+Forecast Anything — release-candidate materials
+
+The project name, public owner, package registry and domain are provisional.
+Apache-2.0 is the roadmap's proposed license for project code; the accompanying
+LICENSE is prepared for that release candidate. Public release is a separate
+decision. This notice does not assign copyright ownership or grant trademark
+rights in the working name.
+
+Third-party software retains its own copyright and license terms. The Python
+dependency inventory is in pyproject.toml and uv.lock. The console and optional
+agent inventories are in their package.json and package-lock.json files.
+Retain applicable third-party notices when redistributing their artifacts;
+this file is not a complete third-party license inventory or SBOM.
+
+The optional Timestral integration has separate code and model-weight terms:
+- Source: mistralai/timestral, Apache-2.0, pinned in integrations/models.lock.json.
+- Weights: mistralai/Timestral-28M, Modified MIT, separately pinned in that lock.
+  Weight-license applicability and real CPU parity remain unresolved. Model
+  weights are not licensed by the project's Apache-2.0 LICENSE.
+See docs/implementation/timestral.md for the recorded restrictions and gate.
+
+External benchmark datasets are separately attributed in benchmarks/manifest.yaml:
+- UCI Online Retail II, DOI 10.24432/C5CG6D, recorded as CC-BY-4.0.
+- UCI Individual Household Electric Power Consumption, DOI 10.24432/C58K54,
+  recorded as CC-BY-4.0.
+- Wikimedia pageview aggregates, recorded as CC0-1.0, with source and access
+  policy URLs in the manifest.
+Dataset source files, prepared observations, and any redistribution of them
+remain subject to their own terms. Transformations and availability/timezone
+assumptions are recorded in the manifest. Synthetic scenarios are labeled and
+excluded from observed benchmark scores. The bundled minimal observations are
+synthetic example data, not a redistribution of those external datasets.

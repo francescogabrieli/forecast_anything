@@ -1,0 +1,10 @@
+{
+  "as_of": "2026-10-21T00:00:00Z",
+  "assumptions": [
+    "Synthetic retail demonstration; hand-authored item totals, not observed customer or benchmark data.",
+    "Fixed UTC daily buckets use right endpoints; available_at equals event_time by synthetic assumption, not observed publication history.",
+    "The three-day repetition period is illustrative; no real retail seasonality has been established.",
+    "Point-only seasonal baseline; no calibrated intervals, joint paths, event probabilities or causal claims.",
+    "No inventory, returns, deliveries or stockout mechanism is represented; item totals alone do not establish availability."
+  ]
+}

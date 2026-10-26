@@ -4,6 +4,7 @@ import hmac
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from ..contracts import DomainError, ErrorResponse
@@ -19,6 +20,7 @@ def create_app(
     runtime: Runtime,
     workspace_token: str,
     agent_token: str | None = None,
+    console_origins: tuple[str, ...] = (),
 ) -> FastAPI:
     if not isinstance(workspace_token, str) or not workspace_token.strip():
         raise DomainError("workspace_token_required", {})
@@ -61,6 +63,17 @@ def create_app(
                     headers={"WWW-Authenticate": "Bearer"},
                 )
         return await call_next(request)
+
+    # Register after the auth middleware so CORS can answer browser preflight
+    # requests before authentication and wrap authenticated responses.
+    if console_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(console_origins),
+            allow_credentials=False,
+            allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "Accept", "Last-Event-ID"],
+        )
 
     @app.exception_handler(DomainError)
     async def domain_error(request, error):

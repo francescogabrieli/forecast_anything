@@ -1,5 +1,6 @@
 import Ajv2020Module from "ajv/dist/2020.js";
 import addFormatsModule from "ajv-formats";
+import { coreOperationFetch, isSafeHttpOrigin } from "./egress.js";
 
 import {
   candidateRequestSchema,
@@ -44,9 +45,14 @@ function record(value: unknown): Record<string, unknown> | null {
 }
 
 export function createCoreClient(options: CoreClientOptions) {
-  const fetcher = options.fetcher ?? fetch;
-  const endpoint = new URL("/v1/agent/operations", options.coreUrl);
-  if (!/^https?:$/.test(endpoint.protocol)) throw new AgentClientError("invalid_core_url");
+  let base: URL;
+  try { base = new URL(options.coreUrl); }
+  catch { throw new AgentClientError("invalid_core_url"); }
+  if (!isSafeHttpOrigin(base) || base.username || base.password || base.search || base.hash || base.pathname !== "/") {
+    throw new AgentClientError("invalid_core_url");
+  }
+  const endpoint = new URL("/v1/agent/operations", base);
+  const fetcher = coreOperationFetch(base.origin, options.fetcher ?? globalThis.fetch);
   if (!options.agentToken.trim()) throw new AgentClientError("missing_agent_token");
 
   async function operation(tool: "inspectSource" | "proposeCandidates" | "explainRun", input: object): Promise<unknown> {

@@ -27,6 +27,18 @@ from forecast_anything.worker import Worker
 NOW = datetime(2026, 10, 24, tzinfo=timezone.utc)
 
 
+def test_agent_gateway_allows_only_internal_docker_agent_http_origin():
+    from forecast_anything.discovery.agent_gateway import AgentGateway
+
+    assert (
+        AgentGateway("http://agent:3000", token="bridge-token").base_url
+        == "http://agent:3000"
+    )
+    for unsafe in ("http://agent:3001", "http://remote-agent:3000"):
+        with pytest.raises(DomainError, match="invalid_agent_gateway_config"):
+            AgentGateway(unsafe, token="bridge-token")
+
+
 def _setup(tmp_path, *, max_tool_calls=4, max_candidates=3):
     csv = tmp_path / "sales.csv"
     csv.write_text("time,value\n2026-10-21,1\n2026-10-22,2\n2026-10-23,3\n")
@@ -140,6 +152,64 @@ def test_agent_tool_call_replay_is_stable_and_cannot_reset_budget(tmp_path):
     assert extra.status_code == 422
     assert extra.json()["code"] == "discovery_budget_exhausted"
     assert ledger.discovery_usage("epoch") == (1, 1)
+
+
+def test_exhausted_tool_budget_does_not_block_completed_session_poll(tmp_path):
+    client, ledger, job, candidate, _ = _setup(tmp_path, max_tool_calls=4)
+    queue = JobQueue(ledger)
+    now = [NOW]
+
+    class Gateway:
+        calls = 0
+
+        def poll(self, session_id):
+            assert session_id == "session-1"
+            self.calls += 1
+            return None if self.calls == 1 else (candidate,)
+
+    gateway = Gateway()
+    runtime = Runtime(ledger, {}, {}, lambda: now[0])
+    first = queue.claim("first", NOW, 60)
+    assert first.job_id == job.job_id
+    assert (
+        Worker(runtime, queue, discovery_gateway=gateway)._poll_discovery(first, NOW)
+        is None
+    )
+    for index in range(3):
+        response = _agent_post(
+            client, _operation(job.job_id, call_key=f"inspect-{index}")
+        )
+        assert response.status_code == 200
+    proposal = _operation(
+        job.job_id,
+        call_key="propose",
+        tool="proposeCandidates",
+        value={
+            "proposals": [
+                {
+                    "template_id": "forecast_change",
+                    "source_ids": ["sales"],
+                    "reason": "Existing frozen question",
+                }
+            ]
+        },
+    )
+    assert _agent_post(client, proposal).status_code == 200
+    assert ledger.discovery_usage("epoch") == (1, 4)
+    assert (
+        _agent_post(client, _operation(job.job_id, call_key="fifth")).json()["code"]
+        == "discovery_budget_exhausted"
+    )
+
+    now[0] += timedelta(seconds=30)
+    second = queue.claim("second", now[0], 60)
+    result = Worker(runtime, queue, discovery_gateway=gateway)._poll_discovery(
+        second, now[0]
+    )
+    queue.complete(second, now[0], result)
+    assert queue.get(job.job_id).state == "completed"
+    assert result["candidate_ids"] == [candidate.candidate_id]
+    assert ledger.discovery_usage("epoch") == (1, 4)
 
 
 def test_completed_job_allows_only_replay_of_an_existing_tool_call(tmp_path):

@@ -460,21 +460,13 @@ class Worker:
         ledger, payload = self.runtime.ledger, dict(job.payload)
         epoch = ledger.get_discovery_epoch(payload["epoch_id"])
         if "session_id" not in payload:
-            ledger.consume_discovery_tool_call(
-                epoch.epoch_id, f"{job.job_id}/start", lease_guard=job.guard
-            )
             session_id = self.discovery_gateway.start(
                 epoch.epoch_id, tuple(payload["source_ids"]), job.job_id
             )
             payload["session_id"] = session_id
             self.queue.checkpoint(job, payload, self.runtime.clock())
-        poll = payload.get("poll", 0)
-        ledger.consume_discovery_tool_call(
-            epoch.epoch_id, f"{job.job_id}/poll/{poll}", lease_guard=job.guard
-        )
         candidates = self.discovery_gateway.poll(payload["session_id"])
         if candidates is None:
-            payload["poll"] = poll + 1
             self.queue.checkpoint(
                 job,
                 payload,

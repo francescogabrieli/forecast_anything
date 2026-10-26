@@ -31,6 +31,7 @@ from ..contracts import (
 )
 from ..discovery.agent_gateway import AgentOperationRequest, AgentOperationResponse
 from ..discovery.candidates import TEMPLATES
+from ..sources.profiling import inspect_source
 from .scenarios import create_scenario
 
 
@@ -40,6 +41,10 @@ def router(service):
     @api.post("/sources", response_model=SourceRegistration, status_code=201)
     def register(spec: SourceSpec):
         return service.register_source(spec)
+
+    @api.post("/sources/preview", response_model=SourceProfile)
+    def preview_source(spec: SourceSpec):
+        return inspect_source(spec)
 
     @api.get("/sources", response_model=list[SourceView])
     def sources():

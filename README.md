@@ -1,58 +1,59 @@
 # Forecast Anything
 
-Open-source predictive infrastructure built around a **Future Graph**: connect data sources, discover useful questions, and maintain composable, inspectable views of possible futures.
+Connect explicit data sources, compose forecasts in a **Future Graph**, and inspect what changed, which inputs were available, and which results have evidence behind them.
 
-Timestral is the first forecasting-model candidate. Language-model agents interpret sources and propose work; the runtime validates plans, executes numerical tools, preserves provenance, and evaluates issued forecasts against later observations.
+Forecast Anything is a local forecasting observatory under development. The Python runtime validates typed graphs, freezes point-in-time inputs, records immutable forecasts in SQLite, and evaluates them against later observations. A React console uses the same authenticated API. The working name, public owner, package registry and domain remain provisional; this checkout prepares a release candidate and does not identify a published package or hosted service.
 
-## Project status
+## Try a forecast without model keys or weights
 
-- Design approved on 24 October 2026.
-- Roadmap approved on 24 October 2026; subagent-driven execution selected on 25 October 2026.
-- Core plan C1–C6 implemented on `feat/future-graph-core`; branch integration pending.
-- CSV CLI, point-in-time snapshots, typed DAG validation, seasonal-naive forecasts, immutable SQLite runs and durable events are available.
-- The optional Timestral library adapter is implemented; acceptance remains pending license clarification and real CPU parity. Typed point/path composition and empirical window-event probabilities are available; the authenticated local observatory API, durable worker, and isolated scenarios are implemented; the agent adapter and observatory UI remain planned.
-- The repository is currently private. The code license and final public branding will be resolved before public release.
-
-## Try the core
-
-From the repository root, with [uv](https://docs.astral.sh/uv/) installed:
+From this checkout, with Python 3.12+ and [uv](https://docs.astral.sh/uv/) installed:
 
 ```sh
-uv sync --python 3.12 --extra dev
+uv sync --locked --extra dev
 mkdir -p .local
-uv run forecast-anything run examples/minimal/graph.json --data examples/minimal/observations.csv --as-of 2026-10-24T00:00:00Z --db .local/example.db
+uv run --locked forecast-anything run examples/minimal/graph.json --data examples/minimal/observations.csv --as-of 2026-10-24T00:00:00Z --db .local/example.db
 ```
 
-The JSON response identifies the source snapshot and the actual provider, `seasonal_naive`. The example declares `options.period: 2` and produces `[[20.0, 30.0, 20.0]]`. This is a point forecast; it supplies no uncertainty intervals or event probabilities.
-
-Copy `run_id` from that response to retrieve the issued result:
+The response names the actual provider, `seasonal_naive`, and contains the point forecast `[[20.0, 30.0, 20.0]]`. The example explicitly sets period 2. It is a synthetic fixture with no uncertainty intervals or event probabilities. Repeating the request returns the same stored run; copy its `run_id` to read it later:
 
 ```sh
-uv run forecast-anything show RUN_ID --db .local/example.db
-uv run pytest -q
+uv run --locked forecast-anything show RUN_ID --db .local/example.db
 ```
 
-Repeating the same request returns the same stored run. The initial CLI accepts one explicitly described CSV source and the seasonal-naive provider. The library runtime supports separately bound snapshots and registered providers/operators; builtin numerical operators are available through explicit library registration; see [operator semantics](docs/implementation/operators.md). SQLite files must live on local disk. Overlapping first requests may repeat computation; durable publication remains unique. The API and worker use the shared durable job queue.
+For the console, local API, worker, installed-wheel path and packaging status, follow the [quickstart](docs/quickstart.md). Source mapping, availability time, timezone, cadence, missing values and units must be explicit before ingestion. The minimal CLI accepts exactly one normalized CSV source; API/library source registration supports CSV and bounded HTTP JSON.
 
-See [core implementation and decisions](docs/implementation/core.md) for contracts, verification and limits. For optional model installation, pinned revisions, separate code/weights licenses and the pending acceptance gate, see [Timestral provider status](docs/implementation/timestral.md).
+## What works, and what the tests establish
 
-## Local observatory API
+| Path | Implemented behavior | Evidence and limits |
+| --- | --- | --- |
+| Baseline demo | Real seasonal-naive computation, deterministic source discovery templates, immutable ledger | No LLM or downloaded model weights required. It does not establish forecast quality on arbitrary data. |
+| Console and API | Source inspection, discoveries, graph/run details, durable events and isolated scenario comparison | Component and API tests plus a Playwright flow against a real local API/worker with a fixed clock and baseline provider. This deterministic fixture is not a live LLM or Timestral smoke. |
+| Composition | Aligned sum, cumulative balance and empirical window events | Representation, unit and sample-identity checks; marginal quantiles cannot be converted into joint paths. |
+| Timestral | Optional pinned library adapter for point forecasts and marginal quantiles | Real CPU parity, license applicability for weights, and the Timestral benchmark comparison remain pending. A skipped model test is not acceptance. |
+| Discovery agent | Optional Eve service with budgeted tools and separate Postgres state | Scripted tests and restart/egress checks exercise integration. The selected OpenAI provider still needs an explicitly approved paid live smoke. |
 
-Start two processes against the same local SQLite file:
+See the [capability matrix](docs/capabilities.md) for precise boundaries and [Timestral status](docs/implementation/timestral.md) for the separate code/weights licenses. Historical replay and synthetic assumptions must remain labeled; forecasts alone cannot activate a watch without the runtime's required evaluation evidence.
+
+## Run the local API
+
+Start the API and one worker against the same local SQLite file. Use the same exported environment in both terminals:
 
 ```sh
 mkdir -p .local
 export FORECAST_ANYTHING_WORKSPACE_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-uv run forecast-anything serve --db .local/observatory.db
+export FORECAST_ANYTHING_CONSOLE_ORIGINS="http://127.0.0.1:5173,http://localhost:5173"
+uv run --locked forecast-anything serve --db .local/observatory.db
 # In a second terminal:
-uv run forecast-anything worker --db .local/observatory.db
+uv run --locked forecast-anything worker --db .local/observatory.db
 ```
 
-The server defaults to `127.0.0.1:8000`. All routes except `/health`, including documentation, capabilities and event streams, require `Authorization: Bearer YOUR_TOKEN`. Source references are accepted only on registration and are omitted from responses. See [API behavior and contracts](docs/implementation/api.md) for submission payloads, replay and scenario semantics.
+The server defaults to `127.0.0.1:8000`. Except for `/health`, workspace routes, documentation and event streams require `Authorization: Bearer YOUR_TOKEN`. The optional agent operation route requires a separate agent token. Console tokens stay in browser memory. `FORECAST_ANYTHING_CONSOLE_ORIGINS` is a comma-separated list of exact browser origins; when unset, the CLI enables no cross-origin access. Set the actual console origin, including its port. CORS does not replace authentication.
 
-## Local quality checks
+Keep the SQLite ledger on local disk and run one worker per workspace. This is an initial local deployment, with no multi-host coordination claim. See [API contracts](docs/implementation/api.md) and [security guidance](SECURITY.md) before configuring sources or optional agents.
 
-CI runs these checks on Python 3.12 and 3.14 for pull requests to `main`, pushes to `main`, and manual runs. With uv installed, run the same checks locally:
+## Contribute and verify
+
+Start with [CONTRIBUTING](CONTRIBUTING.md), the [connector guide](docs/connectors.md), or the [approved design](docs/superpowers/specs/2026-10-24-forecast-anything-design.md). The [roadmap](docs/roadmap.md) includes planned work and unresolved acceptance gates; it is not the capability matrix.
 
 ```sh
 uv sync --locked --extra dev
@@ -63,20 +64,8 @@ uv run --locked python scripts/export_contracts.py contracts/v1 --check
 uv build
 ```
 
-Ruff checks core errors and import ordering (`E4`, `E7`, `E9`, `F`, `I`) and formats Python. The build produces a wheel and source distribution in `dist/`.
+Console and agent checks, including the deterministic browser test, are documented in [CONTRIBUTING](CONTRIBUTING.md). Passing offline tests does not prove live model acceptance or completion of the planned five-person usability study.
 
-## Start here
+## License and release status
 
-- [Approved design](docs/superpowers/specs/2026-10-24-forecast-anything-design.md)
-- [Complete roadmap](docs/roadmap.md)
-- [Quality and CI roadmap](docs/quality-roadmap.md)
-- [Core and temporal ledger](docs/superpowers/plans/2026-10-24-01-core.md)
-- [Models, composition and evidence](docs/superpowers/plans/2026-10-24-02-models-and-evidence.md)
-- [Autonomous observatory and agents](docs/superpowers/plans/2026-10-24-03-observatory-and-agents.md)
-- [Experience and release](docs/superpowers/plans/2026-10-24-04-experience-and-release.md)
-
-The planning documents are currently in Italian. The four implementation plans contain 21 tasks and 105 checkable steps.
-
-## Working materials
-
-Local scratch files, the pasted source conversation and pre-migration copies are preserved under the ignored work/ directory. The ignored outputs/ directory contains compatibility links for documents already shared in the original chat.
+The release candidate includes the [Apache License 2.0](LICENSE), following the roadmap's proposed license for project code. [NOTICE](NOTICE) separates project materials, dependencies, datasets and model weights. Public release remains gated on owner/name/registry decisions, artifact checks and the roadmap's release conditions. No public destination or trademark ownership is implied by this working name.

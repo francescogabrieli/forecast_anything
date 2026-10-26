@@ -27,12 +27,78 @@ jobs:
       - name: Install locked dependencies
         run: uv sync --locked --extra dev
       - name: Lint Python
-        run: uv run --locked ruff check src tests
+        run: uv run --locked ruff check src tests apps/agent/egress-proxy/proxy.py
       - name: Check Python formatting
-        run: uv run --locked ruff format --check src tests
+        run: uv run --locked ruff format --check src tests apps/agent/egress-proxy/proxy.py
       - name: Check exported contract drift
         run: uv run --locked python scripts/export_contracts.py contracts/v1 --check
+      - name: Check exported console contract drift
+        run: uv run --locked python scripts/export_contracts.py apps/console/src/api --check
       - name: Run tests
         run: uv run --locked pytest -q
       - name: Build wheel and source distribution
         run: uv build
+      - name: Smoke-test the installed wheel outside the checkout
+        run: uv run --locked python scripts/check_release.py --dist dist
+
+  agent:
+    name: Agent package (Node 24)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/agent
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Install locked agent dependencies
+        run: npm ci
+      - name: Audit production agent dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Check generated core contracts
+        run: npm run contracts:check
+      - name: Typecheck agent package
+        run: npm run typecheck
+      - name: Test agent package
+        run: npm test -- --run
+      - name: Build Eve agent
+        run: npm run build
+      - name: Verify process-level egress policy
+        run: bash scripts/check-egress-policy.sh
+      - name: Verify Eve and Postgres recovery
+        run: bash scripts/check-postgres-restart.sh
+
+  console:
+    name: Forecast console (Node 24)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/console
+    steps:
+      - uses: actions/checkout@3d3c42e5eaa5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/console/package-lock.json
+      - name: Install locked console dependencies
+        run: npm ci
+      - name: Check generated console contracts
+        run: npm run check:types
+      - name: Typecheck console
+        run: npm run typecheck
+      - name: Test console
+        run: npm test -- --run
+      - name: Build console
+        run: npm run build
+      - name: Set up locked Python runtime for the real API E2E fixture
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.3"
+          python-version: "3.14"
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run deterministic browser E2E
+        run: CI=1 npm run test:e2e

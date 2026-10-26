@@ -1,6 +1,6 @@
 # Optional Timestral provider
 
-The library adapter is implemented, but provider acceptance remains pending: **real CPU fp32 parity has not run**. The user's clarification about applicability of the weights license is still required before downloading, loading, or executing weights. Unit tests and a skipped parity test do not satisfy this acceptance gate. The initial CLI continues to use the seasonal-naive provider.
+The library adapter is implemented, but provider acceptance remains pending: **real CPU fp32 parity has not run**. The user's clarification about applicability of the weights license is still required before downloading, loading, or executing weights. Unit tests and a skipped parity test do not satisfy this acceptance gate. The stock CLI uses the seasonal-naive provider; a separate opt-in registration is available for deployments that have cleared these gates.
 
 ## Install the optional dependency
 
@@ -24,6 +24,8 @@ The provenance and resolved dependencies are recorded in [the model lock](../../
 The code and weights have separate licenses. The [pinned weights license](https://huggingface.co/mistralai/Timestral-28M/blob/49b26409ac87b5935539a5d8ffe7f397b720db47/LICENSE) requires a separate license for global consolidated monthly revenue **above USD 20 million**. Applicability to the user's intended use remains unresolved; installing the optional dependency does not resolve that question or authorize weight execution.
 
 The adapter checks the installed source commit before model loading and retains checkpoint, weights revision, and code revision in its results. It exposes point forecasts and marginal quantiles; it does not supply joint paths.
+
+The optional deployment requires `FORECAST_ANYTHING_TIMESTRAL_ENABLED=1`, `FORECAST_ANYTHING_TIMESTRAL_CHECKPOINT`, `FORECAST_ANYTHING_TIMESTRAL_REVISION` and `FORECAST_ANYTHING_TIMESTRAL_CODE_REVISION`. Registration reads capabilities but does not import PyTorch or download weights. The `compose.timestral.yaml` overlay uses pinned values from `integrations/models.lock.json` and installs the optional library code; the first run whose graph explicitly selects Timestral attempts the weight download. Do not apply the overlay or run that graph before resolving the weight-license applicability and real-parity gates above.
 
 ## Pending real parity gate
 

@@ -1,6 +1,8 @@
 """HTTP boundary of the optional Eve discovery gateway."""
 
 import json
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from threading import Thread
 from urllib.error import HTTPError
 
 import pytest
@@ -87,3 +89,53 @@ def test_agent_gateway_never_returns_remote_body_or_credentials(monkeypatch):
     with pytest.raises(DomainError, match="agent_gateway_unavailable") as error:
         gateway.start("epoch", ("sales",), "job-key")
     assert "private-secret" not in error.value.model_dump_json()
+
+
+def test_agent_gateway_rejects_redirect_without_sending_bearer_to_target():
+    from forecast_anything.discovery.agent_gateway import AgentGateway
+
+    redirected_requests = []
+
+    class Target(BaseHTTPRequestHandler):
+        def do_GET(self):
+            redirected_requests.append(self.headers.get("Authorization"))
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"sessionId":"redirected"}')
+
+        def log_message(self, *_args):
+            pass
+
+    target = HTTPServer(("127.0.0.1", 0), Target)
+
+    class Redirect(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.send_response(302)
+            self.send_header(
+                "Location", f"http://127.0.0.1:{target.server_port}/capture"
+            )
+            self.end_headers()
+
+        def log_message(self, *_args):
+            pass
+
+    origin = HTTPServer(("127.0.0.1", 0), Redirect)
+    threads = [
+        Thread(target=server.serve_forever, daemon=True) for server in (target, origin)
+    ]
+    for thread in threads:
+        thread.start()
+    try:
+        gateway = AgentGateway(
+            f"http://127.0.0.1:{origin.server_port}", token="private-agent-token"
+        )
+        with pytest.raises(DomainError, match="agent_gateway_unavailable"):
+            gateway.start("epoch", ("sales",), "job-key")
+        assert redirected_requests == []
+    finally:
+        for server in (origin, target):
+            server.shutdown()
+            server.server_close()
+        for thread in threads:
+            thread.join()
