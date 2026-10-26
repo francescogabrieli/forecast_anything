@@ -47,7 +47,7 @@ Stop the stack with `Ctrl+C`. The workspace database and generated token remain 
 
 ## Optional integrations
 
-- Timestral has a separately pinned code and weight revision. Its real parity gate and weight-license applicability remain unresolved. Do not enable `compose.timestral.yaml` or run a graph using Timestral until the applicable weight license has been reviewed and the provider has passed its real parity gate. The default demo does not install Timestral or download weights.
+- Timestral has separately pinned code and weight revisions. Real CPU fp32 parity passed for the pinned provider, and one local personal evaluation was authorized by the project owner. The weights use a separate Modified MIT license; each downstream user must assess whether its terms apply to their use. Weights are not included in this repository. The default demo does not install Timestral or download weights; see the [provider notes](implementation/timestral.md) before opting in.
 - `compose.agent.yaml` requires a separate workspace agent setup, distinct bridge/core tokens, a URL-safe Postgres password and an OpenAI API key. It makes paid provider calls when configured. The agent runs behind the repository's restricted egress proxy and does not receive the Docker socket. Do not start this override without intended credentials and approval for any paid inference.
 
 ## Verify changes
