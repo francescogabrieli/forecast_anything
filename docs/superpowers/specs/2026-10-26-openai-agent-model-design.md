@@ -37,11 +37,11 @@ The user selected a GPT model for orchestration. The direct OpenAI SDK integrati
 
 - Add tests for model selection/configuration and exact-origin egress using a scripted provider; no paid calls in CI.
 - Run package typecheck, tests, contract drift check, Eve build, egress policy check, and Postgres/Eve restart check.
-- After approval of a concrete smoke request and cost estimate, verify one real GPT tool call against a local synthetic core job, then confirm the persistent operation ID and budget usage.
+- Completed on 2026-10-26 after approval of the bounded request and cost estimate: one real GPT-6 Luna `inspect_source` tool call against a local synthetic core job; the core persisted its operation ID. The response used 518 input and 23 output tokens. Existing scripted/restart checks cover persistent budget behavior; this live smoke does not claim model quality or production readiness.
 
 ## Decision
 
-Approved by the user on 2026-10-26: use `gpt-6-luna` as the configurable starting model via `OPENAI_MODEL_ID`. Mistral is reserved for Timestral forecasting. This selects the orchestration architecture; a real paid GPT smoke still requires separate approval of its bounded request and estimated cost.
+Approved by the user on 2026-10-26: use `gpt-6-luna` as the configurable starting model via `OPENAI_MODEL_ID`. Mistral is reserved for Timestral forecasting. The separately approved bounded live smoke also completed on 2026-10-26; it verifies the basic tool-call path only.
 
 ## Sources
 

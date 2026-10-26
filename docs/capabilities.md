@@ -17,7 +17,7 @@ This matrix describes the code in the release-candidate checkout. It is not a cl
 | Ledger and jobs | Local SQLite immutable runs/evaluations, durable cursors, leased job queue and recovery | One worker per workspace; local disk required. No multi-host coordination or distributed database claim. |
 | API | Bearer authentication, typed job submission, immutable reads, source profiles, replayable SSE and scenarios | Local workspace trust model, not tenant isolation. `/health` is public; optional agent operations use a separate token. |
 | Console | Guided source interpretation, graph/run views, discovery/event feed and scenario comparison | Renders recorded representations; it does not invent bands for point results. Full external usability acceptance remains pending. |
-| Agent | Optional Eve bridge, persistent core tool budgets, Postgres metadata/session state and egress controls | Controlled-response integration/restart checks; no accepted live smoke for the selected OpenAI provider. Paid calls require configured credentials and explicit approval. |
+| Agent | Optional Eve bridge, persistent core tool budgets, Postgres metadata/session state and egress controls | A bounded GPT-6 Luna smoke on 2026-10-26 produced one `inspect_source` tool call against synthetic local data and confirmed the persisted core operation ID. This validates the basic live provider path only, not model quality, full autonomous discovery, or production readiness. Paid calls require configured credentials and explicit approval. |
 
 ## Demonstrations and evidence
 
@@ -25,7 +25,7 @@ The minimal CLI example uses synthetic observations and the actual seasonal-naiv
 
 The browser E2E fixture starts the real API and a worker with a fixed clock, synthetic CSV source and seasonal-naive provider. It covers viewing a stored run, graph keyboard interaction, a disrupted/reconnected event stream and an assumed scenario comparison. Its fixed local token is test-only. It neither measures model quality nor validates a paid provider. The planned broader two-source/update/evaluation journey and five-person usability study must be reported separately from this fixture.
 
-The agent tests use scripted responses. The Docker restart check interrupts a real Eve turn after a budgeted core operation and resumes the same session; the isolated fixture simulates expiry of Graphile Worker's four-hour stale-job lock. This establishes the tested recovery path, not a four-hour elapsed-time test or a live OpenAI inference result.
+The agent tests use scripted responses. The Docker restart check interrupts a real Eve turn after a budgeted core operation and resumes the same session; the isolated fixture simulates expiry of Graphile Worker's four-hour stale-job lock. A separate bounded live GPT-6 Luna smoke sent one 3,132-byte request (maximum 128 output tokens), received a function call for `inspect_source` (518 input and 23 output tokens), and confirmed its persisted operation ID in the local core. It used only synthetic data and does not evaluate model quality or production readiness.
 
 The real Timestral test is guarded and normally skipped. A skipped test, adapter unit test or successful dependency install does not satisfy real-model acceptance. See [Timestral status](implementation/timestral.md), [agent decisions](decisions/agent-runtime.md), [operator semantics](implementation/operators.md) and [API contracts](implementation/api.md) for the detailed boundaries.
 

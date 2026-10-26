@@ -1,6 +1,6 @@
 # Complete roadmap step 3: A6 Eve agent
 
-> **For agentic workers:** Use `superpowers:executing-plans` to implement this plan task by task. On 2026-10-26 the user authorized committing and pushing this branch after verification. A real paid GPT smoke still requires separate approval.
+> **For agentic workers:** Use `superpowers:executing-plans` to implement this plan task by task. On 2026-10-26 the user authorized committing and pushing this branch after verification. The bounded live GPT smoke was approved and completed on 2026-10-26.
 
 **Goal:** Finish the remaining A6 work in roadmap step 3 and leave the autonomous observatory aligned with the approved provider architecture: GPT-6 Luna orchestrates Eve, while Mistral is used only for Timestral forecasting.
 
@@ -18,7 +18,7 @@
 - Eve, the authenticated core bridge, the three declared tools, persistent operation budget, frozen-epoch validation, and durable Postgres sessions stay in place.
 - Tests and CI use scripted responses; no paid provider calls in automated checks.
 - Do not download Timestral weights or alter its license/parity gate.
-- Do not run a live GPT smoke without separate approval of the bounded request and cost estimate.
+- Run a live GPT smoke only after separate approval of the bounded request and cost estimate; this approval was received and the smoke completed on 2026-10-26.
 
 ## Review Focus
 
@@ -26,7 +26,7 @@
 - OpenAI calls use only `https://api.openai.com`; arbitrary provider destinations, Mistral chat calls, redirects, and direct outbound sockets stay blocked.
 - A model-produced proposal cannot override the epoch, budget, schema, evidence, promotion policy, or core-issued operation ID.
 - Restart preserves the same Eve session and core operation budget; duplicate calls remain idempotent.
-- A real GPT smoke is not run without explicit approval of a bounded request and cost estimate; lack of credentials never causes CI to silently use another model.
+- The approved bounded GPT smoke produced one live `inspect_source` tool call against a synthetic local core job and confirmed its persistent operation ID. Lack of credentials never causes CI to silently use another model.
 
 ## Current A6 Evidence (preserve; do not redo implementation)
 
@@ -35,7 +35,7 @@
 - Eve package, three-tool allowlist, generated contracts, durable session bridge, and Eve/Postgres restart check are implemented.
 - The restart check now exercises an interrupted Eve turn: after persisting `inspectSource`, it restarts Eve/Postgres, resumes the same session, reuses the operation ID, submits a proposal, and verifies the same candidate and persistent budget. Its fixture advances Graphile Worker's stale lock beyond the four-hour expiry rather than waiting four hours.
 - Existing complete offline verification is recorded in the A6 report. The old real Ministral smoke is historical only and does not validate the newly approved GPT provider.
-- The A6 commit checkbox remains deferred because committing is prohibited. A separate GPT live smoke may remain pending user approval.
+- A bounded live GPT-6 Luna smoke completed on 2026-10-26: one 3,132-byte request, 128-token maximum output, 518 input tokens, 23 output tokens, and one persisted `inspectSource` operation against synthetic local data. It verified the basic provider-to-core tool path, not model quality or production readiness.
 
 ## Files
 
@@ -65,13 +65,13 @@
 
 - Update the agent README and runtime decision record to describe OpenAI/GPT orchestration, `OPENAI_API_KEY` / `OPENAI_MODEL_ID`, the exact egress policy, self-hosted Eve/Postgres, and no paid CI calls.
 - Keep the old Ministral request explicitly as superseded historical evidence; say it does not validate the selected GPT model. State that Mistral is used only for Timestral in the approved design.
-- Update the A6 brief/progress status only from verified evidence: A6 implementation and checks complete; the commit remains deferred; a real GPT smoke remains pending a separately approved bounded paid request. Do not falsely close A6's live-smoke item.
-- Record in the roadmap that step 3's durable observatory criteria are met by existing restart, budget, evidence, promotion/rejection and API tests; distinguish the provider-specific paid smoke and uncommitted integration as follow-ups if still pending.
+- Update the A6 brief/progress status only from verified evidence: implementation and offline checks are complete, the implementation commits were pushed, and the separately approved bounded GPT smoke is complete. Keep model-quality and production-readiness claims outside the smoke result.
+- Record the provider-specific live smoke as completed, keeping model-quality and production-readiness claims outside its scope.
 
 ### Task 4: Verify the complete roadmap step without paid calls
 
 - Run agent install/audit, generated contracts, typecheck, all agent tests, Eve build, Docker egress, and Eve/Postgres interrupted-turn recovery checks.
 - Run Python Ruff, format, contract drift, complete pytest suite, and package build; verify Python 3.12 and 3.14 when available.
 - Confirm the existing coverage demonstrates the roadmap criterion: restart retains in-progress work; candidate promotion/rejection is derived from registered actuals-based evidence and cannot be forged by the model.
-- Inspect the final diff and status; no commit, push, real GPT call, or Timestral weight download.
-- Report any unavailable runtime checks and clearly distinguish step 3 completion from the remaining paid GPT smoke/commit gates.
+- Inspect the final diff and status; do not download Timestral weights. The GPT smoke was run separately after explicit user approval.
+- Report any unavailable runtime checks and distinguish the verified tool-call path from model-quality and production-readiness claims.

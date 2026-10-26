@@ -30,7 +30,7 @@ For the console, local API, worker, installed-wheel path and packaging status, f
 | Console and API | Source inspection, discoveries, graph/run details, durable events and isolated scenario comparison | Component and API tests plus a Playwright flow against a real local API/worker with a fixed clock and baseline provider. This deterministic fixture is not a live LLM or Timestral smoke. |
 | Composition | Aligned sum, cumulative balance and empirical window events | Representation, unit and sample-identity checks; marginal quantiles cannot be converted into joint paths. |
 | Timestral | Optional pinned library adapter for point forecasts and marginal quantiles | Real CPU parity, license applicability for weights, and the Timestral benchmark comparison remain pending. A skipped model test is not acceptance. |
-| Discovery agent | Optional Eve service with budgeted tools and separate Postgres state | Scripted tests and restart/egress checks exercise integration. The selected OpenAI provider still needs an explicitly approved paid live smoke. |
+| Discovery agent | Optional Eve service with budgeted tools and separate Postgres state | Scripted tests and restart/egress checks exercise integration. A bounded GPT-6 Luna live smoke on 2026-10-26 completed one `inspect_source` tool call against synthetic local data and confirmed a persisted core operation ID; this does not establish model quality or production readiness. |
 
 See the [capability matrix](docs/capabilities.md) for precise boundaries and [Timestral status](docs/implementation/timestral.md) for the separate code/weights licenses. Historical replay and synthetic assumptions must remain labeled; forecasts alone cannot activate a watch without the runtime's required evaluation evidence.
 
