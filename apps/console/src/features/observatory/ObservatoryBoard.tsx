@@ -61,14 +61,14 @@ export function ObservatoryBoard({ client }: Props) {
       const loaded = await client.getRun(runId);
       const [loadedGraph, loadedEvaluations, loadedSnapshots] = await Promise.all([
         client.getGraph(loaded.graph_id, loaded.graph_version),
-        Promise.allSettled(loaded.evidence_ids.map((id) => client.getEvaluation(id))),
+        client.getRunEvaluations(loaded.run_id),
         Promise.allSettled(loaded.snapshot_ids.map((id) => client.getSnapshot(id))),
       ]);
       runRef.current = loaded;
       setRun(loaded);
       setGraph(loadedGraph);
-      setEvaluations(loadedEvaluations.flatMap((result) => result.status === "fulfilled" ? [result.value] : []));
-      const actualsIds = loadedEvaluations.flatMap((result) => result.status === "fulfilled" ? [result.value.actuals_snapshot_id] : []);
+      setEvaluations(loadedEvaluations);
+      const actualsIds = loadedEvaluations.map((evaluation) => evaluation.actuals_snapshot_id);
       const actualsSnapshots = await Promise.allSettled(actualsIds.filter((id) => !loaded.snapshot_ids.includes(id)).map((id) => client.getSnapshot(id)));
       const inputSnapshots = loadedSnapshots.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
       setSnapshots([
@@ -110,7 +110,9 @@ export function ObservatoryBoard({ client }: Props) {
         void client.streamEvents(cursor, (event) => {
           if (!active) return;
           setEvents((current) => mergeEvents(current, [event]));
-          if (event.kind === "run_completed") void openRun(event.run_id);
+          if (event.kind === "run_completed") {
+            void refreshWatches().then(() => openRun(event.run_id)).catch(() => undefined);
+          }
           if (event.kind.includes("watch")) void refreshWatches().catch(() => undefined);
         }, controller.signal).catch((reason: unknown) => {
           if (active && !controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Connessione agli eventi interrotta.");

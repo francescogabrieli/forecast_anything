@@ -336,6 +336,16 @@ class Ledger(AgentStorageMixin):
         ):
             raise DomainError("invalid_discovery_evidence", {})
 
+    def evaluations_for_run(self, run_id: str) -> tuple[EvaluationRecord, ...]:
+        """Read separately persisted evidence without rewriting the issued run."""
+        self.get_run(run_id)
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT content FROM evaluations WHERE run_id = ? ORDER BY evaluation_id",
+                (run_id,),
+            ).fetchall()
+        return tuple(EvaluationRecord.model_validate_json(row[0]) for row in rows)
+
     def get_evaluation(self, evaluation_id: str) -> EvaluationRecord:
         return EvaluationRecord.model_validate_json(
             self._get("evaluations", {"evaluation_id": evaluation_id})

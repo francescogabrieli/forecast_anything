@@ -1,4 +1,4 @@
-"""Start an authenticated deterministic API and worker for console E2E tests."""
+"""Start the real local API/worker with deterministic two-source E2E inputs."""
 
 from __future__ import annotations
 
@@ -19,23 +19,60 @@ from forecast_anything.runtime import Runtime
 from forecast_anything.store import Ledger
 from forecast_anything.worker import Worker
 
-NOW = datetime(2026, 10, 24, tzinfo=timezone.utc)
+ISSUED = datetime(2026, 10, 23, 12, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 24, 12, tzinfo=timezone.utc)
 TOKEN = "local-e2e-token"
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 
-def seed(ledger: Ledger, runtime: Runtime) -> None:
-    csv_path = Path(__file__).resolve().parents[2] / "tests/fixtures/console-e2e.csv"
-    source = {
-        "source_id": "sales",
+class FixtureKnownFutureProvider(SeasonalNaiveProvider):
+    """Test-only adapter: repeat history, then add the declared activity signal.
+
+    Production seasonal naive deliberately rejects known_future. This adapter
+    keeps its real seasonal calculation and adds one deterministic fixture value
+    per target; it makes no claim about production support or predictive quality.
+    Single-source candidate/watch requests use seasonal naive unchanged.
+    """
+
+    def capabilities(self):
+        return super().capabilities().model_copy(update={"supports_known_future": True})
+
+    def forecast(self, request):
+        result = super().forecast(request.model_copy(update={"known_future": None}))
+        if request.known_future is None:
+            return result
+        signal = {
+            item.event_time: item.value for item in request.known_future.observations
+        }
+        return result.model_copy(
+            update={
+                "point": tuple(
+                    tuple(
+                        value + signal[target]
+                        for value, target in zip(row, result.timestamps)
+                    )
+                    for row in result.point
+                ),
+                "assumptions": (
+                    *result.assumptions,
+                    "test fixture: additive known-future activity signal",
+                ),
+            }
+        )
+
+
+def source_spec(source_id: str, filename: str) -> dict:
+    return {
+        "source_id": source_id,
         "kind": "csv",
-        "location": str(csv_path),
-        "refresh_seconds": 3600,
+        "location": str(FIXTURES / filename),
+        "refresh_seconds": 86400,
         "mapping": {
             "event_time": "time",
             "value": "value",
             "available_at": {"constant": "2026-10-23"},
             "revision": {"constant": "1"},
-            "series_id": {"constant": "sales"},
+            "series_id": {"constant": source_id},
             "unit": {"constant": "count"},
             "frequency": {"constant": "1d"},
             "timezone": {"constant": "UTC"},
@@ -43,33 +80,88 @@ def seed(ledger: Ledger, runtime: Runtime) -> None:
             "missing_values": {"constant": [""]},
         },
     }
+
+
+def seed(ledger: Ledger, runtime: Runtime, clock: list[datetime]) -> None:
     app = create_app(ledger, runtime, TOKEN, console_origins=("http://127.0.0.1:4173",))
     worker = Worker(runtime, JobQueue(ledger))
     with TestClient(app, headers={"Authorization": f"Bearer {TOKEN}"}) as client:
-        registration = client.post("/v1/sources", json=source)
-        assert registration.status_code == 201, registration.text
-        worker.run_due(NOW)
-        job = client.get(f"/v1/jobs/{registration.json()['job_id']}").json()
-        candidate_id = job["result"]["candidate_ids"][0]
-        candidate = client.get(f"/v1/candidates/{candidate_id}").json()
-        epoch = ledger.get_discovery_epoch(candidate["epoch_id"])
-        submitted = client.post(
-            "/v1/jobs",
-            json={
-                "kind": "run",
-                "key": "console-e2e-base",
-                "graph": candidate["graph"],
-                "snapshot_ids": {"sales": epoch.source_snapshot_ids[0]},
-                "as_of": NOW.isoformat(),
-            },
+
+        def complete(request):
+            assert request.status_code in (201, 202), request.text
+            worker.run_due(clock[0])
+            job = client.get(f"/v1/jobs/{request.json()['job_id']}").json()
+            assert job["state"] == "completed", job
+            return job["result"]
+
+        history = complete(
+            client.post("/v1/sources", json=source_spec("sales", "console-e2e.csv"))
         )
-        assert submitted.status_code == 202, submitted.text
-        worker.run_due(NOW)
+        activity = complete(
+            client.post(
+                "/v1/sources", json=source_spec("activity", "console-e2e-activity.csv")
+            )
+        )
+        candidate = client.get(f"/v1/candidates/{history['candidate_ids'][0]}").json()
+        graph = candidate["graph"]
+        graph["graph_id"] = "console-two-source-base"
+        graph["nodes"].append(
+            {
+                "node_id": "activity",
+                "kind": "source",
+                "inputs": [],
+                "config": {
+                    "source_id": "activity",
+                    "series_ids": ["activity"],
+                    "units": ["count"],
+                    "frequency": "1d",
+                },
+            }
+        )
+        for node in graph["nodes"]:
+            if node["kind"] == "forecast":
+                node["inputs"].append("activity")
+                node["config"]["known_future"] = "activity"
+                node["config"]["relation_type"]["activity"] = "statistical"
+        base = complete(
+            client.post(
+                "/v1/jobs",
+                json={
+                    "kind": "run",
+                    "key": "console-e2e-base",
+                    "graph": graph,
+                    "snapshot_ids": {
+                        "sales": history["source_snapshot_ids"][0],
+                        "activity": activity["source_snapshot_ids"][0],
+                    },
+                    "as_of": ISSUED.isoformat(),
+                },
+            )
+        )
+        clock[0] = NOW
+        actuals_spec = source_spec("sales", "console-e2e-actuals.csv")
+        actuals_spec["mapping"]["available_at"] = "available_at"
+        actuals = complete(client.post("/v1/sources", json=actuals_spec))
+        evaluation = complete(
+            client.post(
+                "/v1/jobs",
+                json={
+                    "kind": "evaluation",
+                    "key": "console-e2e-evaluate",
+                    "run_id": base["run_id"],
+                    "actuals_snapshot_id": actuals["source_snapshot_ids"][0],
+                },
+            )
+        )
+        record = client.get(f"/v1/evaluations/{evaluation['evaluation_id']}").json()
+        assert record["status"] == "evaluated", record
+        # Candidate/watch contracts intentionally remain single-source. The
+        # browser will revise sales and the real worker will create its successor.
         created = client.post(
             "/v1/watches",
             json={
-                "candidate_id": candidate_id,
-                "next_due_at": "2026-10-25T00:00:00Z",
+                "candidate_id": actuals["candidate_ids"][0],
+                "next_due_at": "2026-10-25T12:00:00Z",
             },
         )
         assert created.status_code == 201, created.text
@@ -77,20 +169,21 @@ def seed(ledger: Ledger, runtime: Runtime) -> None:
 
 def main() -> None:
     data_dir = Path(tempfile.mkdtemp(prefix="forecast-anything-console-e2e-"))
-    ledger = Ledger(data_dir / "state.db", clock=lambda: NOW)
+    clock = [ISSUED]
+    ledger = Ledger(data_dir / "state.db", clock=lambda: clock[0])
     runtime = Runtime(
         ledger,
-        {"seasonal_naive": SeasonalNaiveProvider(1)},
+        {"seasonal_naive": FixtureKnownFutureProvider(1)},
         register_builtin_operators(),
-        lambda: NOW,
+        lambda: clock[0],
     )
-    seed(ledger, runtime)
+    seed(ledger, runtime, clock)
     app = create_app(ledger, runtime, TOKEN, console_origins=("http://127.0.0.1:4173",))
     worker = Worker(runtime, JobQueue(ledger))
 
     def run_worker() -> None:
         while True:
-            worker.run_due(NOW)
+            worker.run_due(clock[0])
             time.sleep(0.2)
 
     threading.Thread(target=run_worker, daemon=True).start()

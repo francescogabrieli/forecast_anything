@@ -753,6 +753,8 @@ def test_evaluation_job_reads_real_later_source_actuals(tmp_path):
     evaluation = client.get("/v1/evaluations/" + job["result"]["evaluation_id"]).json()
     assert evaluation["status"] == "evaluated" and evaluation["origin_count"] == 1
     assert evaluation["discovery"] is None
+    assert client.get(f"/v1/runs/{run_id}/evaluations").json() == [evaluation]
+    assert client.get(f"/v1/runs/{run_id}").json()["evidence_ids"] == []
 
 
 def test_domain_validation_errors_never_echo_submitted_credentials(tmp_path):
@@ -966,3 +968,41 @@ def test_source_preview_mapping_is_saved_and_read_back(tmp_path):
     assert reread.status_code == 200
     assert reread.json() == preview.json()
     assert saved.json()["profile"] == reread.json()
+
+
+def test_run_evaluations_are_authenticated_scoped_ordered_and_non_mutating(tmp_path):
+    from forecast_anything.contracts import EvaluationRecord
+
+    ledger, _, client, base = base_run(tmp_path)
+    other = ledger.get_run(base["run_id"]).model_copy(update={"run_id": "other-run"})
+    ledger.append_run(other, (), "other-run")
+    for evaluation_id, run_id in (
+        ("z-evaluation", base["run_id"]),
+        ("other-evaluation", "other-run"),
+        ("a-evaluation", base["run_id"]),
+    ):
+        ledger.append_evaluation(
+            EvaluationRecord(
+                evaluation_id=evaluation_id,
+                run_id=run_id,
+                actuals_snapshot_id=base["snapshot_ids"][0],
+                status="pending",
+                metrics={},
+                origin_count=0,
+                assumptions=(),
+            )
+        )
+    empty = other.model_copy(update={"run_id": "empty-run"})
+    ledger.append_run(empty, (), "empty-run")
+    assert client.get("/v1/runs/empty-run/evaluations").json() == []
+    path = f"/v1/runs/{base['run_id']}/evaluations"
+    assert client.get(path, headers={"Authorization": ""}).status_code == 401
+    response = client.get(path)
+    assert response.status_code == 200, response.text
+    assert [item["evaluation_id"] for item in response.json()] == [
+        "a-evaluation",
+        "z-evaluation",
+    ]
+    assert all(item["run_id"] == base["run_id"] for item in response.json())
+    assert client.get("/v1/runs/missing/evaluations").status_code == 404
+    assert client.get(f"/v1/runs/{base['run_id']}").json() == base

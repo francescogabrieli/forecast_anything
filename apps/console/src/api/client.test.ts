@@ -92,3 +92,16 @@ describe("ApiClient observatory methods", () => {
     expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:8000/v1/events/stream?after=3&follow=true");
   });
 });
+
+
+it("loads persisted evaluations for an encoded run with workspace authentication", async () => {
+  const evaluation = { evaluation_id: "evaluation-1", run_id: "run one", actuals_snapshot_id: "actuals", status: "evaluated", metrics: {}, origin_count: 1, assumptions: [], discovery: null };
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([evaluation]), { status: 200 }));
+  globalThis.fetch = fetchMock;
+  const client = new ApiClient("https://forecast.local", "workspace-secret");
+
+  expect(await client.getRunEvaluations("run one")).toEqual([evaluation]);
+  expect(fetchMock).toHaveBeenCalledWith("https://forecast.local/v1/runs/run%20one/evaluations", {
+    method: "GET", headers: { Authorization: "Bearer workspace-secret" },
+  });
+});
