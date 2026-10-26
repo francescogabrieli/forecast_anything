@@ -59,6 +59,10 @@ export class ApiClient {
     return this.request("GET", `/v1/runs/${encodeURIComponent(runId)}`);
   }
 
+  getRunEvaluations(runId: string): Promise<EvaluationRecord[]> {
+    return this.request("GET", `/v1/runs/${encodeURIComponent(runId)}/evaluations`);
+  }
+
   getJob(jobId: string): Promise<JobView> {
     return this.request("GET", `/v1/jobs/${encodeURIComponent(jobId)}`);
   }

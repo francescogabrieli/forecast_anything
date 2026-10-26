@@ -90,6 +90,10 @@ def router(service):
     def run(run_id: str):
         return service.ledger.get_run(run_id)
 
+    @api.get("/runs/{run_id}/evaluations", response_model=list[EvaluationRecord])
+    def run_evaluations(run_id: str):
+        return service.ledger.evaluations_for_run(run_id)
+
     @api.get("/evaluations/{evaluation_id}", response_model=EvaluationRecord)
     def evaluation(evaluation_id: str):
         return service.ledger.get_evaluation(evaluation_id)

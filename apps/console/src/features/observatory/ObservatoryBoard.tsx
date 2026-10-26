@@ -59,18 +59,25 @@ export function ObservatoryBoard({ client }: Props) {
     setError(undefined);
     try {
       const loaded = await client.getRun(runId);
-      const [loadedGraph, loadedEvaluations, loadedSnapshots] = await Promise.all([
+      const [loadedGraph, [evaluationRead], loadedSnapshots] = await Promise.all([
         client.getGraph(loaded.graph_id, loaded.graph_version),
-        Promise.allSettled(loaded.evidence_ids.map((id) => client.getEvaluation(id))),
+        Promise.allSettled([client.getRunEvaluations(loaded.run_id)]),
         Promise.allSettled(loaded.snapshot_ids.map((id) => client.getSnapshot(id))),
       ]);
+      const loadedEvaluations = evaluationRead.status === "fulfilled" ? evaluationRead.value : [];
+      if (evaluationRead.status === "rejected") {
+        setError(evaluationRead.reason instanceof Error
+          ? `Non è stato possibile caricare le valutazioni: ${evaluationRead.reason.message}`
+          : "Non è stato possibile caricare le valutazioni del run.");
+      }
+      const inputSnapshots = loadedSnapshots.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+      setSnapshots(inputSnapshots);
       runRef.current = loaded;
       setRun(loaded);
       setGraph(loadedGraph);
-      setEvaluations(loadedEvaluations.flatMap((result) => result.status === "fulfilled" ? [result.value] : []));
-      const actualsIds = loadedEvaluations.flatMap((result) => result.status === "fulfilled" ? [result.value.actuals_snapshot_id] : []);
+      setEvaluations(loadedEvaluations);
+      const actualsIds = loadedEvaluations.map((evaluation) => evaluation.actuals_snapshot_id);
       const actualsSnapshots = await Promise.allSettled(actualsIds.filter((id) => !loaded.snapshot_ids.includes(id)).map((id) => client.getSnapshot(id)));
-      const inputSnapshots = loadedSnapshots.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
       setSnapshots([
         ...inputSnapshots,
         ...actualsSnapshots.flatMap((result) => result.status === "fulfilled" ? [result.value] : []),
@@ -110,7 +117,12 @@ export function ObservatoryBoard({ client }: Props) {
         void client.streamEvents(cursor, (event) => {
           if (!active) return;
           setEvents((current) => mergeEvents(current, [event]));
-          if (event.kind === "run_completed") void openRun(event.run_id);
+          if (event.kind === "run_completed") {
+            void openRun(event.run_id);
+            void refreshWatches().catch((reason: unknown) => {
+              if (active) setError(reason instanceof Error ? reason.message : "Non è stato possibile aggiornare la sorveglianza.");
+            });
+          }
           if (event.kind.includes("watch")) void refreshWatches().catch(() => undefined);
         }, controller.signal).catch((reason: unknown) => {
           if (active && !controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Connessione agli eventi interrotta.");
