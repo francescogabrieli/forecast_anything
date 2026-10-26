@@ -38,6 +38,8 @@ def test_same_contract_three_domains(tmp_path):
         }
     report_path = run_suite(MANIFEST, tmp_path / "run", ("baseline",))
     report = json.loads(report_path.read_text())
+    assert report["status"] == "baseline_only"
+    assert report["model_comparison"]["status"] == "not_requested"
     assert set(report["datasets"]) == {"retail", "energy", "activity"}
     for dataset in report["datasets"].values():
         baseline = dataset["providers"]["baseline"]
@@ -121,6 +123,51 @@ def test_model_gate_does_not_require_or_load_timestral(tmp_path):
         assert (
             dataset["providers"]["baseline"]["splits"]["selection"]["origin_count"] > 0
         )
+
+
+def test_approved_timestral_comparison_uses_same_final_origins(tmp_path, monkeypatch):
+    from forecast_anything.contracts import Capabilities
+    from forecast_anything.providers.baseline import SeasonalNaiveProvider
+
+    class FixtureTimestralProvider:
+        def __init__(self, checkpoint, revision, code_revision):
+            self.delegate = SeasonalNaiveProvider(period=1)
+            self.revision = f"{checkpoint}@{revision};code={code_revision}"
+
+        def capabilities(self):
+            return Capabilities(
+                provider_id="timestral",
+                provider_revision=self.revision,
+                representations=("point",),
+                supports_known_future=True,
+            )
+
+        def forecast(self, request):
+            result = self.delegate.forecast(request)
+            return result.model_copy(
+                update={"provider_id": "timestral", "provider_revision": self.revision}
+            )
+
+    monkeypatch.setenv("FORECAST_ANYTHING_TIMESTRAL_WEIGHTS_APPROVED", "1")
+    monkeypatch.setattr(
+        "benchmarks.run.TimestralProvider", FixtureTimestralProvider, raising=False
+    )
+    report = json.loads(
+        run_suite(MANIFEST, tmp_path, ("baseline", "timestral")).read_text()
+    )
+
+    assert report["status"] == "evaluated"
+    assert report["model_comparison"]["status"] == "evaluated"
+    for dataset in report["datasets"].values():
+        baseline = dataset["providers"]["baseline"]
+        timestral = dataset["providers"]["timestral"]
+        assert timestral["status"] == "evaluated"
+        baseline_final = baseline["splits"]["final"]
+        timestral_final = timestral["splits"]["final"]
+        assert timestral_final["origin_count"] == baseline_final["origin_count"] == 4
+        assert timestral_final["matched_origin_count"] == 4
+        assert timestral_final["relative_mae"] is not None
+        assert timestral["provider_revision"].startswith("mistralai/Timestral-28M@")
 
 
 def test_prepared_input_tamper_is_rejected(tmp_path):

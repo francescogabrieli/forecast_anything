@@ -134,7 +134,7 @@ Il piano 01 (C1–C6) e i piani 02 e 03 sono integrati in `main` tramite PR #2. 
 
 Il 26 ottobre 2026 è stata approvata la configurazione GPT-6 Luna per l’orchestrazione Eve e Mistral soltanto per Timestral. Lo smoke GPT limitato è stato eseguito con una richiesta sintetica: una chiamata `inspect_source` su dati locali, 518 token in ingresso e 23 in uscita. Conferma il percorso base provider-Eve-core e l’operation ID persistito; non misura qualità del modello né prontezza per la produzione.
 
-Il piano 04 è in corso: U1, U2 e l’implementazione di U3 sono integrate tramite PR #2; la copertura E2E a due sorgenti è stata completata e integrata tramite PR #3. Restano la validazione dello stack Eve/LLM in Compose su ambiente pulito, il test osservato con cinque persone, la licenza/parità e il confronto Timestral M4, oltre ai passaggi di preparazione della release. Il gate Timestral resta aperto e non si scaricano pesi senza la relativa decisione. [Stato del core e decisioni](implementation/core.md).
+Il piano 04 è in corso: U1, U2 e l’implementazione di U3 sono integrate tramite PR #2; la copertura E2E a due sorgenti è stata completata e integrata tramite PR #3. Nel piano 02, la parità CPU fp32 Timestral e il confronto M4 sui tre domini sono stati eseguiti con autorizzazione del proprietario per una valutazione locale personale; la licenza dei pesi continua a valere per ogni utilizzatore e deployment. Restano la validazione dello stack Eve/LLM in Compose su ambiente pulito, il test osservato con cinque persone e i passaggi di preparazione della release. [Stato del core e decisioni](implementation/core.md).
 
 ## Fonti tecniche per le scelte del piano
 

@@ -57,7 +57,7 @@ def test_timestral_declares_marginals_not_paths():
 
 - [ ] **2. Run:** uv run pytest tests/unit/test_timestral_adapter.py -q; deve fallire per provider mancante.
 - [ ] **3. Implementare l’adattatore.** Caricare il checkpoint una volta per worker; convertire maschere, target e covariate usando il contratto ufficiale della revisione fissata. Richiedere target event_time <= as_of e covariate available_at <= as_of. L’output iniziale dichiara point e marginal_quantiles, senza inventare paths.
-- [ ] **4. Verificare prima i test unitari, poi:** uv sync --extra timestral; uv run pytest tests/model/test_timestral_parity.py -q. Il test reale confronta mediane e quantili con la chiamata ufficiale sullo stesso piccolo input, con tolleranze esplicite 1e-5 assoluta/relativa su CPU fp32. Rilevare revisioni prima del download; registrare macchina, latenza warm/cold e memoria. Il gate del provider richiede un test reale eseguito, non saltato.
+- [x] **4. Verificare prima i test unitari, poi:** uv sync --extra timestral; uv run pytest tests/model/test_timestral_parity.py -q. Il test reale confronta mediane e quantili con la chiamata ufficiale sullo stesso piccolo input, con tolleranze esplicite 1e-5 assoluta/relativa su CPU fp32. Rilevare revisioni prima del download; registrare macchina, latenza warm/cold e memoria. Il gate del provider richiede un test reale eseguito, non saltato. Passato su macOS arm64/Python 3.14 il 2026-10-26; uso locale autorizzato dal proprietario.
 - [ ] **5. Commit dei file del task e lock:** feat: add a provenance-preserving Timestral provider.
 
 ## Task M2: composizione tipizzata e operatori sugli eventi
@@ -123,7 +123,7 @@ def test_final_split_is_separate():
 
 **Interfaces:** prepare_suite(manifest: Path, destination: Path) -> dict[str, Path]; run_suite(manifest: Path, output: Path, providers: tuple[str, ...]) -> Path. Artefatti: report.json con datasets indicizzato da retail/energy/activity e risultati per provider; origins.csv, assumptions.json, environment.json. Creare le tre fixture tests/fixtures/benchmarks/retail.csv, energy.csv, activity.csv e il relativo manifest.yaml.
 
-- [ ] **1. Test:** test_same_contract_three_domains usa piccole fixture retail/energy/activity; test_returned_goods_and_missing_meter_reading applica una ricetta esplicita; test_no_vintage_claim_without_vintages verifica assumed_available_at visibile; test_synthetic_deliveries_are_labelled mantiene separati dati reali e scenario.
+- [x] **1. Test:** test_same_contract_three_domains usa piccole fixture retail/energy/activity; test_returned_goods_and_missing_meter_reading applica una ricetta esplicita; test_no_vintage_claim_without_vintages verifica assumed_available_at visibile; test_synthetic_deliveries_are_labelled mantiene separati dati reali e scenario.
 Esempio di asserzione rappresentativa da includere nei test del task:
 
 ~~~python
@@ -136,10 +136,10 @@ def test_benchmark_reports_all_domains(tmp_path):
     assert (tmp_path / "assumptions.json").exists()
 ~~~
 
-- [ ] **2. Run:** uv run pytest tests/integration/test_benchmark_contract.py -q; fallimento atteso per harness mancante.
-- [ ] **3. Implementare manifest e preparazione.** Retail: UCI Online Retail II, quantità vendute positive e resi separati; frequenza giornaliera e calendario UTC con assunzione dichiarata quando il fuso originale non è documentato. Energia: UCI household power, aggregazione oraria e campioni mancanti espliciti. Attività: Wikimedia pageviews giornaliere aggregate per progetto/accesso, User-Agent identificabile. Scegliere e fissare le serie senza guardare il holdout; registrare URL, checksum, licenza, intervallo e ricetta. Per dataset privi di vintage il replay assume una disponibilità dichiarata e non certifica i tempi reali di pubblicazione.
-- [ ] **4. Eseguire prepare, poi run:** uv run python -m benchmarks.prepare --manifest benchmarks/manifest.yaml --output .local/data; uv run python -m benchmarks.run --manifest benchmarks/manifest.yaml --output .local/benchmark. Bloccare gli intervalli nel manifest prima dell’esecuzione. Confrontare baseline e Timestral senza richiedere che Timestral vinca ovunque. Una fonte nuova deve usare il nucleo invariato; solo ricetta e grafo cambiano.
-- [ ] **5. Commit di harness, manifest e rapporto senza pesi o dati grezzi voluminosi:** test: establish cross-domain forecasting evidence.
+- [x] **2. Run:** `tests/integration/test_benchmark_contract.py` passa con fixture baseline e opt-in Timestral.
+- [x] **3. Implementare manifest e preparazione.** Retail: UCI Online Retail II, quantità vendute positive e resi separati; frequenza giornaliera e calendario UTC con assunzione dichiarata quando il fuso originale non è documentato. Energia: UCI household power, aggregazione oraria e campioni mancanti espliciti. Attività: Wikimedia pageviews giornaliere aggregate per progetto/accesso, User-Agent identificabile. Scegliere e fissare le serie senza guardare il holdout; registrare URL, checksum, licenza, intervallo e ricetta. Per dataset privi di vintage il replay assume una disponibilità dichiarata e non certifica i tempi reali di pubblicazione.
+- [x] **4. Eseguire prepare, poi run:** eseguito con split congelati e confronto baseline/Timestral sullo stesso insieme di origini finali; artefatto in `docs/research/timestral-benchmark.json`. Timestral non ha vinto su retail e questo non blocca l’accettazione.
+- [x] **5. Commit di harness, manifest e rapporto senza pesi o dati grezzi voluminosi:** harness, report sintetico e test vengono versionati; pesi e dataset preparati restano fuori dal repository.
 ## Task M5: esperimento su traiettorie congiunte
 
 **Files:** creare src/forecast_anything/uncertainty/residual_panels.py, experiments/joint_paths.py, tests/unit/test_joint_paths.py, docs/research/joint-paths.md.

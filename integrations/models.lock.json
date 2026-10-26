@@ -12,8 +12,11 @@
       "license": "Modified MIT",
       "license_url": "https://huggingface.co/mistralai/Timestral-28M/blob/49b26409ac87b5935539a5d8ffe7f397b720db47/LICENSE",
       "restriction": "Global consolidated monthly revenue above USD 20 million requires a separate license; applicability is unresolved.",
-      "approval_status": "pending_user_clarification",
-      "downloaded": false
+      "local_evaluation_authorized": true,
+      "authorization_scope": "project owner's local personal evaluation only; no downstream license grant",
+      "license_applicability_for_downstream_users": "must be assessed independently",
+      "downloaded_to_local_cache": true,
+      "included_in_repository": false
     },
     "environment": {
       "python": "3.14.0",
@@ -125,10 +128,19 @@
       "marginal_quantiles"
     ],
     "parity": {
-      "status": "not_executed_license_gate",
+      "status": "passed_local_cpu_fp32",
       "absolute_tolerance": 1e-05,
       "relative_tolerance": 1e-05,
-      "gate_requires_real_executed_test": true
+      "gate_requires_real_executed_test": true,
+      "executed_on": "2026-10-26",
+      "python": "3.14.0",
+      "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+      "device": "cpu",
+      "dtype": "float32",
+      "peak_rss_bytes": 598474752,
+      "official_cold_load_and_forecast_seconds": 0.21008883299509762,
+      "adapter_cold_seconds": 0.0625486249991809,
+      "adapter_warm_seconds": 0.01041679199988721
     }
   }
 }
