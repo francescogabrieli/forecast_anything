@@ -643,7 +643,7 @@ def run_experiment(source, output, seed=0, draws=1000):
             "Single-series benchmark measures temporal dependence; multiseries evidence is synthetic only",
             "Any method change after this test requires a new holdout",
         ],
-        "timestral": "pending_license_and_real_parity; no weights loaded or comparison evidence",
+        "timestral": "separate_m4_evidence; this experiment uses baseline panels only; no Timestral weights loaded",
         "synthetic": synthetic,
         "benchmark": benchmark,
         "total_seconds": perf_counter() - started,

@@ -228,6 +228,9 @@ def test_fixture_experiment_uses_frozen_final_origins_and_preserves_inputs(tmp_p
     output = run_experiment(source, tmp_path / "m5", seed=0, draws=100)
     report = json.loads(output.read_text())
     assert report["status"] == "experimental/provisional"
+    assert report["timestral"] == (
+        "separate_m4_evidence; this experiment uses baseline panels only; no Timestral weights loaded"
+    )
     for name, dataset in report["benchmark"].items():
         assert dataset["final_origin_count"] == 4
         assert dataset["event"]["defined_on"] == "exploration"

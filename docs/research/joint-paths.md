@@ -1,6 +1,6 @@
 # Experimental joint residual trajectories
 
-Status: **experimental/provisional**, evaluated on the frozen M4 baseline artifacts on 2026-10-25. No domain passes the predeclared positive lower 95% Brier-skill bound. This completes the research experiment, not acceptance of calibrated joint forecast probabilities. Timestral license/real-parity acceptance and model comparison remain pending; no weights were downloaded or run.
+Status: **experimental/provisional**, replayed on 2026-10-26 against the same frozen M4 baseline artifacts. No domain passes the predeclared positive lower 95% Brier-skill bound. This completes the research experiment, not acceptance of calibrated joint forecast probabilities. M4 Timestral parity and model-comparison evidence are tracked separately; this experiment continues to use only baseline residual panels and does not load Timestral weights. The full machine-readable M5 output is available in [joint-paths/report.json](joint-paths/report.json).
 
 ## Method and attribution
 
@@ -108,13 +108,13 @@ Calibration for the panel method (full control bins also appear in the JSON repo
 | activity | [0.6, 0.8) | 3 | 0.654333 | 0.000000 |
 | activity | [0.8, 1.0] | 9 | 0.912667 | 0.777778 |
 
-Total recorded runtime: **8.877 s**, including ledger loading, synthetic cases, sampling, operator application and bootstrap summaries. Base forecasts were reused, with zero additional provider inference calls and zero network/model-weight cost. Each method makes 397 empirical path-generation calls (37 + 230 + 130) and four synthetic calls. Path cells per empirical origin are 5,000 retail, 24,000 energy and 7,000 activity; peak storage includes one origin's Python/Pydantic paths, so cell counts are not a byte-accurate memory measurement. Timing is local and environment-dependent.
+The 2026-10-26 replay recorded **9.154 s**, including ledger loading, synthetic cases, sampling, operator application and bootstrap summaries. Base forecasts were reused, with zero additional provider inference calls and zero network/model-weight cost. Each method makes 397 empirical path-generation calls (37 + 230 + 130) and four synthetic calls. Path cells per empirical origin are 5,000 retail, 24,000 energy and 7,000 activity; peak storage includes one origin's Python/Pydantic paths, so cell counts are not a byte-accurate memory measurement. Timing is local and environment-dependent.
 
 ## Verification and limitations
 
 Focused tests cover unmatured exclusion; empty support; matrix/provider/calendar mismatches; duplicate origins; shared-origin series/horizon dependence; seed, input-order and draw-prefix identity; independent-control ordering/provenance; score/bootstrap gates; final-only frozen origins; immutable M4 inputs; final-panel/provider contamination; and final-actual perturbation invariance. Changing final fixture actuals changes scored outcomes while leaving event definitions, references, sample identities and forecast probabilities exactly unchanged.
 
-The full regular suite and lint/format checks pass, with the existing real Timestral parity test skipped pending its separate gate. Standard `uv build` produces wheel and sdist. The local sandbox initially could not resolve PyPI for isolated build dependencies; the same standard command subsequently passed with scoped build-only network access. An additional offline cached-dependency/no-build-isolation build also succeeded. No M1–M4 source or data changes were made.
+Focused M5 verification and lint/format checks pass. The parity run is tracked separately in [the M4 evidence](timestral-benchmark/report.json). Standard `uv build` produces wheel and sdist. The local sandbox initially could not resolve PyPI for isolated build dependencies; the same standard command subsequently passed with scoped build-only network access. An additional offline cached-dependency/no-build-isolation build also succeeded. The replay left the frozen M4 input artifacts unchanged.
 
 Residual transfer across changing levels, volatility, seasonality and source regimes remains unvalidated. Non-overlapping windows avoid target reuse but do not guarantee independent origins; the simple paired IID bootstrap may understate serial uncertainty. Exploration-based event choices and intervals are per dataset; no multiple-testing correction or broad event-family claim is made. The synthetic cases have only two support panels and the real benchmark has only one series per domain. Probability estimates retain Monte Carlo error at 1,000 draws. Actual release-vintage uncertainty, missing observations, small positive-event counts and the baseline's forecast biases remain limitations.
 
