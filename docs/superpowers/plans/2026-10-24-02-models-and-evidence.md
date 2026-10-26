@@ -169,10 +169,10 @@ def test_no_panels_cannot_create_joint_information():
     assert error.value.code == "insufficient_joint_support"
 ~~~
 
-- [ ] **2. Run:** uv run pytest tests/unit/test_joint_paths.py -q; fallimento atteso per sampler mancante.
-- [ ] **3. Implementare un candidato sperimentale preciso:** campionare interi pannelli di errori di forecast storici completati, allineati per origine, serie e orizzonte; aggiungerli alla previsione corrente. Non campionare ogni cella indipendentemente. Usare seed=0 e 1.000 traiettorie nell’esperimento. Etichettare l’ipotesi di trasferibilità dei residui e lo stato experimental.
-- [ ] **4. Eseguire:** uv run python experiments/joint_paths.py --seed 0 --draws 1000. Confrontare campionamento indipendente e pannelli su processi congiunti sintetici noti, poi sui dati del task M4 con split M3. Riportare Brier score, Brier skill contro frequenza di evento storica, calibrazione, numerosità e costo. La promozione a supporto valutato richiede almeno 30 origini finali non sovrapposte, 10 eventi e 10 non-eventi, e limite inferiore dell’intervallo bootstrap al 95% del Brier skill > 0. Sono soglie operative proposte, non garanzie; se non raggiunte resta experimental/provisional. Modificare il metodo dopo il test richiede un nuovo holdout.
-- [ ] **5. Commit del codice e rapporto completo, inclusi insuccessi:** research: evaluate joint residual trajectories.
+- [x] **2. Run:** `tests/unit/test_joint_paths.py` passa con la fixture deterministica e l’esperimento reale.
+- [x] **3. Implementare un candidato sperimentale preciso:** campionare interi pannelli di errori di forecast storici completati, allineati per origine, serie e orizzonte; aggiungerli alla previsione corrente. Non campionare ogni cella indipendentemente. Usare seed=0 e 1.000 traiettorie nell’esperimento. Etichettare l’ipotesi di trasferibilità dei residui e lo stato experimental.
+- [x] **4. Eseguire:** `experiments/joint_paths.py --seed 0 --draws 1000` è stato rieseguito sugli hash M4 congelati. Confronta campionamento indipendente e pannelli su processi congiunti sintetici noti e sui dati M4 con split M3; riporta Brier score, skill, calibrazione, numerosità e costo. Tutti i domini restano provisional perché il limite inferiore bootstrap non è positivo. Nessuna modifica al metodo o al holdout.
+- [x] **5. Commit del codice e rapporto completo, inclusi insuccessi:** codice e report JSON versionati; tutte le soglie non raggiunte restano documentate.
 
 
 ## Consegna indipendente
