@@ -1,13 +1,14 @@
-"""Freeze calendars, issue core runtime forecasts and export scored evidence.
+"""Freeze calendars, compare approved providers, and export scored evidence.
 
-The real Timestral gate is intentionally pending until license authorization.
-Preparation and baseline inference never import or download model weights.
+Timestral inference is opt-in and requires explicit local weights approval.
+Preparation and baseline inference never load or download model weights.
 """
 
 import argparse
 import csv
 import importlib.metadata
 import json
+import os
 import platform
 import subprocess
 import sys
@@ -15,9 +16,11 @@ from pathlib import Path
 
 from forecast_anything.connectors.csv import load_csv
 from forecast_anything.contracts import DomainError, GraphSpec, Node
+from forecast_anything.evaluation.metrics import relative_mae
 from forecast_anything.evaluation.records import evaluate_run
 from forecast_anything.evaluation.splits import build_splits
 from forecast_anything.providers.baseline import SeasonalNaiveProvider
+from forecast_anything.providers.timestral import TimestralProvider
 from forecast_anything.runtime import Runtime
 from forecast_anything.store import Ledger
 from forecast_anything.temporal import freeze
@@ -25,11 +28,16 @@ from forecast_anything.temporal import freeze
 from .prepare import digest, load_manifest, prepare_suite, write_json
 
 PARTITIONS = ("exploration", "selection", "final")
+TIMESTRAL_APPROVAL_ENV = "FORECAST_ANYTHING_TIMESTRAL_WEIGHTS_APPROVED"
 
 
-def _graph(name, config):
+def _graph(name, config, provider="baseline"):
     return GraphSpec(
-        graph_id=f"benchmark:{name}",
+        graph_id=(
+            f"benchmark:{name}"
+            if provider == "baseline"
+            else f"benchmark:{name}:{provider}"
+        ),
         version=1,
         nodes=(
             Node(
@@ -48,11 +56,15 @@ def _graph(name, config):
                 kind="forecast",
                 inputs=("history",),
                 config={
-                    "provider": "seasonal_naive",
+                    "provider": "seasonal_naive"
+                    if provider == "baseline"
+                    else provider,
                     "history": "history",
                     "horizon": config["horizon"],
                     "frequency": config["frequency"],
-                    "options": {"period": config["period"]},
+                    "options": {"period": config["period"]}
+                    if provider == "baseline"
+                    else {},
                     "relation_type": {"history": "statistical"},
                 },
             ),
@@ -60,7 +72,7 @@ def _graph(name, config):
     )
 
 
-def _environment():
+def _environment(timestral_status="not_requested"):
     try:
         revision = subprocess.check_output(
             ["git", "rev-parse", "HEAD"],
@@ -83,7 +95,7 @@ def _environment():
         },
         "providers": {
             "baseline": "seasonal_naive@1",
-            "timestral": "pending_license; no weights loaded",
+            "timestral": timestral_status,
         },
     }
 
@@ -152,14 +164,49 @@ def run_suite(manifest: Path, output: Path, providers: tuple[str, ...]) -> Path:
         "scenarios": specification.get("scenarios", []),
     }
     write_json(output / "assumptions.json", assumptions)
-    write_json(output / "environment.json", _environment())
+    timestral_approved = (
+        "timestral" in providers and os.environ.get(TIMESTRAL_APPROVAL_ENV) == "1"
+    )
+    pins = json.loads(
+        (
+            Path(__file__).resolve().parent.parent / "integrations/models.lock.json"
+        ).read_text()
+    )["timestral"]
+    timestral_revision = (
+        f"{pins['weights']['repo']}@{pins['weights']['revision']};"
+        f"code={pins['code']['revision']}"
+    )
+    timestral_status = (
+        timestral_revision
+        if timestral_approved
+        else "pending_license; no weights loaded"
+        if "timestral" in providers
+        else "not_requested"
+    )
+    write_json(output / "environment.json", _environment(timestral_status))
+    pending = "timestral" in providers and not timestral_approved
+    comparison_status = (
+        "pending_license"
+        if pending
+        else "evaluated"
+        if timestral_approved
+        else "not_requested"
+    )
     report = {
         "schema_version": 1,
-        "status": "pending_model_comparison",
+        "status": (
+            "pending_model_comparison"
+            if pending
+            else "evaluated"
+            if timestral_approved
+            else "baseline_only"
+        ),
         "manifest_sha256": digest(manifest),
         "model_comparison": {
-            "status": "pending_license",
-            "reason": "Timestral weights are not authorized; baseline-only evidence does not complete M4",
+            "status": comparison_status,
+            "reason": "Set FORECAST_ANYTHING_TIMESTRAL_WEIGHTS_APPROVED=1 for an explicitly approved local comparison"
+            if pending
+            else None,
         },
         "datasets": {},
         "scenarios": [
@@ -169,6 +216,13 @@ def run_suite(manifest: Path, output: Path, providers: tuple[str, ...]) -> Path:
     }
     # Freeze every dataset calendar and split before the first provider invocation.
     frozen, origins, jobs = {}, [], []
+    timestral_provider = None
+    if timestral_approved:
+        timestral_provider = TimestralProvider(
+            pins["weights"]["repo"],
+            pins["weights"]["revision"],
+            pins["code"]["revision"],
+        )
     for name, config in specification["datasets"].items():
         observations = load_csv(directory / f"{name}.csv")
         calendar = tuple(sorted({o.event_time for o in observations}))
@@ -194,7 +248,7 @@ def run_suite(manifest: Path, output: Path, providers: tuple[str, ...]) -> Path:
             "providers": {},
         }
         for provider in providers:
-            if provider == "timestral":
+            if provider == "timestral" and not timestral_approved:
                 report["datasets"][name]["providers"][provider] = {
                     "status": "pending_license",
                     "reason": "No Timestral inference or weight download authorized",
@@ -251,18 +305,36 @@ def run_suite(manifest: Path, output: Path, providers: tuple[str, ...]) -> Path:
                         ].append(dict(row))
                     else:
                         jobs.append(
-                            (name, config, partition, origin, snapshot, targets, row)
+                            (
+                                provider,
+                                name,
+                                config,
+                                partition,
+                                origin,
+                                snapshot,
+                                targets,
+                                row,
+                            )
                         )
     write_json(output / "frozen_calendar.json", frozen)
     _write_origins(output / "origins.csv", origins)
     panels = []
+    final_scores = {}
     ledger = Ledger(output / "ledger.sqlite")
-    for name, config, partition, origin, snapshot, targets, row in jobs:
-        result = report["datasets"][name]["providers"]["baseline"]
-        graph = _graph(name, config)
+    for provider, name, config, partition, origin, snapshot, targets, row in jobs:
+        result = report["datasets"][name]["providers"][provider]
+        graph = _graph(name, config, provider)
+        provider_instance = (
+            SeasonalNaiveProvider(config["period"])
+            if provider == "baseline"
+            else timestral_provider
+        )
         runtime = Runtime(
             ledger,
-            {"seasonal_naive": SeasonalNaiveProvider(config["period"])},
+            {
+                "seasonal_naive": SeasonalNaiveProvider(config["period"]),
+                "timestral": provider_instance,
+            },
             {},
             lambda: origin,
         )
@@ -270,7 +342,7 @@ def run_suite(manifest: Path, output: Path, providers: tuple[str, ...]) -> Path:
             graph,
             {"history": snapshot},
             origin,
-            f"benchmark:{digest(manifest)}:{name}:{origin.isoformat()}:baseline",
+            f"benchmark:{digest(manifest)}:{name}:{origin.isoformat()}:{provider}",
         )
         actuals = freeze(
             tuple(targets),
@@ -280,7 +352,8 @@ def run_suite(manifest: Path, output: Path, providers: tuple[str, ...]) -> Path:
         evaluation = evaluate_run(run, actuals, graph)
         ledger.put_snapshot(actuals)
         ledger.append_evaluation(evaluation)
-        write_json(output / f"graph.{name}.json", graph.model_dump(mode="json"))
+        if provider == "baseline":
+            write_json(output / f"graph.{name}.json", graph.model_dump(mode="json"))
         score = evaluation.metrics.get("baseline", {})
         if run.state != "completed" or score.get("status") != "evaluated":
             row.update(
@@ -297,8 +370,16 @@ def run_suite(manifest: Path, output: Path, providers: tuple[str, ...]) -> Path:
         )
         aggregate["mae"] = aggregate["absolute_error_sum"] / aggregate["count"]
         result["status"] = "evaluated"
+        if partition == "final":
+            final_scores[(name, provider, origin.isoformat())] = (
+                score["mae"],
+                score["count"],
+            )
+        forecast = run.results["baseline"]
+        if provider == "timestral":
+            result["provider_revision"] = forecast.provider_revision
+            result["authorization"] = "explicit_local_user_opt_in"
         if partition != "final":
-            forecast = run.results["baseline"]
             panels.append(
                 {
                     "origin": origin.isoformat(),
@@ -313,7 +394,7 @@ def run_suite(manifest: Path, output: Path, providers: tuple[str, ...]) -> Path:
                     "available_at": max(o.available_at for o in targets).isoformat(),
                     "target_timestamps": [o.event_time.isoformat() for o in targets],
                     "dataset": name,
-                    "provider": "baseline",
+                    "provider": provider,
                     "provider_id": forecast.provider_id,
                     "provider_revision": forecast.provider_revision,
                     "snapshot_id": snapshot.snapshot_id,
@@ -335,6 +416,52 @@ def run_suite(manifest: Path, output: Path, providers: tuple[str, ...]) -> Path:
                     stream.write(
                         json.dumps(panel, sort_keys=True, allow_nan=False) + "\n"
                     )
+    if timestral_approved:
+        for name, dataset in report["datasets"].items():
+            timestral = dataset["providers"]["timestral"]["splits"]["final"]
+            baseline_origins = {
+                origin
+                for dataset_name, provider, origin in final_scores
+                if dataset_name == name and provider == "baseline"
+            }
+            timestral_origins = {
+                origin
+                for dataset_name, provider, origin in final_scores
+                if dataset_name == name and provider == "timestral"
+            }
+            matched_origins = baseline_origins & timestral_origins
+            timestral["matched_origin_count"] = len(matched_origins)
+            matched_baseline_count = matched_timestral_count = 0
+            matched_baseline_error = matched_timestral_error = 0.0
+            for origin in matched_origins:
+                baseline_mae, count = final_scores[(name, "baseline", origin)]
+                timestral_mae, _ = final_scores[(name, "timestral", origin)]
+                matched_baseline_count += count
+                matched_timestral_count += count
+                matched_baseline_error += baseline_mae * count
+                matched_timestral_error += timestral_mae * count
+            matched_baseline_mae = (
+                matched_baseline_error / matched_baseline_count
+                if matched_baseline_count
+                else None
+            )
+            matched_timestral_mae = (
+                matched_timestral_error / matched_timestral_count
+                if matched_timestral_count
+                else None
+            )
+            timestral["matched_mae"] = matched_timestral_mae
+            timestral["baseline_matched_mae"] = matched_baseline_mae
+            value, reason = relative_mae(matched_timestral_mae, matched_baseline_mae)
+            timestral["relative_mae"] = value
+            timestral["relative_mae_reason"] = reason
+        if not any(
+            dataset["providers"]["timestral"]["splits"]["final"]["matched_origin_count"]
+            for dataset in report["datasets"].values()
+        ):
+            report["status"] = report["model_comparison"]["status"] = (
+                "insufficient_evidence"
+            )
     _write_origins(output / "origins.csv", origins)
     write_json(output / "report.json", report)
     return output / "report.json"
