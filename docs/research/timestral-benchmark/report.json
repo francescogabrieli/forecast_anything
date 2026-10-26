@@ -12027,13 +12027,13 @@
             },
             "final": {
               "absolute_error_sum": 2420.2585089947697,
-              "baseline_matched_mae": 0.552989692028986,
+              "baseline_matched_mae": 0.5529896920289856,
               "count": 5520,
               "mae": 0.43845262844108146,
-              "matched_mae": 0.43845262844108157,
+              "matched_mae": 0.4384526284410816,
               "matched_origin_count": 230,
               "origin_count": 230,
-              "relative_mae": 0.792876675209525,
+              "relative_mae": 0.7928766752095256,
               "relative_mae_reason": null
             },
             "selection": {

@@ -1,5 +1,5 @@
 {
-  "git_revision": "b8b7ffd20c0c435522faf6057c231f5c120ca428",
+  "git_revision": "10710cca3ba3ec17c3f92437c42dea167e18f838",
   "harness_sha256": {
     "prepare.py": "a4fa9b15927468af4f7434f45d58821c23ccf8d0ff6f8ad99699ebbd2886aab0",
     "run.py": "49f35e7e6aecbe652c5f5406d2b2684bac753c2d6359f2f7c47d29332021d070"
