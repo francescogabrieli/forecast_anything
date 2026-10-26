@@ -111,7 +111,10 @@ export function ObservatoryBoard({ client }: Props) {
           if (!active) return;
           setEvents((current) => mergeEvents(current, [event]));
           if (event.kind === "run_completed") {
-            void refreshWatches().then(() => openRun(event.run_id)).catch(() => undefined);
+            void openRun(event.run_id);
+            void refreshWatches().catch((reason: unknown) => {
+              if (active) setError(reason instanceof Error ? reason.message : "Non è stato possibile aggiornare la sorveglianza.");
+            });
           }
           if (event.kind.includes("watch")) void refreshWatches().catch(() => undefined);
         }, controller.signal).catch((reason: unknown) => {
