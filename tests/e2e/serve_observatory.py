@@ -24,10 +24,7 @@ TOKEN = "local-e2e-token"
 
 
 def seed(ledger: Ledger, runtime: Runtime) -> None:
-    csv_path = Path("/private/tmp/forecast-anything-console-e2e.csv")
-    csv_path.write_text(
-        "time,value\n2026-10-21,1\n2026-10-22,2\n2026-10-23,3\n", encoding="utf-8"
-    )
+    csv_path = Path(__file__).resolve().parents[2] / "tests/fixtures/console-e2e.csv"
     source = {
         "source_id": "sales",
         "kind": "csv",

@@ -67,6 +67,11 @@ jobs:
         run: npm run build
       - name: Verify process-level egress policy
         run: bash scripts/check-egress-policy.sh
+      - name: Set up locked Python runtime for Eve/Postgres recovery check
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.3"
+          python-version: "3.14"
       - name: Verify Eve and Postgres recovery
         run: bash scripts/check-postgres-restart.sh
 

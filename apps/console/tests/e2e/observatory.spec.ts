@@ -1,4 +1,7 @@
 import { expect, test } from "@playwright/test";
+import { resolve } from "node:path";
+
+const sourceCsv = resolve(process.cwd(), "../../tests/fixtures/console-e2e.csv");
 
 test("reviews a deterministic run and compares an assumed scenario", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -23,7 +26,7 @@ test("reviews a deterministic run and compares an assumed scenario", async ({ pa
   await expect(page.getByRole("button", { name: "Riattiva segnalazioni" })).toBeVisible();
 
   await page.getByLabel("ID della fonte").fill("activity");
-  await page.getByLabel("Percorso o URL").fill("/private/tmp/forecast-anything-console-e2e.csv");
+  await page.getByLabel("Percorso o URL").fill(sourceCsv);
   await page.getByLabel("Mappatura JSON").fill(JSON.stringify({
     event_time: "time",
     value: "value",
