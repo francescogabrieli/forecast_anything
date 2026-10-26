@@ -59,18 +59,25 @@ export function ObservatoryBoard({ client }: Props) {
     setError(undefined);
     try {
       const loaded = await client.getRun(runId);
-      const [loadedGraph, loadedEvaluations, loadedSnapshots] = await Promise.all([
+      const [loadedGraph, [evaluationRead], loadedSnapshots] = await Promise.all([
         client.getGraph(loaded.graph_id, loaded.graph_version),
-        client.getRunEvaluations(loaded.run_id),
+        Promise.allSettled([client.getRunEvaluations(loaded.run_id)]),
         Promise.allSettled(loaded.snapshot_ids.map((id) => client.getSnapshot(id))),
       ]);
+      const loadedEvaluations = evaluationRead.status === "fulfilled" ? evaluationRead.value : [];
+      if (evaluationRead.status === "rejected") {
+        setError(evaluationRead.reason instanceof Error
+          ? `Non è stato possibile caricare le valutazioni: ${evaluationRead.reason.message}`
+          : "Non è stato possibile caricare le valutazioni del run.");
+      }
+      const inputSnapshots = loadedSnapshots.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+      setSnapshots(inputSnapshots);
       runRef.current = loaded;
       setRun(loaded);
       setGraph(loadedGraph);
       setEvaluations(loadedEvaluations);
       const actualsIds = loadedEvaluations.map((evaluation) => evaluation.actuals_snapshot_id);
       const actualsSnapshots = await Promise.allSettled(actualsIds.filter((id) => !loaded.snapshot_ids.includes(id)).map((id) => client.getSnapshot(id)));
-      const inputSnapshots = loadedSnapshots.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
       setSnapshots([
         ...inputSnapshots,
         ...actualsSnapshots.flatMap((result) => result.status === "fulfilled" ? [result.value] : []),
