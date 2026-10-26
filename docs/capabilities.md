@@ -27,7 +27,7 @@ The browser E2E fixture starts the real API and a worker with a fixed clock, syn
 
 The agent tests use scripted responses. The Docker restart check interrupts a real Eve turn after a budgeted core operation and resumes the same session; the isolated fixture simulates expiry of Graphile Worker's four-hour stale-job lock. A separate bounded live GPT-6 Luna smoke sent one 3,132-byte request (maximum 128 output tokens), received a function call for `inspect_source` (518 input and 23 output tokens), and confirmed its persisted operation ID in the local core. It used only synthetic data and does not evaluate model quality or production readiness.
 
-The real Timestral test is guarded and normally skipped. A skipped test, adapter unit test or successful dependency install does not satisfy real-model acceptance. See [Timestral status](implementation/timestral.md), [the pinned benchmark evidence](research/timestral-benchmark.json), [agent decisions](decisions/agent-runtime.md), [operator semantics](implementation/operators.md) and [API contracts](implementation/api.md) for the detailed boundaries.
+The real Timestral test is guarded and normally skipped. A skipped test, adapter unit test or successful dependency install does not satisfy real-model acceptance. See [Timestral status](implementation/timestral.md), [the pinned benchmark evidence](research/timestral-benchmark/report.json), [agent decisions](decisions/agent-runtime.md), [operator semantics](implementation/operators.md) and [API contracts](implementation/api.md) for the detailed boundaries.
 
 ## Extension contracts
 

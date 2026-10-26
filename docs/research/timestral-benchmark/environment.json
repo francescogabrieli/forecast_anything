@@ -1,0 +1,18 @@
+{
+  "git_revision": "b8b7ffd20c0c435522faf6057c231f5c120ca428",
+  "harness_sha256": {
+    "prepare.py": "a4fa9b15927468af4f7434f45d58821c23ccf8d0ff6f8ad99699ebbd2886aab0",
+    "run.py": "49f35e7e6aecbe652c5f5406d2b2684bac753c2d6359f2f7c47d29332021d070"
+  },
+  "packages": {
+    "forecast-anything": "0.1.0",
+    "numpy": "2.5.4",
+    "pydantic": "2.14.1"
+  },
+  "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "providers": {
+    "baseline": "seasonal_naive@1",
+    "timestral": "mistralai/Timestral-28M@49b26409ac87b5935539a5d8ffe7f397b720db47;code=a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff"
+  },
+  "python": "3.14.0 (main, Nov 19 2025, 23:04:28) [Clang 21.1.4 ]"
+}

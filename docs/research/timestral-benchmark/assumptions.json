@@ -1,0 +1,42 @@
+{
+  "datasets": {
+    "activity": {
+      "assumed_available_at": "period_end_UTC",
+      "bucket_labels": "right endpoint; bucket complete at event_time",
+      "no_real_publication_time_certification": true,
+      "timezone_assumption": "API UTC buckets",
+      "vintage_status": "assumed_not_observed"
+    },
+    "energy": {
+      "assumed_available_at": "period_end_UTC",
+      "bucket_labels": "right endpoint; bucket complete at event_time",
+      "no_real_publication_time_certification": true,
+      "timezone_assumption": "Original source timezone not certified; interpret wall-clock timestamps as UTC, without DST conversion",
+      "vintage_status": "assumed_not_observed"
+    },
+    "retail": {
+      "assumed_available_at": "period_end_UTC",
+      "bucket_labels": "right endpoint; bucket complete at event_time",
+      "no_real_publication_time_certification": true,
+      "timezone_assumption": "Original source timezone not certified; interpret wall-clock timestamps as UTC, without DST conversion",
+      "vintage_status": "assumed_not_observed"
+    }
+  },
+  "scenarios": [
+    {
+      "description": "Illustrative external deliveries scenario; no observed realization binding and excluded from benchmark scores",
+      "id": "synthetic_deliveries",
+      "kind": "synthetic_scenario",
+      "unit": "items",
+      "values": [
+        50,
+        50,
+        100,
+        50,
+        50,
+        0,
+        0
+      ]
+    }
+  ]
+}
