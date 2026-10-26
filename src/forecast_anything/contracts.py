@@ -13,7 +13,9 @@ from pydantic import (
     ConfigDict,
     Field,
     FiniteFloat,
+    JsonValue,
     StringConstraints,
+    computed_field,
     model_validator,
 )
 
@@ -77,6 +79,45 @@ class Snapshot(Contract):
     assumptions: tuple[str, ...]
 
 
+class SourceSpec(Contract):
+    """Registered source configuration. Mapping is explicit; see profiling module.
+
+    secret_ref names a source-scoped injected credential, never a literal token.
+    Locations and secret references must not be passed to agents or logs.
+    """
+
+    source_id: Identifier
+    kind: Literal["csv", "http_json"]
+    location: Annotated[str, StringConstraints(min_length=1)] = Field(repr=False)
+    secret_ref: Identifier | None = Field(default=None, repr=False)
+    mapping: dict[str, JsonValue] = Field(default_factory=dict)
+    refresh_seconds: Annotated[int, Field(gt=0, strict=True)]
+
+
+class SourceField(Contract):
+    data_type: Literal[
+        "string", "integer", "number", "boolean", "datetime", "null", "mixed"
+    ]
+    nullable: bool
+
+
+SourceSampleValue = str | bool | int | FiniteFloat | None
+
+
+class SourceProfile(Contract):
+    """Sanitized agent-facing view, bounded independently of source size."""
+
+    source_id: Identifier
+    source_revision: Identifier | None = None
+    fields: dict[str, SourceField]
+    proposed_mapping: dict[str, JsonValue]
+    unresolved: tuple[str, ...]
+    assumptions: tuple[str, ...]
+    sample_rows: Annotated[
+        tuple[dict[str, SourceSampleValue], ...], Field(max_length=100)
+    ] = ()
+
+
 class Node(Contract):
     node_id: Identifier
     kind: Literal["source", "forecast", "transform", "event"]
@@ -107,6 +148,32 @@ class OperatorContract(Contract):
     name: Identifier
     required_representation: Representation
     units_rule: Identifier
+    # Optional v1 additions: omission retains Plan 01 negotiation and wire meaning.
+    accepted_representations: tuple[Representation, ...] | None = None
+    output_representation: Representation | Literal["preserve"] | None = None
+
+    @model_validator(mode="after")
+    def validate_negotiation(self) -> OperatorContract:
+        accepted = self.accepted_representations
+        if accepted is not None and (
+            not accepted
+            or len(set(accepted)) != len(accepted)
+            or self.required_representation not in accepted
+        ):
+            raise ValueError(
+                "accepted representations must be unique and include required fallback"
+            )
+        return self
+
+    def accepted_inputs(self) -> set[str]:
+        return set(self.accepted_representations or (self.required_representation,))
+
+    def output_representations(self, common: set[str], kind: str) -> set[str]:
+        if self.output_representation == "preserve":
+            return common
+        if self.output_representation is not None:
+            return {self.output_representation}
+        return {"point" if kind == "event" else self.required_representation}
 
 
 class ForecastRequest(Contract):
@@ -180,6 +247,221 @@ class EventRecord(Contract):
     payload: OpaqueDictionary
 
 
+class _ImmutableDict(dict):
+    def _deny(self, *args, **kwargs):
+        raise TypeError("evaluation metrics are immutable")
+
+    __setitem__ = __delitem__ = clear = pop = popitem = setdefault = update = (
+        __ior__
+    ) = _deny
+
+
+def _immutable(value):
+    if isinstance(value, dict):
+        return _ImmutableDict({key: _immutable(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_immutable(item) for item in value)
+    return value
+
+
+class DiscoveryBudget(Contract):
+    max_candidates: Annotated[int, Field(ge=0, strict=True)] = 10
+    max_tool_calls: Annotated[int, Field(ge=0, strict=True)] = 20
+
+
+class VerificationProtocol(Contract):
+    """Frozen before final evaluation; no post-selection correction is assumed."""
+
+    criterion: Literal["mae", "brier"] = "mae"
+    target_node_id: Identifier = "question"
+    reference_node_id: Identifier = "reference"
+    selection_method: Literal["prespecified_holdout", "exploratory", "corrected"] = (
+        "prespecified_holdout"
+    )
+
+
+class CandidateCostEstimate(Contract):
+    """Static execution work, not a latency or monetary quote.
+
+    Unknown/unsupported execution has no numeric value; zero is never a stand-in
+    for an unavailable estimate. The compiler owns the estimate and its basis.
+    """
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
+
+    status: Literal["known", "unavailable"] = "unavailable"
+    value: Annotated[int, Field(ge=0, strict=True)] | None = None
+    unit: Literal["provider_calls_per_run"] = "provider_calls_per_run"
+    basis: Identifier = "not_estimated"
+
+    @model_validator(mode="after")
+    def validate_availability(self) -> CandidateCostEstimate:
+        if (self.status == "known") != (self.value is not None):
+            raise ValueError(
+                "known cost requires a value; unavailable cost requires null"
+            )
+        return self
+
+
+class Candidate(Contract):
+    candidate_id: Identifier
+    template_id: Identifier
+    source_ids: tuple[Identifier, ...]
+    graph: GraphSpec
+    reason: Identifier
+    protocol_id: Identifier
+    epoch_id: Identifier
+    protocol: VerificationProtocol = Field(default_factory=VerificationProtocol)
+    estimated_cost: CandidateCostEstimate = Field(default_factory=CandidateCostEstimate)
+    source_profiles: tuple[SourceProfile, ...] = ()
+    executable: bool = False
+    unresolved: tuple[str, ...] = ()
+
+
+class DiscoveryEpoch(Contract):
+    epoch_id: Identifier
+    source_snapshot_ids: tuple[Identifier, ...]
+    explored_candidate_ids: tuple[Identifier, ...]
+    final_origin_ids: tuple[Identifier, ...]
+    final_candidate_id: Identifier | None = None
+    tuning_origin_ids: tuple[Identifier, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_partitions(self) -> DiscoveryEpoch:
+        for values in (
+            self.source_snapshot_ids,
+            self.explored_candidate_ids,
+            self.final_origin_ids,
+            self.tuning_origin_ids,
+        ):
+            if len(set(values)) != len(values):
+                raise ValueError("discovery identities must be unique")
+        if set(self.final_origin_ids) & set(self.tuning_origin_ids):
+            raise ValueError("final origins cannot be used for tuning")
+        if self.final_candidate_id is not None and (
+            self.final_candidate_id not in self.explored_candidate_ids
+        ):
+            raise ValueError("final block owner must be a declared candidate")
+        return self
+
+
+class EligibilityDecision(Contract):
+    action: Literal["activate", "provisional", "reject"]
+    reason_codes: tuple[Identifier, ...]
+    candidate_id: Identifier | None = None
+    protocol_id: Identifier | None = None
+    epoch_id: Identifier | None = None
+    evaluation_ids: tuple[Identifier, ...] = ()
+    policy_version: Identifier = "discovery-v1"
+
+
+class Watch(Contract):
+    """Current relevance state; Candidate and decision retain their issued lineage.
+
+    Evidence applicability is current metadata, independent of immutable scores.
+    A minimal watch can be displayed without lineage, but cannot be qualified.
+    """
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
+
+    watch_id: Identifier
+    candidate_id: Identifier
+    lifecycle: Literal["candidate", "evaluating", "active", "paused", "unsupported"]
+    quality: Literal["provisional", "usable", "stale", "degraded"]
+    graph_id: Identifier
+    graph_version: int
+    policy_version: Identifier
+    next_due_at: AwareDatetime
+    muted: bool
+    priority: Annotated[int, Field(ge=0, le=5, strict=True)] = 3
+    candidate: Candidate | None = None
+    eligibility_decision: EligibilityDecision | None = None
+    source_snapshot_ids: tuple[Identifier, ...] = ()
+    evidence_applicable: bool = False
+    reevaluation_required: bool = True
+    invalidated_evaluation_ids: tuple[Identifier, ...] = ()
+    candidate_invalidated: bool = False
+    supersedes_watch_id: Identifier | None = None
+
+    @model_validator(mode="after")
+    def validate_lineage(self) -> Watch:
+        if self.supersedes_watch_id == self.watch_id:
+            raise ValueError("watch cannot supersede itself")
+        if self.candidate is not None and (
+            self.candidate_id != self.candidate.candidate_id
+            or (self.graph_id, self.graph_version)
+            != (self.candidate.graph.graph_id, self.candidate.graph.version)
+        ):
+            raise ValueError("watch candidate lineage mismatch")
+        if self.eligibility_decision is not None and (
+            self.eligibility_decision.candidate_id != self.candidate_id
+            or self.eligibility_decision.policy_version != self.policy_version
+            or self.candidate is None
+            or (
+                self.eligibility_decision.protocol_id,
+                self.eligibility_decision.epoch_id,
+            )
+            != (self.candidate.protocol_id, self.candidate.epoch_id)
+        ):
+            raise ValueError("watch decision lineage mismatch")
+        return self
+
+    @property
+    def operational(self) -> bool:
+        """Only current, qualified, unmuted watches may emit operational alerts."""
+        return (
+            self.lifecycle == "active"
+            and self.quality == "usable"
+            and not self.muted
+            and self.evidence_applicable
+            and not self.reevaluation_required
+            and not self.candidate_invalidated
+            and self.eligibility_decision is not None
+            and self.eligibility_decision.action == "activate"
+        )
+
+
+class EvaluationContext(Contract):
+    """Trusted evaluator attestation, never accepted as an agent proposal.
+
+    Origin IDs identify the frozen target window, independently of model/config.
+    The caller establishes temporal/semantic validity using Plan 02 evaluation.
+    Defaults fail closed when that verification has not been performed.
+    """
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
+
+    candidate_id: Identifier
+    protocol_id: Identifier
+    epoch_id: Identifier
+    origin_id: Identifier
+    partition: Literal["exploration", "selection", "final"]
+    source_snapshot_ids: tuple[Identifier, ...]
+    target_start: AwareDatetime
+    target_end: AwareDatetime
+    temporal_valid: bool = False
+    semantic_valid: bool = False
+
+    @model_validator(mode="after")
+    def validate_window(self) -> EvaluationContext:
+        if self.target_end < self.target_start:
+            raise ValueError("target window must be ordered")
+        return self
+
+
+class EvaluationRecord(Contract):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
+
+    evaluation_id: Identifier
+    run_id: Identifier
+    actuals_snapshot_id: Identifier
+    status: Literal["pending", "evaluated", "insufficient_evidence"]
+    metrics: Annotated[OpaqueDictionary, AfterValidator(_immutable)]
+    origin_count: Annotated[int, Field(ge=0, strict=True)]
+    assumptions: tuple[str, ...]
+    discovery: EvaluationContext | None = None
+
+
 class _ErrorPayload(Contract):
     code: Identifier
     details: OpaqueDictionary
@@ -199,3 +481,116 @@ class DomainError(Exception):
 
     def model_dump_json(self, **kwargs: Any) -> str:
         return self._payload.model_dump_json(**kwargs)
+
+
+class SourceView(Contract):
+    source_id: Identifier
+    revision: Identifier
+    kind: Literal["csv", "http_json"]
+    refresh_seconds: int
+
+
+class SourceRegistration(SourceView):
+    profile: SourceProfile
+    job_id: Identifier
+    epoch_id: Identifier
+
+
+class CandidateRequest(Contract):
+    template_id: Identifier
+    source_ids: tuple[Identifier, ...]
+    reason: Identifier
+    selection_method: Literal["prespecified_holdout", "exploratory", "corrected"] = (
+        "prespecified_holdout"
+    )
+
+
+class WatchRequest(Contract):
+    candidate_id: Identifier
+    next_due_at: AwareDatetime
+
+
+class WatchPatch(Contract):
+    muted: Annotated[bool, Field(strict=True)] | None = None
+    priority: Annotated[int, Field(ge=0, le=5, strict=True)] | None = None
+
+    @model_validator(mode="after")
+    def require_control(self):
+        if not self.model_fields_set or any(
+            getattr(self, key) is None for key in self.model_fields_set
+        ):
+            raise ValueError("at least one non-null control is required")
+        return self
+
+
+class WatchView(Watch):
+    @computed_field
+    @property
+    def operational(self) -> bool:
+        return super().operational
+
+
+class RunJobRequest(Contract):
+    kind: Literal["run"]
+    key: Identifier
+    graph: GraphSpec
+    snapshot_ids: dict[Identifier, Identifier]
+    as_of: AwareDatetime
+    previous_run_id: Identifier | None = None
+
+
+class EvaluationJobRequest(Contract):
+    kind: Literal["evaluation"]
+    key: Identifier
+    run_id: Identifier
+    actuals_snapshot_id: Identifier
+
+
+class ResumeJobRequest(Contract):
+    kind: Literal["watch_resume"]
+    key: Identifier
+    watch_id: Identifier
+
+
+JobRequest = Annotated[
+    RunJobRequest | EvaluationJobRequest | ResumeJobRequest, Field(discriminator="kind")
+]
+
+
+class JobView(Contract):
+    job_id: Identifier
+    state: Identifier
+    attempt: int
+    result: OpaqueDictionary | None = None
+    error: OpaqueDictionary | None = None
+
+
+class ScenarioRequest(Contract):
+    base_graph_id: Identifier
+    base_version: Annotated[int, Field(gt=0, strict=True)]
+    label: Identifier
+    source_overrides: dict[Identifier, Snapshot]
+
+
+class ScenarioRecord(Contract):
+    scenario_id: Identifier
+    graph_id: Identifier
+    version: int
+    parent_run_id: Identifier
+    label: Identifier
+    snapshot_ids: dict[Identifier, Identifier]
+
+
+class ScenarioView(ScenarioRecord):
+    job_id: Identifier
+
+
+class CapabilitiesView(Contract):
+    providers: dict[str, Capabilities]
+    operators: dict[str, OperatorContract]
+    templates: tuple[str, ...]
+
+
+class ErrorResponse(Contract):
+    code: Identifier
+    details: OpaqueDictionary

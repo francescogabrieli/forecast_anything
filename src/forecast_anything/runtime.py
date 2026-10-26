@@ -6,7 +6,7 @@ import json
 from copy import deepcopy
 from datetime import datetime, timezone
 from hashlib import sha256
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from .contracts import (
     REPRESENTATION_FIELDS,
@@ -29,6 +29,9 @@ from .graph import (
 from .operators.base import Operator
 from .providers.base import ForecastProvider, frequency_step, observation_grid
 from .store import Ledger
+
+if TYPE_CHECKING:
+    from .jobs import LeaseGuard
 
 
 def _digest(value: dict) -> str:
@@ -89,7 +92,14 @@ class Runtime:
         )
 
     def run(
-        self, spec: GraphSpec, snapshots: dict[str, Snapshot], as_of: datetime, key: str
+        self,
+        spec: GraphSpec,
+        snapshots: dict[str, Snapshot],
+        as_of: datetime,
+        key: str,
+        lease_guard: LeaseGuard | None = None,
+        previous_run_id: str | None = None,
+        scenario_id: str | None = None,
     ) -> RunRecord:
         if as_of.tzinfo is None or as_of.utcoffset() is None:
             raise DomainError("naive_timestamp", {"field": "as_of"})
@@ -101,6 +111,25 @@ class Runtime:
             name: Snapshot.model_validate(value.model_dump())
             for name, value in snapshots.items()
         }
+        scenario = self.ledger.scenario_for_graph(spec.graph_id, spec.version)
+        if scenario_id is not None:
+            if (
+                scenario is None
+                or scenario.scenario_id != scenario_id
+                or scenario.parent_run_id != previous_run_id
+                or scenario.snapshot_ids
+                != {name: snap.snapshot_id for name, snap in snapshots.items()}
+                or self.ledger.get_graph(spec.graph_id, spec.version) != spec
+            ):
+                raise DomainError("invalid_scenario_lineage", {})
+            parent = self.ledger.get_run(previous_run_id)
+            if as_of != parent.as_of:
+                raise DomainError("invalid_scenario_lineage", {})
+        elif scenario is not None or any(
+            any(a.startswith("assumed:") for a in snapshot.assumptions)
+            for snapshot in snapshots.values()
+        ):
+            raise DomainError("scenario_required", {})
         fingerprint = _digest(
             {
                 "graph": spec.model_dump(mode="json"),
@@ -109,6 +138,12 @@ class Runtime:
                     for name, value in snapshots.items()
                 },
                 "as_of": as_of.isoformat(),
+                **({"scenario_id": scenario_id} if scenario_id else {}),
+                **(
+                    {"previous_run_id": previous_run_id}
+                    if previous_run_id is not None
+                    else {}
+                ),
             }
         )
         run_id = _digest({"key": key, "request": fingerprint})
@@ -137,6 +172,38 @@ class Runtime:
                 "invalid_snapshot_bindings",
                 {"expected": sorted(source_keys), "actual": sorted(snapshots)},
             )
+        reusable = {}
+        if previous_run_id is not None:
+            prior = self.ledger.get_run(previous_run_id)
+            if (prior.graph_id, prior.graph_version, prior.as_of, prior.state) == (
+                spec.graph_id,
+                spec.version,
+                as_of,
+                "completed",
+            ) and self.ledger.get_graph(prior.graph_id, prior.graph_version) == spec:
+                old_bindings = self.ledger.run_bindings(previous_run_id)
+                affected = set()
+                for node_id in compiled.order:
+                    config = configs[node_id]
+                    node = nodes[node_id]
+                    if isinstance(config, SourceConfig):
+                        if (
+                            old_bindings.get(config.source_id)
+                            != snapshots[config.source_id].snapshot_id
+                        ):
+                            affected.add(node_id)
+                    elif isinstance(config, ForecastConfig):
+                        result = prior.results.get(node_id)
+                        capability = capabilities[config.provider]
+                        if result is None or (
+                            result.provider_id,
+                            result.provider_revision,
+                        ) != (capability.provider_id, capability.provider_revision):
+                            affected.add(node_id)
+                    if any(parent in affected for parent in node.inputs):
+                        affected.add(node_id)
+                    if node_id not in affected and node_id in prior.results:
+                        reusable[node_id] = prior.results[node_id]
         values, calendars, requests = {}, {}, {}
         # All actual source metadata and request calendars are checked before inference.
         for node_id in compiled.order:
@@ -214,7 +281,7 @@ class Runtime:
             for node_id, config in configs.items()
             if isinstance(config, ForecastConfig)
         }
-        actual, results = {}, {}
+        actual, results, guaranteed = {}, {}, {}
         state = "completed"
         for node_id in compiled.order:
             config = configs[node_id]
@@ -234,7 +301,9 @@ class Runtime:
                     capability = capabilities[config.provider]
                     actual[node_id] = capability.provider_id
                     result = _result(
-                        self.providers[config.provider].forecast(
+                        reusable[node_id]
+                        if node_id in reusable
+                        else self.providers[config.provider].forecast(
                             requests[node_id].model_copy(deep=True)
                         )
                     )
@@ -254,6 +323,7 @@ class Runtime:
                             "invalid_provider_output", {"node_id": node_id}
                         )
                     _require_representations(result, capability.representations)
+                    guaranteed[node_id] = set(capability.representations)
                     bindings = {"history": config.history}
                     if config.known_future:
                         bindings["known_future"] = config.known_future
@@ -268,17 +338,22 @@ class Runtime:
                         for value in inputs.values()
                         if isinstance(value, ForecastResult)
                     ]
-                    for value in forecasts:
-                        _require_representations(
-                            value, (contract.required_representation,)
+                    common = contract.accepted_inputs().intersection(
+                        *(guaranteed[parent] for parent in node.inputs)
+                    )
+                    if not common or len(forecasts) != len(inputs):
+                        raise DomainError(
+                            "unsupported_representation", {"node_id": node_id}
                         )
+                    for value in forecasts:
+                        _require_representations(value, common)
                     if forecasts and any(
                         value.timestamps != forecasts[0].timestamps
                         for value in forecasts
                     ):
                         raise DomainError("incompatible_calendar", {"node_id": node_id})
                     if (
-                        contract.required_representation == "joint_paths"
+                        "joint_paths" in common
                         and forecasts
                         and any(
                             value.sample_group_id != forecasts[0].sample_group_id
@@ -291,18 +366,44 @@ class Runtime:
                         k: v for k, v in config.parameters.items() if k != "bindings"
                     }
                     result = _result(
-                        self.operators[config.operator].apply(
+                        reusable[node_id]
+                        if node_id in reusable
+                        else self.operators[config.operator].apply(
                             deepcopy(inputs), deepcopy(parameters)
                         )
                     )
-                    _require_representations(
-                        result,
-                        (
-                            "point"
-                            if node.kind == "event"
-                            else contract.required_representation,
-                        ),
-                    )
+                    output_reps = contract.output_representations(common, node.kind)
+                    _require_representations(result, output_reps)
+                    guaranteed[node_id] = output_reps
+                    if (
+                        "joint_paths" in output_reps
+                        and "joint_paths" in common
+                        and (
+                            result.sample_group_id != forecasts[0].sample_group_id
+                            or len(result.paths) != len(forecasts[0].paths)
+                        )
+                    ):
+                        raise DomainError("incompatible_samples", {"node_id": node_id})
+                    if contract.output_representation == "preserve" and any(
+                        result.series_ids != value.series_ids for value in forecasts
+                    ):
+                        raise DomainError("incompatible_series", {"node_id": node_id})
+                    if (
+                        node.kind == "event"
+                        and contract.output_representation == "point"
+                        and contract.units_rule == "probability"
+                    ):
+                        if (
+                            len(result.series_ids) != 1
+                            or result.timestamps != (forecasts[0].timestamps[-1],)
+                            or result.paths is not None
+                            or result.quantiles is not None
+                            or result.sample_group_id is not None
+                            or not 0 <= result.point[0][0] <= 1
+                        ):
+                            raise DomainError(
+                                "invalid_event_output", {"node_id": node_id}
+                            )
                     input_units = {
                         unit
                         for value in inputs.values()
@@ -378,7 +479,7 @@ class Runtime:
             state=state,
             results=results,
             evidence_ids=(),
-            scenario_id=None,
-            parent_run_id=None,
+            scenario_id=scenario_id,
+            parent_run_id=previous_run_id,
         )
-        return self.ledger.append_run(run, tuple(events), key)
+        return self.ledger.append_run(run, tuple(events), key, lease_guard=lease_guard)

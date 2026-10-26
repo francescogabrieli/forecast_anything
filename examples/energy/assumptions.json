@@ -1,0 +1,10 @@
+{
+  "as_of": "2026-10-21T06:00:00Z",
+  "assumptions": [
+    "Synthetic energy demonstration; hand-authored hourly mean power, not observed meter or benchmark data.",
+    "Fixed UTC hourly buckets use right endpoints; available_at equals event_time by synthetic assumption, with no local-time or DST conversion.",
+    "Values measure mean power in kW, not energy in kWh; no meter integration or missing-minute validation was performed.",
+    "The three-hour repetition period is illustrative; no daily, weather or demand-response relationship has been established.",
+    "Point-only seasonal baseline; no calibrated intervals, joint paths, capacity-exceedance probabilities or causal claims."
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "graph_id": "demo_energy",
+  "version": 1,
+  "nodes": [
+    {"node_id": "history", "kind": "source", "inputs": [], "config": {
+      "source_id": "demo_energy_csv", "series_ids": ["energy_power"], "units": ["kW"], "frequency": "1h"
+    }},
+    {"node_id": "forecast", "kind": "forecast", "inputs": ["history"], "config": {
+      "provider": "seasonal_naive", "history": "history", "horizon": 3, "frequency": "1h",
+      "relation_type": {"history": "statistical"}, "options": {"period": 3}
+    }}
+  ]
+}

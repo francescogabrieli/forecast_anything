@@ -45,8 +45,11 @@ Esempio di asserzione rappresentativa da includere nei test del task:
 
 ~~~python
 def test_timestral_declares_marginals_not_paths():
-    provider = TimestralProvider(checkpoint="mistralai/Timestral-28M",
-                                revision="fixture", code_revision="fixture")
+    provider = TimestralProvider(
+        checkpoint="mistralai/Timestral-28M",
+        revision="fixture",
+        code_revision="fixture",
+    )
     caps = provider.capabilities()
     assert "marginal_quantiles" in caps.representations
     assert "joint_paths" not in caps.representations
@@ -69,11 +72,21 @@ Esempio di asserzione rappresentativa da includere nei test del task:
 ~~~python
 def test_anytime_uses_complete_paths():
     t = datetime(2026, 10, 24, tzinfo=timezone.utc)
-    result = ForecastResult(provider_id="fixture", provider_revision="1", series_ids=("s",),
-        timestamps=(t, t+timedelta(hours=1)), units=("count",), point=((1,1),),
-        quantiles=None, paths=(((2,0),), ((0,2),)), sample_group_id="world", assumptions=())
+    result = ForecastResult(
+        provider_id="fixture",
+        provider_revision="1",
+        series_ids=("s",),
+        timestamps=(t, t + timedelta(hours=1)),
+        units=("count",),
+        point=((1, 1),),
+        quantiles=None,
+        paths=(((2, 0),), ((0, 2),)),
+        sample_group_id="world",
+        assumptions=(),
+    )
     answer = register_builtin_operators()["any_exceed"].apply(
-        {"value": result}, {"threshold": 1, "comparator": "gt"})
+        {"value": result}, {"threshold": 1, "comparator": "gt"}
+    )
     assert answer.point[0][0] == 1.0
 ~~~
 
@@ -94,7 +107,7 @@ Esempio di asserzione rappresentativa da includere nei test del task:
 ~~~python
 def test_final_split_is_separate():
     t = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    split = build_splits(tuple(t+timedelta(days=i) for i in range(100)), horizon=5)
+    split = build_splits(tuple(t + timedelta(days=i) for i in range(100)), horizon=5)
     assert split.exploration_end < split.selection_end < split.final_start
     assert split.stride == split.horizon == 5
 ~~~
@@ -115,7 +128,9 @@ Esempio di asserzione rappresentativa da includere nei test del task:
 
 ~~~python
 def test_benchmark_reports_all_domains(tmp_path):
-    report_path = run_suite(Path("tests/fixtures/benchmarks/manifest.yaml"), tmp_path, ("baseline",))
+    report_path = run_suite(
+        Path("tests/fixtures/benchmarks/manifest.yaml"), tmp_path, ("baseline",)
+    )
     report = json.loads(report_path.read_text())
     assert set(report["datasets"]) == {"retail", "energy", "activity"}
     assert (tmp_path / "assumptions.json").exists()
@@ -137,12 +152,20 @@ Esempio di asserzione rappresentativa da includere nei test del task:
 ~~~python
 def test_no_panels_cannot_create_joint_information():
     t = datetime(2026, 10, 24, tzinfo=timezone.utc)
-    base = ForecastResult(provider_id="fixture", provider_revision="1", series_ids=("s",),
-        timestamps=(t,), units=("count",), point=((1,),), quantiles=None, paths=None,
-        sample_group_id=None, assumptions=())
+    base = ForecastResult(
+        provider_id="fixture",
+        provider_revision="1",
+        series_ids=("s",),
+        timestamps=(t,),
+        units=("count",),
+        point=((1,),),
+        quantiles=None,
+        paths=None,
+        sample_group_id=None,
+        assumptions=(),
+    )
     with pytest.raises(DomainError) as error:
-        ResidualPanelSampler().sample(base=base, panels=(), as_of=t,
-                                      draws=1000, seed=0)
+        ResidualPanelSampler().sample(base=base, panels=(), as_of=t, draws=1000, seed=0)
     assert error.value.code == "insufficient_joint_support"
 ~~~
 

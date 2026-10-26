@@ -1,0 +1,11 @@
+services:
+  agent:
+    build:
+      context: ./apps/agent/egress-probe
+    command: ["node", "/app/test.mjs"]
+    networks:
+      - default
+
+networks:
+  default:
+    driver: bridge

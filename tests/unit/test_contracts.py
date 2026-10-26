@@ -181,3 +181,25 @@ def test_opaque_dictionary_preserves_finite_nested_structure():
     nested = {"arbitrary": [{"nested": ("preserved", 3.5, None)}]}
     node = Node(node_id="n", kind="source", inputs=(), config=nested)
     assert node.config == nested
+
+
+@pytest.mark.parametrize(
+    "status,value",
+    [
+        ("known", None),
+        ("known", -1),
+        ("known", float("inf")),
+        ("known", True),
+        ("unavailable", 0),
+        ("unavailable", 2),
+    ],
+)
+def test_candidate_cost_requires_known_finite_value_or_explicit_unavailable(
+    status, value
+):
+    from forecast_anything.contracts import CandidateCostEstimate
+
+    with pytest.raises(ValidationError):
+        CandidateCostEstimate(
+            status=status, value=value, unit="provider_calls_per_run", basis="test"
+        )

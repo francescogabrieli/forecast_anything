@@ -1,0 +1,47 @@
+name: Bug report
+description: Report a reproducible failure using synthetic or sanitized data.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check the capability matrix first. For suspected vulnerabilities, follow SECURITY.md and avoid public exploit details. Never include tokens, private source URLs, credentials or private observations.
+  - type: input
+    id: revision
+    attributes:
+      label: Revision and environment
+      description: Commit or installed version, OS, Python/Node versions and installation path.
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Execution path
+      options:
+        - Baseline CLI or demo
+        - Local API or worker
+        - Console or deterministic browser E2E
+        - Optional Timestral adapter
+        - Optional Eve agent
+        - Other documented path
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include exact commands and a small synthetic fixture. Remove private locations and secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Include sanitized error codes and whether the problem survives a restart. Distinguish skipped model checks from executed checks.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Verification and context
+      description: Relevant test results, provider/revision, mappings, units, timezone and assumptions. Sanitize screenshots and logs before attaching them.

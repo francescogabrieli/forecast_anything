@@ -1,0 +1,10 @@
+{
+  "as_of": "2026-10-21T00:00:00Z",
+  "assumptions": [
+    "Synthetic activity demonstration; hand-authored daily view totals, not observed Wikimedia or benchmark data.",
+    "Fixed UTC daily buckets use right endpoints; available_at equals event_time by synthetic assumption, not observed API release history.",
+    "The three-day repetition period is illustrative; no real weekly seasonality or response to news has been established.",
+    "Views are aggregate counts, not unique users; no bot classification, campaign or causal mechanism is represented.",
+    "Point-only seasonal baseline; no calibrated intervals, joint paths, spike probabilities or causal claims."
+  ]
+}

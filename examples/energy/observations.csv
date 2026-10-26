@@ -1,0 +1,7 @@
+series_id,event_time,available_at,revision,value,unit
+energy_power,2026-10-21T01:00:00Z,2026-10-21T01:00:00Z,1,0.6,kW
+energy_power,2026-10-21T02:00:00Z,2026-10-21T02:00:00Z,1,1.0,kW
+energy_power,2026-10-21T03:00:00Z,2026-10-21T03:00:00Z,1,1.4,kW
+energy_power,2026-10-21T04:00:00Z,2026-10-21T04:00:00Z,1,0.8,kW
+energy_power,2026-10-21T05:00:00Z,2026-10-21T05:00:00Z,1,1.2,kW
+energy_power,2026-10-21T06:00:00Z,2026-10-21T06:00:00Z,1,1.6,kW

@@ -7,6 +7,9 @@ from pathlib import Path
 
 import pytest
 
+from forecast_anything.cli import configured_providers
+from forecast_anything.contracts import DomainError
+
 ROOT = Path(__file__).resolve().parents[2]
 FIELDS = ["series_id", "event_time", "available_at", "revision", "value", "unit"]
 
@@ -15,6 +18,28 @@ def cli(*args):
     return subprocess.run(
         ["forecast-anything", *map(str, args)], capture_output=True, text=True
     )
+
+
+def test_optional_timestral_provider_is_not_loaded_by_default(monkeypatch):
+    monkeypatch.delenv("FORECAST_ANYTHING_TIMESTRAL_ENABLED", raising=False)
+
+    assert set(configured_providers()) == {"seasonal_naive"}
+
+
+def test_optional_timestral_provider_requires_pins_and_registers_lazily(monkeypatch):
+    monkeypatch.setenv("FORECAST_ANYTHING_TIMESTRAL_ENABLED", "1")
+    with pytest.raises(DomainError, match="incomplete_timestral_configuration"):
+        configured_providers()
+    monkeypatch.setenv(
+        "FORECAST_ANYTHING_TIMESTRAL_CHECKPOINT", "mistralai/Timestral-28M"
+    )
+    monkeypatch.setenv("FORECAST_ANYTHING_TIMESTRAL_REVISION", "weights-revision")
+    monkeypatch.setenv("FORECAST_ANYTHING_TIMESTRAL_CODE_REVISION", "code-revision")
+
+    providers = configured_providers()
+
+    assert set(providers) == {"seasonal_naive", "timestral"}
+    assert providers["timestral"].capabilities().provider_id == "timestral"
 
 
 def test_cli_exposes_run_command():

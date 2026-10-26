@@ -31,7 +31,7 @@
 
 ## Mappa dei file
 
-Sotto src/forecast_anything: sources/catalog.py, sources/profiling.py, discovery/candidates.py, discovery/policy.py, watches.py, jobs.py, worker.py, api/app.py, api/routes.py, api/scenarios.py; migrazioni 003_observatory.sql e 004_jobs.sql.
+Sotto src/forecast_anything: sources/catalog.py, sources/profiling.py, discovery/candidates.py, discovery/policy.py, watches.py, jobs.py, worker.py, api/app.py, api/routes.py, api/scenarios.py; migrazioni 003_discovery.sql, 004_observatory.sql e 005_jobs.sql.
 
 Adattatore separato: apps/agent/agent/instructions.md, agent.ts, tools/inspect_source.ts, propose_candidates.ts, explain_run.ts; apps/agent/src/client.ts, bridge.ts; tests e lock del relativo package.
 
@@ -48,8 +48,14 @@ Esempio di asserzione rappresentativa da includere nei test del task:
 def test_profile_does_not_invent_units(tmp_path):
     path = tmp_path / "source.csv"
     path.write_text("date,value\n2026-10-24,1\n")
-    source = SourceSpec(source_id="s", kind="csv", location=str(path), secret_ref=None,
-                        mapping={}, refresh_seconds=60)
+    source = SourceSpec(
+        source_id="s",
+        kind="csv",
+        location=str(path),
+        secret_ref=None,
+        mapping={},
+        refresh_seconds=60,
+    )
     assert "unit" in inspect_source(source).unresolved
 ~~~
 
@@ -60,7 +66,7 @@ def test_profile_does_not_invent_units(tmp_path):
 
 ## Task A2: domande candidate e protocolli di verifica
 
-**Files:** creare src/forecast_anything/discovery/candidates.py, policy.py, tests/unit/test_discovery.py; estendere contracts.py e store.py.
+**Files:** creare src/forecast_anything/discovery/candidates.py, policy.py, migrations/003_discovery.sql, tests/unit/test_discovery.py; estendere contracts.py e store.py.
 
 **Interfaces:** DiscoveryBudget(max_candidates: int = 10, max_tool_calls: int = 20); Candidate(candidate_id, template_id, source_ids, graph: GraphSpec, reason, protocol_id, epoch_id); DiscoveryEpoch(epoch_id, source_snapshot_ids, explored_candidate_ids, final_origin_ids); EligibilityDecision(action: activate/provisional/reject, reason_codes: tuple[str, ...]); propose_candidates(profiles: tuple[SourceProfile, ...], budget: DiscoveryBudget) -> tuple[Candidate, ...]; assess_candidate(candidate: Candidate, evidence: tuple[EvaluationRecord, ...], epoch: DiscoveryEpoch) -> EligibilityDecision.
 
@@ -79,7 +85,7 @@ def test_discovery_without_sources_proposes_nothing():
 
 ## Task A3: sorveglianze e rilevanza
 
-**Files:** creare src/forecast_anything/watches.py, migrations/003_observatory.sql, tests/unit/test_watches.py; estendere contracts.py.
+**Files:** creare src/forecast_anything/watches.py, migrations/004_observatory.sql, tests/unit/test_watches.py; estendere contracts.py.
 
 **Interfaces:** Watch(watch_id, candidate_id, lifecycle, quality, graph_id, graph_version, policy_version, next_due_at, muted: bool, priority: int = 3); priority va da 0 a 5. lifecycle=candidate/evaluating/active/paused/unsupported; quality=provisional/usable/stale/degraded. advance_watch(watch: Watch, event: dict, now: datetime) -> Watch; summarize_change(previous: RunRecord, current: RunRecord) -> dict.
 
@@ -89,8 +95,17 @@ Esempio di asserzione rappresentativa da includere nei test del task:
 ~~~python
 def test_refresh_expired_is_visible():
     t = datetime(2026, 10, 24, tzinfo=timezone.utc)
-    watch = Watch(watch_id="w", candidate_id="c", lifecycle="active", quality="usable",
-                  graph_id="g", graph_version=1, policy_version="1", next_due_at=t, muted=False)
+    watch = Watch(
+        watch_id="w",
+        candidate_id="c",
+        lifecycle="active",
+        quality="usable",
+        graph_id="g",
+        graph_version=1,
+        policy_version="1",
+        next_due_at=t,
+        muted=False,
+    )
     assert advance_watch(watch, {"kind": "refresh_expired"}, t).quality == "stale"
 ~~~
 
@@ -101,7 +116,7 @@ def test_refresh_expired_is_visible():
 
 ## Task A4: lavoro durevole, retry e aggiornamenti selettivi
 
-**Files:** creare src/forecast_anything/jobs.py, worker.py, migrations/004_jobs.sql, tests/integration/test_worker.py; modificare store.py e runtime.py.
+**Files:** creare src/forecast_anything/jobs.py, worker.py, migrations/005_jobs.sql, tests/integration/test_worker.py; modificare store.py e runtime.py.
 
 **Interfaces:** Job(job_id, key, payload, attempt, state, lease_token, lease_until); JobQueue(ledger: Ledger).enqueue(key: str, payload: dict) -> Job; JobQueue.claim(owner: str, now: datetime, ttl_seconds: int) -> Job oppure None; Worker(runtime: Runtime, queue: JobQueue).run_due(now: datetime, limit: int = 10) -> tuple[str, ...]. LeaseGuard(job_id, lease_token); append_run e Runtime.run accettano lease_guard opzionale.
 
@@ -112,7 +127,8 @@ Esempio di asserzione rappresentativa da includere nei test del task:
 def test_job_key_is_idempotent(tmp_path):
     queue = JobQueue(Ledger(tmp_path / "state.db"))
     assert queue.enqueue("refresh/s/1", {"source_id": "s"}).job_id == (
-        queue.enqueue("refresh/s/1", {"source_id": "s"}).job_id)
+        queue.enqueue("refresh/s/1", {"source_id": "s"}).job_id
+    )
 ~~~
 
 - [ ] **2. Run:** uv run pytest tests/integration/test_worker.py -q; fallimento atteso per worker mancante.

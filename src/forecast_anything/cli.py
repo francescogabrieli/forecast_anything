@@ -2,8 +2,10 @@
 
 import argparse
 import json
+import os
 import sqlite3
 import sys
+import time
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
@@ -17,6 +19,30 @@ from .providers.baseline import SeasonalNaiveProvider
 from .runtime import Runtime
 from .store import Ledger
 from .temporal import freeze
+
+
+def configured_providers():
+    """Register the baseline and only opt-in, pinned providers from the environment."""
+    providers = {"seasonal_naive": SeasonalNaiveProvider(1)}
+    enabled = os.environ.get("FORECAST_ANYTHING_TIMESTRAL_ENABLED", "").strip()
+    if enabled not in {"", "0", "1"}:
+        raise DomainError("invalid_provider_configuration", {})
+    if enabled == "1":
+        values = {
+            "checkpoint": os.environ.get("FORECAST_ANYTHING_TIMESTRAL_CHECKPOINT"),
+            "revision": os.environ.get("FORECAST_ANYTHING_TIMESTRAL_REVISION"),
+            "code_revision": os.environ.get(
+                "FORECAST_ANYTHING_TIMESTRAL_CODE_REVISION"
+            ),
+        }
+        if not all(
+            isinstance(value, str) and value.strip() for value in values.values()
+        ):
+            raise DomainError("incomplete_timestral_configuration", {})
+        from .providers.timestral import TimestralProvider
+
+        providers["timestral"] = TimestralProvider(**values)
+    return providers
 
 
 def _run(args):
@@ -49,7 +75,7 @@ def _run(args):
     ).hexdigest()
     return Runtime(
         Ledger(args.db),
-        {"seasonal_naive": SeasonalNaiveProvider(period=1)},
+        configured_providers(),
         {},
         lambda: datetime.now(timezone.utc),
     ).run(spec, snapshots, origin, key)
@@ -66,8 +92,75 @@ def main() -> int:
     show = commands.add_parser("show", help="Read a stored immutable emission")
     show.add_argument("run_id")
     show.add_argument("--db", type=Path, required=True)
+    serve = commands.add_parser("serve", help="Serve the authenticated local API")
+    serve.add_argument("--db", type=Path, required=True)
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8000)
+    worker = commands.add_parser("worker", help="Process the shared durable queue")
+    worker.add_argument("--db", type=Path, required=True)
+    worker.add_argument("--once", action="store_true")
+    worker.add_argument("--limit", type=int, default=10)
+    worker.add_argument("--poll-seconds", type=float, default=1)
+    worker.add_argument("--lease-seconds", type=int, default=60)
     args = parser.parse_args()
     try:
+        if args.command in {"serve", "worker"}:
+            from .operators import register_builtin_operators
+
+            ledger = Ledger(args.db)
+            runtime = Runtime(
+                ledger,
+                configured_providers(),
+                register_builtin_operators(),
+                lambda: datetime.now(timezone.utc),
+            )
+            if args.command == "serve":
+                import uvicorn
+
+                from .api.app import create_app
+
+                app = create_app(
+                    ledger,
+                    runtime,
+                    os.environ.get("FORECAST_ANYTHING_WORKSPACE_TOKEN", ""),
+                    agent_token=os.environ.get("FORECAST_ANYTHING_AGENT_CORE_TOKEN"),
+                    console_origins=tuple(
+                        origin.strip()
+                        for origin in os.environ.get(
+                            "FORECAST_ANYTHING_CONSOLE_ORIGINS", ""
+                        ).split(",")
+                        if origin.strip()
+                    ),
+                )
+                uvicorn.run(app, host=args.host, port=args.port, access_log=False)
+                return 0
+            from .discovery.agent_gateway import AgentGateway
+            from .jobs import JobQueue
+            from .worker import Worker
+
+            if args.poll_seconds <= 0:
+                raise DomainError("invalid_poll_interval", {})
+            agent_url = os.environ.get("FORECAST_ANYTHING_AGENT_URL")
+            bridge_token = os.environ.get("FORECAST_ANYTHING_AGENT_BRIDGE_TOKEN")
+            if bool(agent_url) != bool(bridge_token):
+                raise DomainError("agent_gateway_config_incomplete", {})
+            gateway = (
+                AgentGateway(agent_url, token=bridge_token)
+                if agent_url and bridge_token
+                else None
+            )
+            worker = Worker(
+                runtime,
+                JobQueue(ledger),
+                discovery_gateway=gateway,
+                lease_seconds=args.lease_seconds,
+            )
+            while True:
+                completed = worker.run_due(runtime.clock(), limit=args.limit)
+                if args.once:
+                    print(json.dumps({"job_ids": completed}))
+                    return 0
+                time.sleep(args.poll_seconds)
         record = (
             _run(args)
             if args.command == "run"
@@ -75,6 +168,8 @@ def main() -> int:
         )
         print(record.model_dump_json())
         return 0 if record.state == "completed" else 1
+    except KeyboardInterrupt:
+        return 0
     except DomainError as error:
         print(error.model_dump_json(), file=sys.stderr)
     except ValidationError as error:

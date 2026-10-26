@@ -1,0 +1,27 @@
+# This changes the existing worker; it never adds a second queue consumer.
+services:
+  core:
+    build:
+      target: api-timestral
+    environment:
+      FORECAST_ANYTHING_TIMESTRAL_ENABLED: "1"
+      FORECAST_ANYTHING_TIMESTRAL_CHECKPOINT: mistralai/Timestral-28M
+      FORECAST_ANYTHING_TIMESTRAL_REVISION: 49b26409ac87b5935539a5d8ffe7f397b720db47
+      FORECAST_ANYTHING_TIMESTRAL_CODE_REVISION: a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff
+
+  worker:
+    build:
+      target: worker-timestral
+    environment:
+      FORECAST_ANYTHING_TIMESTRAL_ENABLED: "1"
+      FORECAST_ANYTHING_TIMESTRAL_CHECKPOINT: mistralai/Timestral-28M
+      FORECAST_ANYTHING_TIMESTRAL_REVISION: 49b26409ac87b5935539a5d8ffe7f397b720db47
+      FORECAST_ANYTHING_TIMESTRAL_CODE_REVISION: a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff
+      HF_HOME: /cache/huggingface
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      DO_NOT_TRACK: "1"
+    volumes:
+      - timestral-cache:/cache
+
+volumes:
+  timestral-cache:

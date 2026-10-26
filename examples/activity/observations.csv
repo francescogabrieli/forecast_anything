@@ -1,0 +1,7 @@
+series_id,event_time,available_at,revision,value,unit
+activity_views,2026-10-16T00:00:00Z,2026-10-16T00:00:00Z,1,100,views
+activity_views,2026-10-17T00:00:00Z,2026-10-17T00:00:00Z,1,160,views
+activity_views,2026-10-18T00:00:00Z,2026-10-18T00:00:00Z,1,140,views
+activity_views,2026-10-19T00:00:00Z,2026-10-19T00:00:00Z,1,120,views
+activity_views,2026-10-20T00:00:00Z,2026-10-20T00:00:00Z,1,180,views
+activity_views,2026-10-21T00:00:00Z,2026-10-21T00:00:00Z,1,150,views
