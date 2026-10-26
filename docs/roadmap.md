@@ -1,6 +1,6 @@
 # Forecast Anything — roadmap completa
 
-Specifica e roadmap approvate il 24 ottobre 2026 · Piano 01 implementato il 25 ottobre 2026 · Integrazione del branch da approvare.
+Specifica e roadmap approvate il 24 ottobre 2026 · Piano 01 implementato il 25 ottobre 2026 · PR #2 e #3 integrate in main il 26 ottobre 2026.
 
 Questa roadmap ordina risultati e dipendenze, senza assegnare date. Non è un elenco di funzionalità da costruire tutte prima di imparare qualcosa: ogni passaggio produce evidenze utilizzabili per decidere il successivo.
 
@@ -130,11 +130,11 @@ Usare le segnalazioni e i ritorni degli utilizzatori per ordinare miglioramenti 
 
 ## Stato dell’esecuzione
 
-Il piano 01 (C1–C6) è implementato. Sul branch corrente `feat/timestral-provider`, i task A1–A5 e il codice A6 del piano 03 sono presenti; sono verificati catalogo/fonti, discovery, policy, job durevoli, API, Eve, bridge autenticato, budget e ripresa dopo un’interruzione. Il test di recovery interrompe un turno dopo `inspectSource`, riavvia Eve e Postgres e verifica la stessa sessione, lo stesso operation ID, la proposta candidata e l’utilizzo del budget. Per non attendere quattro ore, la fixture simula la scadenza della lease di Graphile Worker; la policy reale di lock scaduto resta quindi una dipendenza operativa da considerare. La prova automatica dimostra che proposte promosse o respinte dipendono da evidenze registrate e non da numeri generati dal modello.
+Il piano 01 (C1–C6) e i piani 02 e 03 sono integrati in `main` tramite PR #2. La recovery Eve/Postgres interrompe un turno dopo `inspectSource`, riavvia i servizi e verifica la stessa sessione, lo stesso operation ID e il budget persistente. La fixture anticipa la scadenza della lease Graphile Worker invece di attendere quattro ore; la policy reale del lock scaduto resta una dipendenza operativa.
 
-Il 26 ottobre 2026 è stata approvata la configurazione GPT-6 Luna per l’orchestrazione Eve e Mistral soltanto per Timestral; la verifica offline di adapter, rete, build e persistenza è aggiornata su Python 3.12/3.14 e Node 24. L’utente ha poi autorizzato commit e push del branch. Lo smoke live GPT a pagamento resta aperto e richiede approvazione separata di richiesta sintetica e costo; il test offline non lo sostituisce.
+Il 26 ottobre 2026 è stata approvata la configurazione GPT-6 Luna per l’orchestrazione Eve e Mistral soltanto per Timestral. Lo smoke GPT limitato è stato eseguito con una richiesta sintetica: una chiamata `inspect_source` su dati locali, 518 token in ingresso e 23 in uscita. Conferma il percorso base provider-Eve-core e l’operation ID persistito; non misura qualità del modello né prontezza per la produzione.
 
-Il piano 02 ha il codice integrato, ma la licenza/parità reale Timestral e il confronto Timestral M4 restano irrisolti; non si scaricano pesi senza la relativa decisione. Il piano 04 (console, installazione e release candidata) non è iniziato. [Stato del core e decisioni](implementation/core.md).
+Il piano 04 è in corso: U1, U2 e l’implementazione di U3 sono integrate tramite PR #2; la copertura E2E a due sorgenti è stata completata e integrata tramite PR #3. Restano la validazione dello stack Eve/LLM in Compose su ambiente pulito, il test osservato con cinque persone, la licenza/parità e il confronto Timestral M4, oltre ai passaggi di preparazione della release. Il gate Timestral resta aperto e non si scaricano pesi senza la relativa decisione. [Stato del core e decisioni](implementation/core.md).
 
 ## Fonti tecniche per le scelte del piano
 
