@@ -65,13 +65,13 @@ For a pull request, describe the concrete before/after behavior, a minimal repro
 
 ## Starter contribution proposals
 
-These are proposed issue scopes, not claims that issues have been published:
+These starter issues are open; check the linked discussion before starting work:
 
 | Proposal | Fixture | Acceptance |
 | --- | --- | --- |
-| Connector: add explicit HTTP pagination | Loopback server with two pages, repeated cursors and a cross-origin next link | Bounded requests and response sizes; reject unsafe credential forwarding; deterministic rows and provenance; keep existing non-paginated reads working. A new connector kind requires explicit contract review. |
-| Data recipe: a new public daily series | Small attributed raw sample, checksum, documented timezone and publication-time assumptions | Reproducible normalized observations; missing values retained; frozen selection/verification origins; no download or redistribution without checking the dataset terms. |
-| Operator: calendar-aligned difference | Two compatible point/path results and fixtures with mismatched units, dates and sample groups | Explicit existing `OperatorContract`; correct subtraction and lineage; reject incompatible inputs; no probability or quantile arithmetic without a justified representation. |
+| [Connector: add explicit HTTP pagination #9](https://github.com/francescogabrieli/forecast_anything/issues/9) | Loopback server with two pages, repeated cursors and a cross-origin next link | Bounded requests and response sizes; reject unsafe credential forwarding; deterministic rows and provenance; keep existing non-paginated reads working. A new connector kind requires explicit contract review. |
+| [Data recipe: a new public daily series #10](https://github.com/francescogabrieli/forecast_anything/issues/10) | Small attributed raw sample, checksum, documented timezone and publication-time assumptions | Reproducible normalized observations; missing values retained; frozen selection/verification origins; no download or redistribution without checking the dataset terms. |
+| [Operator: calendar-aligned difference #11](https://github.com/francescogabrieli/forecast_anything/issues/11) | Two compatible point/path results and fixtures with mismatched units, dates and sample groups | Explicit existing `OperatorContract`; correct subtraction and lineage; reject incompatible inputs; no probability or quantile arithmetic without a justified representation. |
 
 ## Licensing
 

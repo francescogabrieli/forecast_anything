@@ -27,9 +27,10 @@ For the console, local API, worker, installed-wheel path and packaging status, f
 | Path | Implemented behavior | Evidence and limits |
 | --- | --- | --- |
 | Baseline demo | Real seasonal-naive computation, deterministic source discovery templates, immutable ledger | No LLM or downloaded model weights required. It does not establish forecast quality on arbitrary data. |
-| Console and API | Source inspection, discoveries, graph/run details, durable events and isolated scenario comparison | Component and API tests plus a Playwright flow against a real local API/worker with a fixed clock and baseline provider. This deterministic fixture is not a live LLM or Timestral smoke. |
+| Console and API | Source inspection, explicit first forecast and refresh, discoveries, graph/run details, durable events and isolated scenario comparison | Component/API tests and two Playwright journeys against a real local API/worker: first forecast and two-source evaluation/update/scenario. External usability testing is on hold by owner decision. |
 | Composition | Aligned sum, cumulative balance and empirical window events | Representation, unit and sample-identity checks; marginal quantiles cannot be converted into joint paths. |
-| Timestral | Optional pinned library adapter for point forecasts and marginal quantiles | Real CPU parity, license applicability for weights, and the Timestral benchmark comparison remain pending. A skipped model test is not acceptance. |
+| Timestral | Optional pinned library adapter for point forecasts and marginal quantiles | CPU fp32 parity and an owner-authorized local comparison across three domains passed. The measured benchmark includes a retail result worse than the baseline; it does not show general superiority. Weight terms apply separately to each user/deployment. |
+| Joint residual trajectories | Experimental shared-origin residual-panel sampling with temporal and cross-series sample identity | The recorded experiment did not pass its positive lower Brier-skill acceptance bound in any domain. Available for research; calibrated joint forecast probabilities remain unaccepted. |
 | Discovery agent | Optional Eve service with budgeted tools and separate Postgres state | Scripted tests and restart/egress checks exercise integration. A bounded GPT-6 Luna live smoke on 2026-10-26 completed one `inspect_source` tool call against synthetic local data and confirmed a persisted core operation ID; this does not establish model quality or production readiness. |
 
 See the [capability matrix](docs/capabilities.md) for precise boundaries and [Timestral status](docs/implementation/timestral.md) for the separate code/weights licenses. Historical replay and synthetic assumptions must remain labeled; forecasts alone cannot activate a watch without the runtime's required evaluation evidence.
@@ -64,7 +65,7 @@ uv run --locked python scripts/export_contracts.py contracts/v1 --check
 uv build
 ```
 
-Console and agent checks, including the deterministic browser test, are documented in [CONTRIBUTING](CONTRIBUTING.md). Passing offline tests does not prove live model acceptance or completion of the planned five-person usability study.
+Console and agent checks, including the deterministic browser test, are documented in [CONTRIBUTING](CONTRIBUTING.md). Passing offline tests does not prove live model acceptance. The five-person usability study is on hold by owner decision on 2026-10-27; development and technical-preview preparation continue with external usability explicitly unvalidated.
 
 ## License and release status
 

@@ -1,6 +1,6 @@
 # Console observed usability study
 
-Status: **protocol prepared; sessions not yet run**. Do not report usability acceptance until five external participants complete the study and results are recorded.
+Status: **on hold by owner decision on 2026-10-27; sessions not yet run**. Development and technical-preview preparation continue without waiting for recruitment. Do not report usability acceptance until five external participants complete the study and results are recorded. Resume this protocol when participants are available; the acceptance criterion is unchanged.
 
 ## Goal
 
