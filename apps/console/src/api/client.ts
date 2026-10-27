@@ -1,5 +1,6 @@
 import type {
   EventRecord,
+  Candidate,
   EvaluationRecord,
   GraphSpec,
   JobView,
@@ -47,6 +48,10 @@ export class ApiClient {
     return this.request("POST", "/v1/sources", spec);
   }
 
+  refreshSource(sourceId: string, key: string): Promise<SourceRegistration> {
+    return this.request("POST", `/v1/sources/${encodeURIComponent(sourceId)}/refresh`, { key });
+  }
+
   getWatches(): Promise<WatchView[]> {
     return this.request("GET", "/v1/watches");
   }
@@ -65,6 +70,14 @@ export class ApiClient {
 
   getJob(jobId: string): Promise<JobView> {
     return this.request("GET", `/v1/jobs/${encodeURIComponent(jobId)}`);
+  }
+
+  getCandidate(candidateId: string): Promise<Candidate> {
+    return this.request("GET", `/v1/candidates/${encodeURIComponent(candidateId)}`);
+  }
+
+  submitRun(request: { kind: "run"; key: string; graph: GraphSpec; snapshot_ids: Record<string, string>; as_of: string }): Promise<JobView> {
+    return this.request("POST", "/v1/jobs", request);
   }
 
   getGraph(graphId: string, version = 1): Promise<GraphSpec> {

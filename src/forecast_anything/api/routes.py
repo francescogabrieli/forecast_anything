@@ -22,6 +22,7 @@ from ..contracts import (
     ScenarioView,
     Snapshot,
     SourceProfile,
+    SourceRefreshRequest,
     SourceRegistration,
     SourceSpec,
     SourceView,
@@ -53,6 +54,14 @@ def router(service):
     @api.get("/sources/{source_id}/profile", response_model=SourceProfile)
     def profile(source_id: str):
         return service.profile(source_id)[0]
+
+    @api.post(
+        "/sources/{source_id}/refresh",
+        response_model=SourceRegistration,
+        status_code=202,
+    )
+    def refresh(source_id: str, request: SourceRefreshRequest):
+        return service.refresh_source(source_id, request)
 
     @api.post("/candidates", response_model=Candidate, status_code=201)
     def propose(request: CandidateRequest):

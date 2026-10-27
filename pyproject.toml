@@ -53,6 +53,18 @@ allow-direct-references = true
 "LICENSE" = "forecast_anything/LICENSE"
 "NOTICE" = "forecast_anything/NOTICE"
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/.local/**",
+    "/.superpowers/**",
+    "/.agents/**",
+    "/.codex/**",
+    "/.aws/**",
+    "/work/**",
+    "/outputs/**",
+    "/dist/**",
+]
+
 [tool.hatch.build.targets.sdist.force-include]
 "examples/minimal" = "examples/minimal"
 "contracts/v1" = "contracts/v1"

@@ -345,6 +345,76 @@ def test_source_profile_retry_is_idempotent_across_clock_changes(tmp_path):
     )
 
 
+def test_explicit_source_refresh_captures_new_data_beyond_profile_sample(tmp_path):
+    from pathlib import Path
+
+    ledger, runtime, client = setup(tmp_path)
+    spec = source(tmp_path)
+    spec["mapping"]["available_at"] = "time"
+    path = Path(spec["location"])
+    start = T - timedelta(days=120)
+    rows = [f"{(start + timedelta(days=i)).date()},{i}" for i in range(120)]
+    path.write_text("time,value\n" + "\n".join(rows) + "\n")
+    registered = client.post("/v1/sources", json=spec).json()
+    Worker(runtime, JobQueue(ledger)).run_due(T)
+    original_job = client.get(f"/v1/jobs/{registered['job_id']}").json()
+    original_id = original_job["result"]["source_snapshot_ids"][0]
+
+    with path.open("a") as stream:
+        stream.write("2026-10-24,999\n")
+    runtime.clock = ledger.clock = lambda: T + timedelta(days=1)
+    assert (
+        client.post("/v1/sources", json=spec).json()["job_id"] == registered["job_id"]
+    )
+    request = {"key": "refresh-1"}
+    refreshed = client.post("/v1/sources/sales/refresh", json=request)
+    assert refreshed.status_code == 202, refreshed.text
+    assert refreshed.json()["job_id"] != registered["job_id"]
+    assert (
+        client.post("/v1/sources/sales/refresh", json=request).json()["job_id"]
+        == refreshed.json()["job_id"]
+    )
+    Worker(runtime, JobQueue(ledger)).run_due(runtime.clock())
+    result = client.get(f"/v1/jobs/{refreshed.json()['job_id']}").json()["result"]
+    new_id = result["source_snapshot_ids"][0]
+    assert new_id != original_id
+    assert len(client.get(f"/v1/snapshots/{original_id}").json()["observations"]) == 120
+    assert (
+        client.get(f"/v1/snapshots/{new_id}").json()["observations"][-1]["value"] == 999
+    )
+    assert (
+        TestClient(client.app)
+        .post("/v1/sources/sales/refresh", json=request)
+        .status_code
+        == 401
+    )
+    spec["mapping"]["unit"] = {"constant": "items"}
+    assert client.post("/v1/sources", json=spec).status_code == 201
+    conflict = client.post("/v1/sources/sales/refresh", json=request)
+    assert conflict.status_code == 409
+    assert conflict.json()["code"] == "idempotency_conflict"
+
+
+def test_source_refresh_retry_reuses_original_profile_after_data_changes(tmp_path):
+    from pathlib import Path
+
+    _, _, client = setup(tmp_path)
+    spec = source(tmp_path)
+    assert client.post("/v1/sources", json=spec).status_code == 201
+    first = client.post("/v1/sources/sales/refresh", json={"key": "retry"})
+    assert first.status_code == 202
+    path = Path(spec["location"])
+    path.write_text(path.read_text() + "2026-10-24,4\n")
+    retry = client.post("/v1/sources/sales/refresh", json={"key": "retry"})
+    assert retry.status_code == 202, retry.text
+    assert retry.json() == first.json()
+    path.unlink()
+    assert (
+        client.post("/v1/sources/sales/refresh", json={"key": "retry"}).json()
+        == first.json()
+    )
+
+
 def test_existing_graph_cannot_be_rebound_before_enqueue(tmp_path):
     ledger, _, client, base = base_run(tmp_path)
     graph = ledger.get_graph(base["graph_id"], 1).model_dump(mode="json")

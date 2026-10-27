@@ -6,6 +6,28 @@ import type { EventRecord } from "../../api/schema.generated";
 import { makeRun } from "../../test/fixtures";
 import { ObservatoryBoard } from "./ObservatoryBoard";
 
+it("keeps the most recently requested run when an older response arrives late", async () => {
+  const client = new ApiClient("http://localhost:8000", "test-token");
+  let resolveOld!: (value: ReturnType<typeof makeRun>) => void;
+  vi.spyOn(client, "getWatches").mockResolvedValue([]);
+  vi.spyOn(client, "getEvents").mockResolvedValue([]);
+  vi.spyOn(client, "streamEvents").mockResolvedValue();
+  vi.spyOn(client, "getRun").mockImplementation((id) => id === "old"
+    ? new Promise((resolve) => { resolveOld = resolve; })
+    : Promise.resolve(makeRun({ run_id: id })));
+  vi.spyOn(client, "getGraph").mockResolvedValue({ graph_id: "graph-1", version: 1, nodes: [] });
+  vi.spyOn(client, "getRunEvaluations").mockResolvedValue([]);
+  vi.spyOn(client, "getSnapshot").mockResolvedValue({ snapshot_id: "snapshot-1", as_of: "2026-10-24T00:00:00Z", observations: [], assumptions: [] });
+
+  const { rerender } = render(<ObservatoryBoard client={client} requestedRunId="old" />);
+  await waitFor(() => expect(resolveOld).toBeTypeOf("function"));
+  rerender(<ObservatoryBoard client={client} requestedRunId="new" />);
+  expect(await screen.findByText("ID run: new")).toBeVisible();
+  await act(async () => { resolveOld(makeRun({ run_id: "old" })); });
+  expect(screen.getByText("ID run: new")).toBeVisible();
+  expect(screen.queryByText("ID run: old")).not.toBeInTheDocument();
+});
+
 it("opens the completed run and surfaces a failed watch refresh", async () => {
   const client = new ApiClient("http://localhost:8000", "test-token");
   let deliverEvent: ((event: EventRecord) => void) | undefined;
@@ -28,14 +50,14 @@ it("opens the completed run and surfaces a failed watch refresh", async () => {
   render(<ObservatoryBoard client={client} />);
   await waitFor(() => expect(deliverEvent).toBeTypeOf("function"));
   await user.click(await screen.findByRole("button", { name: "Apri run run-1" }));
-  expect(await screen.findByRole("heading", { name: "run-1" })).toBeVisible();
+  expect(await screen.findByText("ID run: run-1")).toBeVisible();
 
   await act(async () => {
     deliverEvent!({ cursor: 2, event_id: "event-2", kind: "run_completed", run_id: "run-2", payload: { node_ids: ["forecast"] } });
   });
 
-  expect(await screen.findByRole("heading", { name: "run-2" })).toBeVisible();
-  expect(screen.queryByRole("heading", { name: "run-1" })).not.toBeInTheDocument();
+  expect(await screen.findByText("ID run: run-2")).toBeVisible();
+  expect(screen.queryByText("ID run: run-1")).not.toBeInTheDocument();
   expect(await screen.findByRole("alert")).toHaveTextContent("Watch refresh unavailable");
 });
 
@@ -72,8 +94,8 @@ it("opens a completed run without stale evidence when its evaluation lookup fail
     deliverEvent!({ cursor: 2, event_id: "event-2", kind: "run_completed", run_id: "run-2", payload: { node_ids: ["forecast"] } });
   });
 
-  expect(await screen.findByRole("heading", { name: "run-2" })).toBeVisible();
-  expect(screen.queryByRole("heading", { name: "run-1" })).not.toBeInTheDocument();
+  expect(await screen.findByText("ID run: run-2")).toBeVisible();
+  expect(screen.queryByText("ID run: run-1")).not.toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "Valutazione evaluation-1" })).not.toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "Snapshot actuals-1" })).not.toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "Snapshot run-1-input" })).not.toBeInTheDocument();

@@ -30,7 +30,7 @@ Queste sono decisioni del piano, non preferenze già espresse dall’utente:
 | 1. Rendere eseguibile il contratto | Grafo tipizzato, dati disponibili nel tempo, registro e CLI con baseline | Una previsione è ricostruibile, un aggiornamento non modifica il passato |
 | 2. Provare modelli e composizione | Timestral collegato, operatori, valutazioni e esperimenti probabilistici | Le operazioni supportate sono dimostrate; quelle non giustificate vengono riconosciute |
 | 3. Costruire l’osservatorio autonomo | Scoperta di domande, policy, aggiornamenti durevoli, agente e API | Un’interruzione non perde il lavoro e una domanda viene promossa o scartata con evidenze |
-| 4. Farlo usare senza competenze statistiche | Console, spiegazioni verificabili, scenari, installazione e esempi | Persone esterne collegano fonti e comprendono una scoperta |
+| 4. Farlo usare senza competenze statistiche | Console, spiegazioni verificabili, scenari, installazione e esempi | Prova con persone esterne sospesa dal proprietario il 27 ottobre 2026; sviluppo e preparazione dell’anteprima tecnica proseguono |
 | 5. Pubblicare il progetto come prodotto OSS | Repository, pacchetti, documentazione, dati attribuiti e contribution guide | Quickstart verificato su installazione pulita e matrice di capacità pubblica |
 | 6. Preparare e fare il lancio | Demo provabile, video, articolo tecnico, messaggi per comunità pertinenti | Tutte le promesse del lancio rimandano a capacità dimostrabili |
 | 7. Costruire adozione e community | Feedback, contributor, adattatori e prove su fonti nuove | Le nuove estensioni migliorano il sistema senza introdurre percorsi speciali nel nucleo |
@@ -79,6 +79,8 @@ La scoperta parte da famiglie esplicite di domande: deviazione dal comportamento
 La console consente di collegare le fonti supportate, correggere interpretazioni, esplorare il grafo, leggere le scoperte, confrontare emissioni e scenari. La domanda naturale è un ingresso allo stesso runtime, non un motore parallelo.
 
 Usare cinque persone esterne per una prova osservata: almeno quattro devono completare collegamento e comprensione di una scoperta senza istruzioni del maintainer. È una soglia proposta per il piano, non una misura statistica di adozione.
+
+**Decisione del proprietario, 27 ottobre 2026:** questa prova è in sospeso. Non blocca lo sviluppo né la preparazione dell’anteprima tecnica. Il protocollo resta disponibile e il risultato non viene considerato acquisito; l’usabilità per persone non specialiste resta da validare.
 
 **Evidenza richiesta:** report dei problemi incontrati, correzioni del percorso e nuovo tentativo dove necessario. Layout e testi si rifiniscono su questi risultati.
 
@@ -134,7 +136,13 @@ Il piano 01 (C1–C6) e i piani 02 e 03 sono integrati in `main` tramite PR #2. 
 
 Il 26 ottobre 2026 è stata approvata la configurazione GPT-6 Luna per l’orchestrazione Eve e Mistral soltanto per Timestral. Lo smoke GPT limitato è stato eseguito con una richiesta sintetica: una chiamata `inspect_source` su dati locali, 518 token in ingresso e 23 in uscita. Conferma il percorso base provider-Eve-core e l’operation ID persistito; non misura qualità del modello né prontezza per la produzione.
 
-Il piano 04 è in corso: U1, U2 e l’implementazione di U3 sono integrate tramite PR #2; la copertura E2E a due sorgenti è stata completata e integrata tramite PR #3. Nel piano 02, la parità CPU fp32 Timestral e il confronto M4 sui tre domini sono stati eseguiti con autorizzazione del proprietario per una valutazione locale personale; la licenza dei pesi continua a valere per ogni utilizzatore e deployment. Restano la validazione dello stack Eve/LLM in Compose su ambiente pulito, il test osservato con cinque persone e i passaggi di preparazione della release. [Stato del core e decisioni](implementation/core.md).
+Il piano 04 è in corso: U1, U2 e l’implementazione di U3 sono integrate tramite PR #2; la copertura E2E a due sorgenti è stata completata e integrata tramite PR #3. Nel piano 02, la parità CPU fp32 Timestral e il confronto M4 sui tre domini sono stati eseguiti con autorizzazione del proprietario per una valutazione locale personale e integrati tramite PR #5; la licenza dei pesi continua a valere per ogni utilizzatore e deployment. La PR #6 aggiunge le traiettorie residue congiunte; la PR #7 documenta lo smoke Compose Eve/LLM su ambiente pulito, limitato a build, avvio e salute locale senza chiamata al provider.
+
+Il 27 ottobre 2026 il percorso del [primo forecast dopo l’attivazione](superpowers/plans/2026-10-26-first-source-forecast.md) è stato verificato con API e worker reali: scelta esplicita dell’utente, snapshot della fonte, baseline a un passo e apertura del run persistito. Il refresh usa una nuova epoca e i tentativi dopo risposte di rete perse riutilizzano la richiesta originale. La console mostra titoli italiani per le domande sorvegliate e conserva il motivo originale. La fixture E2E mantiene l’orologio fisso; la modalità per lo studio osservato usa `FA_USABILITY=1` e date correnti congelate all’avvio.
+
+Il [test osservato con cinque persone](research/console-usability-study.md) è in sospeso per decisione del proprietario e non blocca il lavoro successivo. Le tre issue iniziali per contributor sono aperte: [paginazione HTTP #9](https://github.com/francescogabrieli/forecast_anything/issues/9), [ricetta dati #10](https://github.com/francescogabrieli/forecast_anything/issues/10), [operatore differenza #11](https://github.com/francescogabrieli/forecast_anything/issues/11). Restano la risoluzione di nome/owner/registry per la pubblicazione e i passaggi di preparazione della release. Lo smoke locale dell’agente e i benchmark non dimostrano qualità generale né prontezza di produzione. [Stato del core e decisioni](implementation/core.md).
+
+La [verifica della candidata tecnica del 27 ottobre](research/release-candidate-check.md) copre wheel installata fuori dal checkout e immagini baseline ricostruite in workspace temporaneo, con primo forecast, invio idempotente e run invariato dopo riavvio. Il pacchetto sorgente esclude ora i materiali locali di lavoro con un test di regressione. La candidata resta locale: nessun pacchetto o immagine è stato pubblicato su registry.
 
 ## Fonti tecniche per le scelte del piano
 

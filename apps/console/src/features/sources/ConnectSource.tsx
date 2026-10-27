@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ApiClient } from "../../api/client";
 import { ApiError } from "../../api/client";
-import type { SourceProfile, SourceSpec } from "../../api/schema.generated";
+import type { SourceProfile, SourceRegistration, SourceSpec } from "../../api/schema.generated";
 
 type SourceClient = Pick<ApiClient, "inspectSource" | "previewSource" | "saveSource">;
-type Props = { client: SourceClient; sourceId: string; onActivated?: () => void };
+type Props = { client: SourceClient; sourceId: string; onActivated?: (registration: SourceRegistration) => void; onDraftChange?: () => void };
 
 const clarificationLabels: Record<string, string> = {
   event_time: "Data dell’osservazione da chiarire",
@@ -47,7 +47,9 @@ function errorMessage(error: unknown): string {
   return "Non è stato possibile completare la richiesta. I dati inseriti sono ancora disponibili.";
 }
 
-export function ConnectSource({ client, sourceId, onActivated }: Props) {
+const unauthorizedMessage = errorMessage(new Error("unauthorized"));
+
+export function ConnectSource({ client, sourceId, onActivated, onDraftChange }: Props) {
   const [kind, setKind] = useState<SourceSpec["kind"]>("csv");
   const [location, setLocation] = useState("");
   const [refreshSeconds, setRefreshSeconds] = useState("3600");
@@ -56,15 +58,18 @@ export function ConnectSource({ client, sourceId, onActivated }: Props) {
   const [error, setError] = useState<string>();
   const [message, setMessage] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const draftVersion = useRef(0);
 
   useEffect(() => {
     let active = true;
+    const version = ++draftVersion.current;
     client.inspectSource(sourceId).then((loaded) => {
-      if (!active) return;
+      if (!active || version !== draftVersion.current) return;
       setProfile(loaded);
       setMappingText(JSON.stringify(loaded.proposed_mapping, null, 2));
     }).catch((reason: unknown) => {
-      if (!active || ["source_not_found", "not_found"].includes(errorCode(reason))) return;
+      const code = errorCode(reason);
+      if (!active || (version !== draftVersion.current && code !== "unauthorized") || ["source_not_found", "not_found"].includes(code)) return;
       setError(errorMessage(reason));
     });
     return () => { active = false; };
@@ -82,11 +87,17 @@ export function ConnectSource({ client, sourceId, onActivated }: Props) {
   }, [mappingText]);
   const mappingError = parsedMapping ? undefined : "Inserisci una mappatura JSON valida.";
 
-  function changeMapping(value: string) {
-    setMappingText(value);
+  function changedDraft() {
+    draftVersion.current += 1;
     setProfile(undefined);
     setMessage(undefined);
-    setError(undefined);
+    setError((current) => current === unauthorizedMessage ? current : undefined);
+    onDraftChange?.();
+  }
+
+  function changeMapping(value: string) {
+    setMappingText(value);
+    changedDraft();
   }
 
   function sourceSpec(): SourceSpec | undefined {
@@ -104,14 +115,17 @@ export function ConnectSource({ client, sourceId, onActivated }: Props) {
   async function preview() {
     const spec = sourceSpec();
     if (!spec) return;
+    const version = draftVersion.current;
     setBusy(true);
     setError(undefined);
     setMessage(undefined);
     try {
-      setProfile(await client.previewSource(spec));
+      const result = await client.previewSource(spec);
+      if (version !== draftVersion.current) return;
+      setProfile(result);
       setMessage("Profilo pronto per la revisione.");
     } catch (reason) {
-      setError(errorMessage(reason));
+      if (version === draftVersion.current || errorCode(reason) === "unauthorized") setError(errorMessage(reason));
     } finally {
       setBusy(false);
     }
@@ -120,21 +134,24 @@ export function ConnectSource({ client, sourceId, onActivated }: Props) {
   async function activate() {
     const spec = sourceSpec();
     if (!spec || !profile || profile.unresolved.length > 0) return;
+    const version = draftVersion.current;
     setBusy(true);
     setError(undefined);
     setMessage(undefined);
     try {
-      await client.saveSource(spec);
+      const registration = await client.saveSource(spec);
+      if (version !== draftVersion.current) return;
       const persisted = await client.inspectSource(sourceId);
+      if (version !== draftVersion.current) return;
       setProfile(persisted);
       if (persisted.unresolved.length > 0) {
         setError("Il profilo salvato richiede ancora chiarimenti. La fonte non è pronta per l’uso.");
       } else {
         setMessage("Fonte attiva. Profilo riletto dal servizio.");
-        onActivated?.();
+        onActivated?.(registration);
       }
     } catch (reason) {
-      setError(errorMessage(reason));
+      if (version === draftVersion.current || errorCode(reason) === "unauthorized") setError(errorMessage(reason));
     } finally {
       setBusy(false);
     }
@@ -147,18 +164,18 @@ export function ConnectSource({ client, sourceId, onActivated }: Props) {
       <form onSubmit={(event) => { event.preventDefault(); void preview(); }}>
         <label>
           Tipo di fonte
-          <select value={kind} onChange={(event) => { setKind(event.target.value as SourceSpec["kind"]); setProfile(undefined); }}>
+          <select value={kind} onChange={(event) => { setKind(event.target.value as SourceSpec["kind"]); changedDraft(); }}>
             <option value="csv">CSV</option>
             <option value="http_json">HTTP JSON</option>
           </select>
         </label>
         <label>
           Percorso o URL
-          <input autoComplete="off" value={location} onChange={(event) => setLocation(event.target.value)} />
+          <input autoComplete="off" value={location} onChange={(event) => { setLocation(event.target.value); changedDraft(); }} />
         </label>
         <label>
           Aggiorna ogni (secondi)
-          <input inputMode="numeric" type="number" min="1" value={refreshSeconds} onChange={(event) => setRefreshSeconds(event.target.value)} />
+          <input inputMode="numeric" type="number" min="1" value={refreshSeconds} onChange={(event) => { setRefreshSeconds(event.target.value); changedDraft(); }} />
         </label>
         <label>
           Mappatura JSON

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import uvicorn
@@ -80,6 +81,18 @@ def source_spec(source_id: str, filename: str) -> dict:
             "missing_values": {"constant": [""]},
         },
     }
+
+
+def write_usability_fixture(directory: Path, now: datetime) -> Path:
+    """Write a deterministic daily series whose last point is current."""
+    first_day = now.date() - timedelta(days=2)
+    path = directory / "usability.csv"
+    rows = ["time,value"]
+    rows.extend(
+        f"{first_day + timedelta(days=offset)},{offset + 1}" for offset in range(3)
+    )
+    path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    return path
 
 
 def seed(ledger: Ledger, runtime: Runtime, clock: list[datetime]) -> None:
@@ -178,6 +191,12 @@ def main() -> None:
         lambda: clock[0],
     )
     seed(ledger, runtime, clock)
+    if os.environ.get("FA_USABILITY") == "1":
+        clock[0] = datetime.now(timezone.utc)
+    usability_csv = write_usability_fixture(data_dir, clock[0])
+    port = int(os.environ.get("FA_USABILITY_PORT", "8000"))
+    print(f"Usability API: http://127.0.0.1:{port}", flush=True)
+    print(f"Usability CSV: {usability_csv}", flush=True)
     app = create_app(ledger, runtime, TOKEN, console_origins=("http://127.0.0.1:4173",))
     worker = Worker(runtime, JobQueue(ledger))
 
@@ -187,7 +206,7 @@ def main() -> None:
             time.sleep(0.2)
 
     threading.Thread(target=run_worker, daemon=True).start()
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning")
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 
 
 if __name__ == "__main__":

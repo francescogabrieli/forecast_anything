@@ -41,6 +41,8 @@ Open [http://localhost:5173](http://localhost:5173). Copy `FORECAST_ANYTHING_WOR
 
 To connect a CSV, place it in the workspace directory printed by the bootstrap command and enter its container path as `/data/your-file.csv`. The mapping must explicitly identify observation time, value, availability time, revision, series, unit, frequency, timezone, calendar and missing-value markers. Review the proposed profile and resolve every required field before activating the source.
 
+Once discovery has prepared a compatible single-series source, **Calcola la prima previsione** submits its existing one-step seasonal-baseline candidate to the worker. The issued value, unit and UTC target appear in the console with a link to its recorded run. This initial result is provisional and not yet evaluated. **Aggiorna dati** explicitly rereads the registered source into a new snapshot. A target that is no longer in the future according to the snapshot and device clock is not offered as a new forecast; update the data and check the device clock if necessary.
+
 The console shows recorded discoveries, their current quality, event history, graph dependencies and run evidence when available. Its deterministic E2E flow connects two local fixtures, mutes a watch, resumes an interrupted event stream from the durable history, navigates the graph by keyboard and compares an assumed scenario with a worker-produced run. It is a functional test fixture, not a forecast-quality benchmark or a completed external usability study.
 
 Stop the stack with `Ctrl+C`. The workspace database and generated token remain under `.local/demo`; removing that directory deletes the local demo state.

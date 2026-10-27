@@ -3,6 +3,54 @@ import { resolve } from "node:path";
 
 const sourceCsv = resolve(process.cwd(), "../../tests/fixtures/console-e2e-actuals.csv");
 
+test("connects a source and issues its first forecast through the worker", async ({ page, request }) => {
+  await page.addInitScript(() => { Date.now = () => Date.parse("2026-10-24T12:00:00Z"); });
+  await page.goto("/");
+  await page.getByLabel("Indirizzo API").fill("http://127.0.0.1:8000");
+  await page.getByLabel("Token workspace").fill("local-e2e-token");
+  await page.getByLabel("ID della fonte").fill("first-sales");
+  await page.getByRole("button", { name: /Apri il workspace/ }).click();
+  await page.getByLabel("Percorso o URL").fill(sourceCsv);
+  await page.getByLabel("Mappatura JSON").fill(JSON.stringify({
+    event_time: "time", value: "value", available_at: "available_at", revision: { constant: "1" },
+    series_id: { constant: "first-sales" }, unit: { constant: "count" }, frequency: { constant: "1d" },
+    timezone: { constant: "UTC" }, calendar: { constant: "gregorian" }, missing_values: { constant: [""] },
+  }));
+  await page.getByRole("button", { name: "Analizza fonte" }).click();
+  await expect(page.getByText("Profilo pronto per la revisione.")).toBeVisible();
+  await page.getByRole("button", { name: "Attiva fonte" }).click();
+  const calculate = page.getByRole("button", { name: "Calcola la prima previsione" });
+  await expect(calculate).toBeVisible();
+  await page.getByLabel("Percorso o URL").fill(`${sourceCsv}.changed`);
+  await expect(calculate).toHaveCount(0);
+  await page.getByLabel("Percorso o URL").fill(sourceCsv);
+  await page.getByRole("button", { name: "Analizza fonte" }).click();
+  await page.getByRole("button", { name: "Attiva fonte" }).click();
+  await expect(calculate).toBeVisible();
+  const refresh = page.waitForResponse((response) =>
+    response.url().endsWith("/v1/sources/first-sales/refresh") && response.request().method() === "POST");
+  await page.getByRole("button", { name: "Aggiorna dati" }).click();
+  expect((await refresh).status()).toBe(202);
+  await expect(calculate).toBeVisible();
+  await calculate.click();
+  await expect(page.getByText(/Previsione pronta: il dettaglio/)).toBeVisible();
+  await expect(page.getByRole("group", { name: "Previsione iniziale" })).toContainText("3 count");
+
+  const api = "http://127.0.0.1:8000/v1";
+  const headers = { Authorization: "Bearer local-e2e-token" };
+  const events = await (await request.get(`${api}/events?limit=1000`, { headers })).json();
+  const started = events.find((event: { kind: string; payload: { source_bindings?: Record<string, string> } }) =>
+    event.kind === "run_started" && event.payload.source_bindings?.["first-sales"]);
+  expect(started).toBeTruthy();
+  const run = await (await request.get(`${api}/runs/${started.run_id}`, { headers })).json();
+  expect(run.state).toBe("completed");
+  expect(run.snapshot_ids).toContain(started.payload.source_bindings["first-sales"]);
+  expect(run.results.forecast.point).toEqual([[3]]);
+  expect(new Date(run.results.forecast.timestamps[0]).getTime()).toBeGreaterThan(new Date(run.as_of).getTime());
+  await expect(page.locator(".run-card").getByText(`ID run: ${run.run_id}`)).toBeVisible();
+  await expect(page.locator(".run-card").getByText("first-sales", { exact: true }).first()).toBeVisible();
+});
+
 test("reviews two-source evaluation, revision notification and immutable scenario", async ({ page, request }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   let interruptedStream = false;
@@ -28,6 +76,7 @@ test("reviews two-source evaluation, revision notification and immutable scenari
   const headers = { Authorization: "Bearer local-e2e-token" };
   const initialEvents = await (await request.get(`${api}/events?limit=1000`, { headers })).json();
   const baseRunId = initialEvents.find((event: { kind: string }) => event.kind === "run_completed").run_id;
+  const initialRunIds = new Set(initialEvents.filter((event: { kind: string }) => event.kind === "run_completed").map((event: { run_id: string }) => event.run_id));
   const baseRun = await (await request.get(`${api}/runs/${baseRunId}`, { headers })).json();
   const baseGraph = await (await request.get(`${api}/graphs/${baseRun.graph_id}`, { headers })).json();
   expect(baseGraph.nodes.filter((node: { kind: string }) => node.kind === "source")
@@ -66,15 +115,15 @@ test("reviews two-source evaluation, revision notification and immutable scenari
 
   await expect.poll(async () => {
     const events = await (await request.get(`${api}/events?limit=1000`, { headers })).json();
-    return events.filter((event: { kind: string; run_id: string }) => event.kind === "run_completed" && event.run_id !== baseRunId).length;
+    return events.filter((event: { kind: string; run_id: string }) => event.kind === "run_completed" && !initialRunIds.has(event.run_id)).length;
   }).toBe(1);
   const revisedEvents = await (await request.get(`${api}/events?limit=1000`, { headers })).json();
-  const notification = revisedEvents.find((event: { kind: string; run_id: string }) => event.kind === "run_completed" && event.run_id !== baseRunId);
+  const notification = revisedEvents.find((event: { kind: string; run_id: string }) => event.kind === "run_completed" && !initialRunIds.has(event.run_id));
   expect(notification.payload.node_ids.slice().sort()).toEqual(["forecast", "question", "reference"]);
   const revisionBinding = revisedEvents.find((event: { kind: string; run_id: string }) => event.kind === "run_started" && event.run_id === notification.run_id).payload.source_bindings;
   expect(revisionBinding.sales).not.toBe(bindings.sales);
   await expect(page.locator(".event-list li").filter({ hasText: "run completed" }).filter({ hasText: notification.run_id })).toHaveCount(1);
-  await expect(page.getByRole("heading", { name: notification.run_id, exact: true })).toBeVisible();
+  await expect(page.locator(".run-card").getByText(`ID run: ${notification.run_id}`)).toBeVisible();
   await expect(page.locator('.graph-node[data-modified="true"]')).toHaveCount(3);
   for (const id of ["forecast", "question", "reference"]) {
     await expect(page.locator(`[data-node-id="${id}"]`)).toHaveAttribute("data-modified", "true");
