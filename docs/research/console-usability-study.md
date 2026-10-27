@@ -15,19 +15,19 @@ Find whether a new user can connect and activate a supported CSV source, then un
 
 ## Setup
 
-- Use a clean workspace for each participant, the normal console build, and a fixed clock and synthetic fixture so every person sees the same discovery and evidence.
-- Give each participant the local console URL, workspace token, source ID, and the path to the prepared CSV as visible to the core process (`tests/e2e/serve_observatory.py` uses a host path; Compose uses `/data/...`). Do not explain the column mapping or where the discovery appears.
+- Use a clean workspace for each participant, the normal console build, and a fixed clock and synthetic fixture so every person sees the same discovery and evidence. The values are deterministic and the dates are generated for the session, so the forecast target remains in the future.
+- Give each participant the local console URL, workspace token, source ID, and the `Usability CSV:` path printed by the API terminal (Compose uses `/data/...`). The API clock is frozen when the server starts; restart it between participants. Do not explain the column mapping or where the discovery appears.
 - Confirm before the session that the source profile is unresolved, activation produces the expected deterministic discovery, and the discovery has a recorded run/evidence view. Reset the workspace after each participant.
 - Keep provider calls disabled. This study tests navigation and interpretation using local deterministic evidence.
 
 For the current deterministic fixture, use two local terminals from the repository root:
 
 ```sh
-uv run --locked --extra dev python tests/e2e/serve_observatory.py
+FA_USABILITY=1 FA_USABILITY_PORT=8010 uv run --locked --extra dev python tests/e2e/serve_observatory.py
 npm --prefix apps/console run dev -- --host 127.0.0.1 --port 4173
 ```
 
-The fixture API binds to loopback, seeds synthetic sources, a run, evaluation and watches, then starts its worker. The fixture token `local-e2e-token` and source paths in `tests/e2e/serve_observatory.py` are test-only; keep the server on loopback and never use real data. Restart the API process between participants to reset state. If the study uses a containerized setup instead, prepare a fresh workspace and unique local token for every participant.
+The fixture API binds to loopback, seeds synthetic sources, a run, evaluation and watches, writes a current-dated synthetic CSV, then starts its worker. Give participants the API URL and CSV path printed by the API terminal, plus the test-only token `local-e2e-token` and source ID `study-sales`. Set the console’s API address to the printed URL. Keep the server on loopback and never use real data. Restart the API process between participants to reset state and generate a fresh path. If the study uses a containerized setup instead, prepare a fresh workspace and unique local token for every participant.
 
 ## Moderator introduction
 

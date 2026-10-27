@@ -22,6 +22,12 @@ const qualityLabels: Record<Watch["quality"], string> = {
   degraded: "Degradata",
 };
 
+const templateTitles: Record<string, string> = {
+  expected_deviation: "Scostamento dal comportamento atteso",
+  forecast_change: "Cambiamento della previsione",
+  declared_limit: "Possibile superamento del limite dichiarato",
+};
+
 function uniqueByCursor(events: EventRecord[]): EventRecord[] {
   const cursors = new Map<number, EventRecord>();
   for (const event of events) {
@@ -43,13 +49,18 @@ export function DiscoveryFeed({ watches, events, onSelectRun, onToggleWatch }: P
           <h3 id="watches-title">Domande sorvegliate</h3>
           {watches.length === 0 ? <p className="muted">Le nuove domande compariranno qui dopo la verifica.</p> : (
             <ul className="watch-list">
-              {watches.map((watch) => (
-                <li key={watch.watch_id}>
-                  <div className="watch-title"><strong>{watch.candidate?.reason ?? watch.candidate_id}</strong><span className={`quality-chip quality-${watch.quality}`}>{qualityLabels[watch.quality]}</span></div>
-                  <p>{lifecycleLabels[watch.lifecycle]} · {qualityLabels[watch.quality]} · priorità {watch.priority}</p>
-                  {onToggleWatch && <button type="button" className="text-button" onClick={() => onToggleWatch(watch)}>{watch.muted ? "Riattiva segnalazioni" : "Silenzia segnalazioni"}</button>}
-                </li>
-              ))}
+              {watches.map((watch) => {
+                const candidate = watch.candidate;
+                const title = candidate ? templateTitles[candidate.template_id] : undefined;
+                return (
+                  <li key={watch.watch_id}>
+                    <div className="watch-title"><strong>{title ?? candidate?.reason ?? watch.candidate_id}</strong><span className={`quality-chip quality-${watch.quality}`}>{qualityLabels[watch.quality]}</span></div>
+                    {title && candidate?.reason && <p className="watch-reason">Motivo: {candidate.reason}</p>}
+                    <p>{lifecycleLabels[watch.lifecycle]} · {qualityLabels[watch.quality]} · priorità {watch.priority}</p>
+                    {onToggleWatch && <button type="button" className="text-button" onClick={() => onToggleWatch(watch)}>{watch.muted ? "Riattiva segnalazioni" : "Silenzia segnalazioni"}</button>}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>

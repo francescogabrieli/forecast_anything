@@ -14,6 +14,8 @@ from ..contracts import (
     JobView,
     ResumeJobRequest,
     RunJobRequest,
+    SourceProfile,
+    SourceRefreshRequest,
     SourceRegistration,
     SourceSpec,
     SourceView,
@@ -220,6 +222,43 @@ class Observatory:
             profile=profile,
             epoch_id=epoch_id,
             job_id=job_id,
+        )
+
+    def refresh_source(self, source_id: str, request: SourceRefreshRequest):
+        request = SourceRefreshRequest.model_validate(request.model_dump())
+        registered = self.catalog.get(source_id)
+        epoch_id = _digest({"source_id": source_id, "refresh_key": request.key})
+        key = f"refresh/templates/{epoch_id}"
+        job_id = sha256(key.encode()).hexdigest()
+        try:
+            job = self.queue.get(job_id)
+        except DomainError as error:
+            if error.code != "not_found":
+                raise
+            profile = inspect_source(registered.spec)
+            try:
+                job = self.queue.enqueue(
+                    key,
+                    {
+                        "kind": "discovery_templates",
+                        "source_id": source_id,
+                        "revision": registered.revision,
+                        "epoch_id": epoch_id,
+                        "profile": profile.model_dump(mode="json"),
+                    },
+                )
+            except DomainError as conflict:
+                if conflict.code != "idempotency_conflict":
+                    raise
+                job = self.queue.get(job_id)
+        if job.payload["revision"] != registered.revision:
+            raise DomainError("idempotency_conflict", {"key": key})
+        profile = SourceProfile.model_validate(job.payload["profile"])
+        return SourceRegistration(
+            **self.source_view(registered).model_dump(),
+            profile=profile,
+            epoch_id=epoch_id,
+            job_id=job.job_id,
         )
 
     def candidate(self, request: CandidateRequest):

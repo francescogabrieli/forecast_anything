@@ -6,6 +6,8 @@ import { RunDetails } from "./RunDetails";
 describe("RunDetails", () => {
   it("does not draw uncertainty for a point-only forecast", () => {
     render(<RunDetails run={makeRun()} evaluations={[]} watch={makeWatch({ quality: "stale" })} />);
+    expect(screen.getByRole("heading", { name: "Risultato" })).toBeVisible();
+    expect(screen.getByText("ID run: run-1")).toBeVisible();
     expect(screen.getByText("Previsione scaduta")).toBeVisible();
     expect(screen.queryByLabelText("Intervallo previsto")).not.toBeInTheDocument();
   });
@@ -27,5 +29,13 @@ describe("RunDetails", () => {
     expect(screen.getByText(/risultato sperimentale/i)).toBeVisible();
     expect(screen.getByRole("link", { name: "evaluation-1" })).toHaveAttribute("href", "#evaluation-evaluation-1");
     expect(screen.getByRole("link", { name: /snapshot-actuals/ })).toHaveAttribute("href", "#snapshot-snapshot-actuals");
+  });
+
+  it("shows the time and timezone for hourly forecast targets", () => {
+    const run = makeRun();
+    run.results.forecast.timestamps = ["2026-10-25T05:00:00Z", "2026-10-25T06:00:00Z"];
+    render(<RunDetails run={run} evaluations={[]} />);
+    expect(screen.getByRole("cell", { name: "25/10/2026, 05:00 UTC" })).toBeVisible();
+    expect(screen.getByRole("cell", { name: "25/10/2026, 06:00 UTC" })).toBeVisible();
   });
 });

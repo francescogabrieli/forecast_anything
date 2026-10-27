@@ -1,4 +1,5 @@
 import type { EvaluationRecord, RunRecord, Snapshot, Watch } from "../../api/schema.generated";
+import { formatUtc } from "../../format";
 
 type Props = { run: RunRecord; evaluations: EvaluationRecord[]; snapshots?: Snapshot[]; watch?: Watch };
 
@@ -14,14 +15,15 @@ export function RunDetails({ run, evaluations, snapshots = [], watch }: Props) {
 
   return (
     <section className="run-card" aria-labelledby="run-details-title">
-      <div className="section-heading"><div><p className="kicker">DETTAGLIO RUN</p><h2 id="run-details-title">{run.run_id}</h2></div><span className={`run-state ${watch?.quality ?? run.state}`}>{stateLabel}</span></div>
-      <dl className="run-meta"><div><dt>Emissione</dt><dd>{new Date(run.as_of).toLocaleString("it-IT")}</dd></div><div><dt>Stato</dt><dd>{run.state}</dd></div><div><dt>Grafo</dt><dd>{run.graph_id} · v{run.graph_version}</dd></div></dl>
+      <div className="section-heading"><h2 id="run-details-title">Risultato</h2><span className={`run-state ${watch?.quality ?? run.state}`}>{stateLabel}</span></div>
+      <p className="run-id">ID run: {run.run_id}</p>
+      <dl className="run-meta"><div><dt>Emissione</dt><dd>{formatUtc(run.as_of)}</dd></div><div><dt>Stato</dt><dd>{run.state}</dd></div><div><dt>Grafo</dt><dd>{run.graph_id} · v{run.graph_version}</dd></div></dl>
       {Object.entries(run.results).map(([nodeId, result]) => (
         <section className="result-block" key={nodeId}>
           <h3>{nodeId}</h3>
           <p className="muted">Provider: {result.provider_id} · {result.provider_revision}</p>
           {result.point && <div className="table-scroll"><table><caption>Valori puntuali</caption><thead><tr><th>Serie</th><th>Timestamp</th><th>Valore</th><th>Unità</th></tr></thead><tbody>
-            {result.series_ids.flatMap((seriesId, seriesIndex) => result.timestamps.map((timestamp, timeIndex) => <tr key={`${seriesId}-${timestamp}`}><td>{seriesId}</td><td>{new Date(timestamp).toLocaleDateString("it-IT")}</td><td>{result.point?.[seriesIndex]?.[timeIndex] ?? "—"}</td><td>{result.units[seriesIndex]}</td></tr>))}
+            {result.series_ids.flatMap((seriesId, seriesIndex) => result.timestamps.map((timestamp, timeIndex) => <tr key={`${seriesId}-${timestamp}`}><td>{seriesId}</td><td>{formatUtc(timestamp)}</td><td>{result.point?.[seriesIndex]?.[timeIndex] ?? "—"}</td><td>{result.units[seriesIndex]}</td></tr>))}
           </tbody></table></div>}
           {result.quantiles && <section role="group" aria-label="Intervallo previsto" className="quantile-block"><h4>Intervallo previsto</h4><p>I quantili sono riportati come forniti dal modello.</p><dl>{Object.entries(result.quantiles).map(([quantile, values]) => <div key={quantile}><dt>Quantile {quantile}</dt><dd>{values.flat().join(" · ")}</dd></div>)}</dl></section>}
           {result.paths && <p className="muted">Traiettorie congiunte: {result.paths.length} · gruppo {result.sample_group_id}</p>}
@@ -41,8 +43,8 @@ export function RunDetails({ run, evaluations, snapshots = [], watch }: Props) {
           {evaluation.assumptions.length > 0 && <ul>{evaluation.assumptions.map((assumption) => <li key={assumption}>{assumption}</li>)}</ul>}
         </article>)}
         {snapshots.map((snapshot) => <article className="snapshot-item" id={`snapshot-${snapshot.snapshot_id}`} key={snapshot.snapshot_id}>
-          <h4>Snapshot {snapshot.snapshot_id}</h4><p>Disponibile al {new Date(snapshot.as_of).toLocaleString("it-IT")}</p>
-          <ul>{snapshot.observations.map((observation, index) => <li key={`${observation.series_id}-${observation.event_time}-${index}`}>{observation.series_id} · {new Date(observation.event_time).toLocaleDateString("it-IT")} · {observation.value ?? "valore mancante"} {observation.unit}</li>)}</ul>
+          <h4>Snapshot {snapshot.snapshot_id}</h4><p>Disponibile al {formatUtc(snapshot.as_of)}</p>
+          <ul>{snapshot.observations.map((observation, index) => <li key={`${observation.series_id}-${observation.event_time}-${index}`}>{observation.series_id} · {formatUtc(observation.event_time)} · {observation.value ?? "valore mancante"} {observation.unit}</li>)}</ul>
           {snapshot.assumptions.length > 0 && <ul>{snapshot.assumptions.map((assumption) => <li key={assumption}>{assumption}</li>)}</ul>}
         </article>)}
         {run.snapshot_ids.filter((id) => !snapshots.some((snapshot) => snapshot.snapshot_id === id)).map((id) => <span className="sr-only" id={`snapshot-${id}`} key={id}>Snapshot {id}</span>)}

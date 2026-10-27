@@ -496,6 +496,10 @@ class SourceRegistration(SourceView):
     epoch_id: Identifier
 
 
+class SourceRefreshRequest(Contract):
+    key: Identifier
+
+
 class CandidateRequest(Contract):
     template_id: Identifier
     source_ids: tuple[Identifier, ...]

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ConnectSource } from "./ConnectSource";
@@ -86,5 +86,27 @@ describe("ConnectSource", () => {
     expect(client.previewSource).toHaveBeenCalledWith(expect.objectContaining({ source_id: "sales", mapping: completeMapping }));
     expect(client.saveSource).toHaveBeenCalledWith(expect.objectContaining({ source_id: "sales", mapping: completeMapping }));
     expect(await screen.findByText(/fonte attiva/i)).toBeVisible();
+  });
+
+  it("does not activate an older source draft after the user edits it", async () => {
+    const user = userEvent.setup();
+    let finishSave: (value: unknown) => void = () => {};
+    const api = {
+      inspectSource: vi.fn().mockRejectedValueOnce(new Error("source_not_found")).mockResolvedValue(profile()),
+      previewSource: vi.fn().mockResolvedValue(profile()),
+      saveSource: vi.fn().mockImplementation(() => new Promise((resolve) => { finishSave = resolve; })),
+    };
+    const activated = vi.fn();
+    const changed = vi.fn();
+    render(<ConnectSource client={api} sourceId="sales" onActivated={activated} onDraftChange={changed} />);
+    await user.type(screen.getByLabelText("Percorso o URL"), "/data/sales.csv");
+    fireEvent.change(screen.getByLabelText("Mappatura JSON"), { target: { value: JSON.stringify(completeMapping) } });
+    await user.click(screen.getByRole("button", { name: "Analizza fonte" }));
+    await user.click(screen.getByRole("button", { name: "Attiva fonte" }));
+    fireEvent.change(screen.getByLabelText("Percorso o URL"), { target: { value: "/data/other.csv" } });
+    await act(async () => finishSave({ source_id: "sales", profile: profile(), job_id: "old-job" }));
+    expect(changed).toHaveBeenCalled();
+    expect(activated).not.toHaveBeenCalled();
+    expect(screen.queryByText(/fonte attiva/i)).not.toBeInTheDocument();
   });
 });
