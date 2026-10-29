@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ApiClient } from "../../api/client";
+import { SourceMappingForm } from "./SourceMappingForm";
 import { ApiError } from "../../api/client";
 import type { SourceProfile, SourceRegistration, SourceSpec } from "../../api/schema.generated";
 
@@ -23,7 +24,7 @@ const clarificationLabels: Record<string, string> = {
 const initialMapping = {
   event_time: "",
   value: "",
-  available_at: { constant: "" },
+  available_at: "",
   revision: { constant: "1" },
   series_id: { constant: "" },
   unit: { constant: "" },
@@ -59,10 +60,18 @@ export function ConnectSource({ client, sourceId, onActivated, onDraftChange }: 
   const [message, setMessage] = useState<string>();
   const [busy, setBusy] = useState(false);
   const draftVersion = useRef(0);
+  const workspaceVersion = useRef(0);
+  const requestVersion = useRef(0);
 
   useEffect(() => {
     let active = true;
+    workspaceVersion.current += 1;
+    requestVersion.current += 1;
     const version = ++draftVersion.current;
+    setProfile(undefined);
+    setMessage(undefined);
+    setError(undefined);
+    setBusy(false);
     client.inspectSource(sourceId).then((loaded) => {
       if (!active || version !== draftVersion.current) return;
       setProfile(loaded);
@@ -72,7 +81,7 @@ export function ConnectSource({ client, sourceId, onActivated, onDraftChange }: 
       if (!active || (version !== draftVersion.current && code !== "unauthorized") || ["source_not_found", "not_found"].includes(code)) return;
       setError(errorMessage(reason));
     });
-    return () => { active = false; };
+    return () => { active = false; workspaceVersion.current += 1; };
   }, [client, sourceId]);
 
   const unresolved = profile?.unresolved ?? [];
@@ -116,18 +125,21 @@ export function ConnectSource({ client, sourceId, onActivated, onDraftChange }: 
     const spec = sourceSpec();
     if (!spec) return;
     const version = draftVersion.current;
+    const workspace = workspaceVersion.current;
+    const request = ++requestVersion.current;
+    const isCurrentRequest = () => workspace === workspaceVersion.current && request === requestVersion.current;
     setBusy(true);
     setError(undefined);
     setMessage(undefined);
     try {
       const result = await client.previewSource(spec);
-      if (version !== draftVersion.current) return;
+      if (!isCurrentRequest() || version !== draftVersion.current) return;
       setProfile(result);
       setMessage("Profilo pronto per la revisione.");
     } catch (reason) {
-      if (version === draftVersion.current || errorCode(reason) === "unauthorized") setError(errorMessage(reason));
+      if (isCurrentRequest() && (version === draftVersion.current || errorCode(reason) === "unauthorized")) setError(errorMessage(reason));
     } finally {
-      setBusy(false);
+      if (isCurrentRequest()) setBusy(false);
     }
   }
 
@@ -135,14 +147,17 @@ export function ConnectSource({ client, sourceId, onActivated, onDraftChange }: 
     const spec = sourceSpec();
     if (!spec || !profile || profile.unresolved.length > 0) return;
     const version = draftVersion.current;
+    const workspace = workspaceVersion.current;
+    const request = ++requestVersion.current;
+    const isCurrentRequest = () => workspace === workspaceVersion.current && request === requestVersion.current;
     setBusy(true);
     setError(undefined);
     setMessage(undefined);
     try {
       const registration = await client.saveSource(spec);
-      if (version !== draftVersion.current) return;
+      if (!isCurrentRequest() || version !== draftVersion.current) return;
       const persisted = await client.inspectSource(sourceId);
-      if (version !== draftVersion.current) return;
+      if (!isCurrentRequest() || version !== draftVersion.current) return;
       setProfile(persisted);
       if (persisted.unresolved.length > 0) {
         setError("Il profilo salvato richiede ancora chiarimenti. La fonte non è pronta per l’uso.");
@@ -151,9 +166,9 @@ export function ConnectSource({ client, sourceId, onActivated, onDraftChange }: 
         onActivated?.(registration);
       }
     } catch (reason) {
-      if (version === draftVersion.current || errorCode(reason) === "unauthorized") setError(errorMessage(reason));
+      if (isCurrentRequest() && (version === draftVersion.current || errorCode(reason) === "unauthorized")) setError(errorMessage(reason));
     } finally {
-      setBusy(false);
+      if (isCurrentRequest()) setBusy(false);
     }
   }
 
@@ -171,16 +186,22 @@ export function ConnectSource({ client, sourceId, onActivated, onDraftChange }: 
         </label>
         <label>
           Percorso o URL
-          <input autoComplete="off" value={location} onChange={(event) => { setLocation(event.target.value); changedDraft(); }} />
+          <input aria-describedby="source-location-help" autoComplete="off" value={location} onChange={(event) => { setLocation(event.target.value); changedDraft(); }} />
         </label>
+        <p id="source-location-help">{kind === "csv" ? "Percorso CSV visibile al server, per esempio /data/sales.csv. Il caricamento dal browser non è ancora disponibile." : "URL HTTP JSON raggiungibile dal servizio."}</p>
         <label>
           Aggiorna ogni (secondi)
           <input inputMode="numeric" type="number" min="1" value={refreshSeconds} onChange={(event) => { setRefreshSeconds(event.target.value); changedDraft(); }} />
         </label>
-        <label>
-          Mappatura JSON
-          <textarea rows={12} spellCheck={false} value={mappingText} onChange={(event) => changeMapping(event.target.value)} />
-        </label>
+        {parsedMapping && <SourceMappingForm mapping={parsedMapping} kind={kind} columns={Object.keys(profile?.fields ?? {})} onChange={(mapping) => changeMapping(JSON.stringify(mapping, null, 2))} />}
+        <details className="advanced-mapping">
+          <summary>Mappatura avanzata</summary>
+          <p>Modifica il JSON completo per costanti numeriche, marcatori tipizzati ed estensioni.</p>
+          <label>
+            Mappatura JSON
+            <textarea rows={12} spellCheck={false} value={mappingText} onChange={(event) => changeMapping(event.target.value)} />
+          </label>
+        </details>
         {mappingError && <p role="alert">{mappingError}</p>}
         <button type="submit" disabled={busy || !sourceSpec()}>{busy ? "Elaborazione…" : "Analizza fonte"}</button>
       </form>

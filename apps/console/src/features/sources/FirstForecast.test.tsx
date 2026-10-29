@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Candidate, JobView, Snapshot, SourceRegistration } from "../../api/schema.generated";
@@ -56,6 +56,18 @@ describe("FirstForecast", () => {
       kind: "run", graph: candidate.graph, snapshot_ids: { sales: "snapshot-1" }, as_of: snapshot.as_of,
     }));
     expect(screen.getByText(/non ancora valutata/i)).toBeVisible();
+  });
+
+  it("opens the retained forecast detail without following its fragment link", async () => {
+    const onRunReady = vi.fn();
+    render(<FirstForecast client={client()} registration={registration} onRunReady={onRunReady} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Calcola la prima previsione" }));
+    const link = await screen.findByRole("link", { name: "Vai al dettaglio" });
+    onRunReady.mockClear();
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    fireEvent(link, click);
+    expect(click.defaultPrevented).toBe(true);
+    expect(onRunReady).toHaveBeenCalledExactlyOnceWith("run-1");
   });
 
   it.each(["submission", "polling"])("retries %s failures without issuing another forecast", async (failure) => {

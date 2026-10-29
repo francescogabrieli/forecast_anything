@@ -105,3 +105,46 @@ it("loads persisted evaluations for an encoded run with workspace authentication
     method: "GET", headers: { Authorization: "Bearer workspace-secret" },
   });
 });
+
+import { makeRun } from "../test/fixtures";
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("home data reads", () => {
+  it("finds the newest distinct runs beyond the first event page", async () => {
+    const calls: string[] = [];
+    const first = Array.from({ length: 1000 }, (_, i) => ({
+      cursor: i + 1, event_id: `event-${i + 1}`, kind: i === 0 ? "run_completed" : "job_queued",
+      run_id: "old", payload: {},
+    }));
+    vi.stubGlobal("fetch", vi.fn(async (url: string, options: RequestInit) => {
+      calls.push(url);
+      expect(options.headers).toMatchObject({ Authorization: "Bearer workspace-secret" });
+      const path = new URL(url).pathname;
+      if (path === "/v1/events") return Response.json(new URL(url).searchParams.get("after") === "0" ? first : [
+        { cursor: 1001, event_id: "new", kind: "run_completed", run_id: "new", payload: {} },
+        { cursor: 1002, event_id: "replayed", kind: "run_completed", run_id: "new", payload: {} },
+      ]);
+      return Response.json(makeRun({ run_id: path.split("/").pop() }));
+    }));
+    const client = new ApiClient("http://localhost:8000", "workspace-secret");
+    expect((await client.getRecentRuns(2)).map((run) => run.run_id)).toEqual(["new", "old"]);
+    expect(calls).toContain("http://localhost:8000/v1/events?after=1000&limit=1000");
+    expect(calls.filter((url) => url.endsWith("/runs/new"))).toHaveLength(1);
+  });
+
+  it("reports a failed later page instead of an empty or partial history", async () => {
+    let page = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => ++page === 1
+      ? Response.json(Array.from({ length: 1000 }, (_, i) => ({ cursor: i + 1, event_id: `event-${i}`, kind: "job_queued", run_id: "", payload: {} })))
+      : Response.json({ code: "unauthorized" }, { status: 401 })));
+    await expect(new ApiClient("http://localhost:8000", "token").getRecentRuns()).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("rejects a non-advancing full page instead of looping forever", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json(Array.from({ length: 1000 }, () => ({
+      cursor: 0, event_id: "event", kind: "job_queued", run_id: "", payload: {},
+    })))));
+    await expect(new ApiClient("http://localhost:8000", "token").getRecentRuns()).rejects.toThrow(/avanza/i);
+  });
+});

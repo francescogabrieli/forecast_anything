@@ -11,6 +11,7 @@ import type {
   SourceProfile,
   SourceRegistration,
   SourceSpec,
+  SourceView,
   WatchView,
 } from "./schema.generated";
 
@@ -54,6 +55,31 @@ export class ApiClient {
 
   getWatches(): Promise<WatchView[]> {
     return this.request("GET", "/v1/watches");
+  }
+
+  getSources(): Promise<SourceView[]> {
+    return this.request("GET", "/v1/sources");
+  }
+
+  async getRecentRuns(limit = 4): Promise<RunRecord[]> {
+    if (!Number.isSafeInteger(limit) || limit < 1) throw new Error("Numero di previsioni non valido.");
+    const completed = new Map<string, number>();
+    let cursor = 0;
+    for (;;) {
+      const events = await this.getEvents(cursor, 1000);
+      if (!events.length) break;
+      const next = events.reduce((latest, event) => Math.max(latest, event.cursor), cursor);
+      if (next <= cursor) throw new Error("La cronologia non avanza. Riprova a caricarla.");
+      for (const event of events) {
+        if (event.kind === "run_completed" && event.run_id) {
+          completed.set(event.run_id, Math.max(completed.get(event.run_id) ?? 0, event.cursor));
+        }
+      }
+      cursor = next;
+      if (events.length < 1000) break;
+    }
+    const ids = [...completed].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([id]) => id);
+    return Promise.all(ids.map((id) => this.getRun(id)));
   }
 
   getEvents(after = 0, limit = 100): Promise<EventRecord[]> {

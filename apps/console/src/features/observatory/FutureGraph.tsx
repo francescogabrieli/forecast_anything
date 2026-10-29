@@ -42,7 +42,7 @@ export function FutureGraph({ graph, modifiedNodeIds, onSelectNode }: Props) {
 
   return (
     <section className="graph-card" aria-labelledby="future-graph-title">
-      <div className="section-heading"><div><p className="kicker">FUTURE GRAPH</p><h2 id="future-graph-title">Come si compone il futuro</h2></div><span className="graph-version">v{graph.version}</span></div>
+      <div className="section-heading"><div><h2 id="future-graph-title">Come si compone il futuro</h2></div><span className="graph-version">v{graph.version}</span></div>
       <p className="muted">Le etichette indicano fonti, previsioni, trasformazioni ed eventi.</p>
       <div className="graph-scroll" tabIndex={0} aria-label="Grafo navigabile">
         <svg role="img" aria-label="Grafo del futuro" viewBox={`0 0 ${width} 208`} width={width} height="208">

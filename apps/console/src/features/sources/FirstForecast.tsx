@@ -202,7 +202,7 @@ export function FirstForecast({ client, registration, onRunReady }: Props) {
       {!ready && error && <button type="button" className="button button-dark" onClick={() => setRetry((value) => value + 1)}>Riprova</button>}
       {ready && !issuedForecast && <button type="button" className="button button-dark" onClick={() => void calculate()} disabled={busy}>{busy ? "Calcolo in corso…" : "Calcola la prima previsione"}</button>}
       {canRefresh && <button type="button" className="first-forecast-refresh" onClick={() => void refresh()} disabled={busy}>Aggiorna dati</button>}
-      {issuedForecast && <a href="#run-details-title" onClick={() => onRunReady(issuedForecast.runId)}>Vai al dettaglio</a>}
+      {issuedForecast && <a href="#run-details-title" onClick={(event) => { event.preventDefault(); onRunReady(issuedForecast.runId); }}>Vai al dettaglio</a>}
     </div>
   </section>;
 }

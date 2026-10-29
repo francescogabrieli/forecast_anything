@@ -49,6 +49,7 @@ it("opens the completed run and surfaces a failed watch refresh", async () => {
   const user = userEvent.setup();
   render(<ObservatoryBoard client={client} />);
   await waitFor(() => expect(deliverEvent).toBeTypeOf("function"));
+  await user.click(screen.getByText("Cronologia", { exact: true }));
   await user.click(await screen.findByRole("button", { name: "Apri run run-1" }));
   expect(await screen.findByText("ID run: run-1")).toBeVisible();
 
@@ -86,6 +87,7 @@ it("opens a completed run without stale evidence when its evaluation lookup fail
   const user = userEvent.setup();
   render(<ObservatoryBoard client={client} />);
   await waitFor(() => expect(deliverEvent).toBeTypeOf("function"));
+  await user.click(screen.getByText("Cronologia", { exact: true }));
   await user.click(await screen.findByRole("button", { name: "Apri run run-1" }));
   expect(await screen.findByRole("heading", { name: "Valutazione evaluation-1" })).toBeVisible();
   expect(await screen.findByRole("heading", { name: "Snapshot actuals-1" })).toBeVisible();
@@ -101,4 +103,6 @@ it("opens a completed run without stale evidence when its evaluation lookup fail
   expect(screen.queryByRole("heading", { name: "Snapshot run-1-input" })).not.toBeInTheDocument();
   expect(await screen.findByRole("heading", { name: "Snapshot run-2-input" })).toBeVisible();
   expect(await screen.findByRole("alert")).toHaveTextContent("Non è stato possibile caricare le valutazioni: Evaluation lookup unavailable");
+  expect(screen.queryByText("Non ancora valutata")).not.toBeInTheDocument();
+  expect(screen.getByText("Valutazioni non disponibili")).toBeVisible();
 });

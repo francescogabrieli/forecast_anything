@@ -6,7 +6,7 @@ import { FutureGraph } from "./FutureGraph";
 import { RunDetails } from "./RunDetails";
 import { ScenarioCompare } from "./ScenarioCompare";
 
-type Props = { client: ApiClient; requestedRunId?: string };
+type Props = { client: ApiClient; requestedRunId?: string; requestedRunVersion?: number };
 
 function mergeEvents(current: EventRecord[], incoming: EventRecord[]): EventRecord[] {
   const byCursor = new Map<number, EventRecord>();
@@ -27,12 +27,13 @@ function sourceBindings(events: EventRecord[], runId: string): Record<string, st
   return Object.fromEntries(Object.entries(bindings).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
 }
 
-export function ObservatoryBoard({ client, requestedRunId }: Props) {
+export function ObservatoryBoard({ client, requestedRunId, requestedRunVersion }: Props) {
   const [watches, setWatches] = useState<Watch[]>([]);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [run, setRun] = useState<RunRecord>();
   const [graph, setGraph] = useState<GraphSpec>();
   const [evaluations, setEvaluations] = useState<EvaluationRecord[]>([]);
+  const [evaluationsUnavailable, setEvaluationsUnavailable] = useState(false);
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [watch, setWatch] = useState<Watch>();
   const [baseRun, setBaseRun] = useState<RunRecord>();
@@ -82,6 +83,7 @@ export function ObservatoryBoard({ client, requestedRunId }: Props) {
       setRun(loaded);
       setGraph(loadedGraph);
       setEvaluations(loadedEvaluations);
+      setEvaluationsUnavailable(evaluationRead.status === "rejected");
       const actualsIds = loadedEvaluations.map((evaluation) => evaluation.actuals_snapshot_id);
       const actualsSnapshots = await Promise.allSettled(actualsIds.filter((id) => !loaded.snapshot_ids.includes(id)).map((id) => client.getSnapshot(id)));
       if (version !== openRunVersion.current) return;
@@ -113,7 +115,7 @@ export function ObservatoryBoard({ client, requestedRunId }: Props) {
 
   useEffect(() => {
     if (requestedRunId) void openRun(requestedRunId);
-  }, [requestedRunId, openRun]);
+  }, [requestedRunId, requestedRunVersion, openRun]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -201,13 +203,13 @@ export function ObservatoryBoard({ client, requestedRunId }: Props) {
     <div className="observatory-board">
       {error && <p role="alert" className="error-message">{error}</p>}
       {status && <p role="status">{status}</p>}
-      <DiscoveryFeed watches={watches} events={events} onSelectRun={(id) => void openRun(id)} onToggleWatch={(value) => void toggleWatch(value)} />
       {(graph || run) && <div className="detail-grid">
         {graph && <FutureGraph graph={graph} modifiedNodeIds={run ? nodeIdsFromRunEvent(events, run.run_id) : new Set()} />}
-        {run && <RunDetails run={run} evaluations={evaluations} snapshots={snapshots} watch={watch} />}
+        {run && <RunDetails graph={graph} sourceBindings={sourceBindings(events, run.run_id)} run={run} evaluations={evaluations} evaluationsUnavailable={evaluationsUnavailable} snapshots={snapshots} watch={watch} />}
       </div>}
+      <DiscoveryFeed watches={watches} events={events} onSelectRun={(id) => void openRun(id)} onToggleWatch={(value) => void toggleWatch(value)} />
       {run && !run.scenario_id && <section className="scenario-builder" aria-labelledby="scenario-builder-title">
-        <div><p className="kicker">ESPLORAZIONE IPOTETICA</p><h2 id="scenario-builder-title">Prova uno scenario</h2><p className="muted">Modifica lo snapshot JSON; l’originale resta immutato. Le assunzioni dello scenario restano etichettate come ipotesi.</p></div>
+        <div><h2 id="scenario-builder-title">Prova uno scenario</h2><p className="muted">Modifica lo snapshot JSON; l’originale resta immutato. Le assunzioni dello scenario restano etichettate come ipotesi.</p></div>
         <form onSubmit={(event) => void createScenario(event)}>
           <label>Nome scenario<input value={scenarioLabel} onChange={(event) => setScenarioLabel(event.target.value)} /></label>
           <label>Snapshot ipotetici per fonte<textarea rows={10} spellCheck={false} value={scenarioOverridesText} onChange={(event) => setScenarioOverridesText(event.target.value)} /></label>
