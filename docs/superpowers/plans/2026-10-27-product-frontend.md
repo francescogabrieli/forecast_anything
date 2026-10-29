@@ -1,5 +1,7 @@
 # Product frontend implementation plan
 
+> Product direction update, 2026-10-29: this plan records the console/release work already undertaken. New work follows the [MCP-first direction](../specs/2026-10-29-mcp-first-product-design.md) and the [current roadmap](../../roadmap.md). The console is optional; browser upload and proprietary chat are not prerequisites for the first assistant-based release. A dedicated MCP implementation plan is still required.
+
 > **For agentic workers:** use superpowers:subagent-driven-development with disjoint file ownership; integrate and review the entire result before delivery.
 
 **Goal:** replace the technical console with the approved TasteSkill product home and guided workspaces while preserving real forecasting, evidence and graph behavior.

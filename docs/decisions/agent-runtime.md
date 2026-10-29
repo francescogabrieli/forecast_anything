@@ -1,5 +1,9 @@
 # Optional agent runtime
 
+## Product direction update — 2026-10-29
+
+The [MCP-first direction](../superpowers/specs/2026-10-29-mcp-first-product-design.md) makes the user’s own assistant the primary conversational interface. The planned MCP adapter is separate from this optional Eve service. Eve, its Postgres state and provider credentials are not requirements for the initial MCP path. The decision and evidence below describe the existing agent integration, not an implemented MCP server.
+
 ## Decision
 
 Keep Eve as an optional, isolated adapter in `apps/agent`. The Python core remains the authority for source access, candidate compilation, persistent budgets, evidence, and activation. The forecast engine and deterministic templates work without Eve. Eve proposes structured candidate ideas; model prose and numeric outputs are never evidence.

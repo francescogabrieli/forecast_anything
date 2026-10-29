@@ -8,6 +8,24 @@ Questa roadmap ordina risultati e dipendenze, senza assegnare date. Non è un el
 
 [Specifica approvata](superpowers/specs/2026-10-24-forecast-anything-design.md). Il prodotto è un osservatorio predittivo continuo, generale e open source, basato su un Future Graph. Scopre domande candidate, le verifica e mantiene prospettive componibili. Timestral e agenti sono componenti; il runtime conserva il significato delle operazioni e le evidenze.
 
+## Direzione corrente — MCP-first (29 ottobre 2026)
+
+Il proprietario ha scelto l’approccio di REA: **MCP come ingresso principale dal proprio assistente, sito per presentazione/onboarding e console opzionale per grafici ed evidenze**. La [specifica MCP-first](superpowers/specs/2026-10-29-mcp-first-product-design.md) aggiorna il canale e le priorità; conserva infrastruttura OSS, Future Graph, previsioni verificabili e scoperta autonoma di domande.
+
+Il server MCP e il sito dedicato non sono implementati. Il frontend esistente resta una console di supporto. Upload dal browser e chat proprietaria non precedono più il percorso dall’assistente. L’agente Eve resta opzionale e distinto dal MCP; il percorso iniziale non richiede Eve, Postgres o una chiave LLM del progetto.
+
+### Prossime consegne, in ordine
+
+| Priorità | Risultato da chiudere | Criterio di completamento |
+| --- | --- | --- |
+| 1. Integrazione MCP verticale | Collegare fonte supportata, avviare forecast, leggere job/run, Future Graph e prove dal proprio assistente | Un client MCP reale verificato sul runtime/worker, baseline senza pesi, retry idempotenti e riconnessione allo stesso run |
+| 2. Verifica delle previsioni | Configurazione supportata e backtesting su più origini accessibili tramite strumenti | Origini point-in-time, confronto baseline, split separati e metriche persistite; esiti non maturi e limiti multi-fonte dichiarati |
+| 3. Setup e sito | Installazione locale riproducibile, collegamento al client, esempi e documentazione; console opzionale | Ambiente pulito e percorso completo dal setup a una previsione verificabile; solo client provati nella matrice di compatibilità |
+| 4. Continuità e scoperta | Consultare aggiornamenti, proporre/verificare domande e sorvegliarle | Worker indipendente dalla chat, recovery, cursori durevoli, budget e promozione con evidenze |
+| 5. Distribuzione e adozione | Pacchetti, sito e materiali coerenti con ciò che funziona | Artifact verificati e destinazioni approvate prima della pubblicazione |
+
+Il nucleo già costruito viene riusato. Il backtest multi-origine resta lavoro di prodotto/core, non si ottiene aggiungendo un wrapper MCP. La chiusura del client non cancella i job; elaborazione e watch richiedono runtime/worker attivi. La prova con cinque persone resta sospesa, senza bloccare queste consegne o dichiarare usabilità validata.
+
 ## Scelte tecniche proposte dal builder
 
 Queste sono decisioni del piano, non preferenze già espresse dall’utente:
@@ -30,7 +48,7 @@ Queste sono decisioni del piano, non preferenze già espresse dall’utente:
 | 1. Rendere eseguibile il contratto | Grafo tipizzato, dati disponibili nel tempo, registro e CLI con baseline | Una previsione è ricostruibile, un aggiornamento non modifica il passato |
 | 2. Provare modelli e composizione | Timestral collegato, operatori, valutazioni e esperimenti probabilistici | Le operazioni supportate sono dimostrate; quelle non giustificate vengono riconosciute |
 | 3. Costruire l’osservatorio autonomo | Scoperta di domande, policy, aggiornamenti durevoli, agente e API | Un’interruzione non perde il lavoro e una domanda viene promossa o scartata con evidenze |
-| 4. Farlo usare senza competenze statistiche | Console, spiegazioni verificabili, scenari, installazione e esempi | Prova con persone esterne sospesa dal proprietario il 27 ottobre 2026; sviluppo e preparazione dell’anteprima tecnica proseguono |
+| 4. Renderlo accessibile dal proprio assistente | MCP, spiegazioni verificabili, console opzionale, installazione ed esempi | Percorso fonte → previsione → evidenze verificato con un client MCP reale; prova con persone esterne ancora sospesa |
 | 5. Pubblicare il progetto come prodotto OSS | Repository, pacchetti, documentazione, dati attribuiti e contribution guide | Quickstart verificato su installazione pulita e matrice di capacità pubblica |
 | 6. Preparare e fare il lancio | Demo provabile, video, articolo tecnico, messaggi per comunità pertinenti | Tutte le promesse del lancio rimandano a capacità dimostrabili |
 | 7. Costruire adozione e community | Feedback, contributor, adattatori e prove su fonti nuove | Le nuove estensioni migliorano il sistema senza introdurre percorsi speciali nel nucleo |
@@ -42,7 +60,7 @@ Queste sono decisioni del piano, non preferenze già espresse dall’utente:
 3. [Osservatorio autonomo e agenti](superpowers/plans/2026-10-24-03-observatory-and-agents.md): sei task; termina con un servizio headless sorvegliabile via API.
 4. [Esperienza, packaging e pubblicazione](superpowers/plans/2026-10-24-04-experience-and-release.md): quattro task; termina con una release candidata utilizzabile.
 
-Ogni piano definisce file, interfacce, verifiche e commit. L’ordine dei piani è vincolante; il lavoro indipendente al loro interno può essere parallelizzato soltanto dopo aver fissato le interfacce condivise.
+I piani elencati documentano l’esecuzione precedente e i relativi contratti. Dal 29 ottobre le prossime consegne seguono l’ordine MCP-first sopra; il nuovo adattatore richiede un piano esecutivo dedicato. Il lavoro indipendente può essere parallelizzato soltanto dopo aver fissato le interfacce condivise.
 
 ## Controlli di qualità del repository
 
@@ -76,6 +94,8 @@ La scoperta parte da famiglie esplicite di domande: deviazione dal comportamento
 
 ## Passaggio 4 — Trasformare il motore in un’esperienza
 
+Dal 29 ottobre il percorso principale passa dall’assistente via MCP; sito e quickstart guidano il setup. La console è una vista opzionale sugli stessi risultati. Accesso conversazionale e backtesting devono utilizzare i contratti del core, senza introdurre un motore parallelo.
+
 La console consente di collegare le fonti supportate, correggere interpretazioni, esplorare il grafo, leggere le scoperte, confrontare emissioni e scenari. La domanda naturale è un ingresso allo stesso runtime, non un motore parallelo.
 
 Usare cinque persone esterne per una prova osservata: almeno quattro devono completare collegamento e comprensione di una scoperta senza istruzioni del maintainer. È una soglia proposta per il piano, non una misura statistica di adozione.
@@ -107,7 +127,7 @@ Il nome può essere Forecast Anything; il testo del README precisa le capacità 
 
 1. Demo breve: due fonti, una domanda scoperta, una prospettiva composta.
 2. Demo di credibilità: nuova informazione, risposta aggiornata, confronto con un’emissione precedente e con gli esiti.
-3. Demo interattiva con dati pubblici, provabile senza account; il replay storico è etichettato come replay e non usa dati successivi all’origine.
+3. Esempio installabile con dati pubblici dal proprio assistente, con baseline senza chiavi del progetto o pesi; i requisiti dell’assistente sono dichiarati separatamente. Il replay storico è etichettato e non usa dati successivi all’origine. Una demo web ospitata è facoltativa e richiede uno scope separato.
 4. README con video o GIF iniziale, esempio provabile, compatibilità, limiti, architettura e come contribuire.
 5. Articolo che spiega un problema difficile risolto, con un esperimento riproducibile.
 6. Confronto rispettoso con i progetti studiati: capacità comuni, differenze dimostrate e componenti riutilizzati.
@@ -146,7 +166,7 @@ La [verifica della candidata tecnica del 27 ottobre](research/release-candidate-
 
 Il 29 ottobre 2026 il [frontend di prodotto](superpowers/specs/2026-10-27-product-frontend-design.md), approvato dal proprietario, sostituisce la console su pagina unica: Home con fonti e previsioni registrate, Fonti con mappatura guidata, Osservatorio con risultato e Future Graph prima della cronologia tecnica, e Workspace per la connessione al core. Il progetto visivo segue TasteSkill; grafici ed evidenze consumano gli stessi contratti del runtime. Lo storico del grafico richiede la fonte risolta dal grafo e dal binding registrato nel run. Le metriche mostrate sono valutazioni già persistite, non un nuovo backtesting interattivo.
 
-I prossimi interventi funzionali per arrivare al percorso completo sono il caricamento CSV dal browser e la previsione configurabile con backtesting su più origini, seguiti dall’integrazione accessibile della scoperta e sorveglianza continua. Questi interventi completano l’esperienza sopra il nucleo esistente; demo e pubblicazione accompagnano il prodotto e non sostituiscono queste capacità.
+La priorità frontend qui descritta è stata aggiornata dalla decisione MCP-first del 29 ottobre: il prossimo intervento è il piano e l’integrazione verticale MCP sopra il runtime esistente, poi previsione configurabile e backtesting su più origini tramite strumenti, setup/sito e scoperta continua. L’upload CSV dal browser è differito. Demo e pubblicazione accompagnano queste capacità senza sostituirle.
 
 ## Fonti tecniche per le scelte del piano
 

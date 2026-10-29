@@ -2,6 +2,8 @@
 
 Forecast Anything runs locally with a seasonal baseline. The default path needs no LLM key, model weights or hosted account.
 
+The [MCP-first product direction](superpowers/specs/2026-10-29-mcp-first-product-design.md) is planned. There is no MCP installation command or supported client configuration yet. The CLI and optional console paths below describe the current implementation.
+
 ## Run a forecast from the checkout
 
 Install Python 3.12+ and [uv](https://docs.astral.sh/uv/), then run the included minimal example:
@@ -41,11 +43,11 @@ Open [http://localhost:5173](http://localhost:5173). Copy `FORECAST_ANYTHING_WOR
 
 Open **Workspace** to enter the API address and token, then **Fonti** to connect or review a source. **Home** lists recent forecasts and lets you prepare a new forecast from a registered source. **Osservatorio** opens recorded results, their Future Graph, evaluations, watches and scenarios.
 
-To connect a CSV, place it in the workspace directory printed by the bootstrap command and enter its container path as `/data/your-file.csv`. Use the guided column/constant fields to identify observation time, value, availability time, revision, series, unit, frequency, timezone, calendar and missing-value markers. Availability must be declared explicitly, even when it uses the observation-time column. Review the proposed profile and resolve every required field before activating the source. **Mappatura avanzata** retains JSON configuration for extensions; browser file upload is a subsequent milestone.
+To connect a CSV, place it in the workspace directory printed by the bootstrap command and enter its container path as `/data/your-file.csv`. Use the guided column/constant fields to identify observation time, value, availability time, revision, series, unit, frequency, timezone, calendar and missing-value markers. Availability must be declared explicitly, even when it uses the observation-time column. Review the proposed profile and resolve every required field before activating the source. **Mappatura avanzata** retains JSON configuration for extensions; browser file upload is deferred behind the primary assistant/MCP journey.
 
 Once discovery has prepared a compatible single-series source, **Calcola la prima previsione** submits its existing one-step seasonal-baseline candidate to the worker. The issued value, unit and UTC target appear in the console with a link to its recorded run. This initial result is provisional and not yet evaluated. **Aggiorna dati** explicitly rereads the registered source into a new snapshot. A target that is no longer in the future according to the snapshot and device clock is not offered as a new forecast; update the data and check the device clock if necessary.
 
-The console shows recorded discoveries, their current quality, event history, graph dependencies and run evidence when available. Forecast charts use only the history source resolved through the recorded graph and snapshot binding; unavailable or ambiguous history stays unavailable. Recorded evaluation metrics are displayed as issued; the interactive multi-origin backtesting workflow is a subsequent milestone. Its deterministic E2E flow runs the production frontend against two local fixtures, mutes a watch, resumes an interrupted event stream from the durable history, navigates the graph by keyboard and compares an assumed scenario with a worker-produced run. It is a functional test fixture, not a forecast-quality benchmark or a completed external usability study.
+The console shows recorded discoveries, their current quality, event history, graph dependencies and run evidence when available. Forecast charts use only the history source resolved through the recorded graph and snapshot binding; unavailable or ambiguous history stays unavailable. Recorded evaluation metrics are displayed as issued; the multi-origin backtesting workflow remains a core/product milestone, prioritized for access through tools before browser controls. Its deterministic E2E flow runs the production frontend against two local fixtures, mutes a watch, resumes an interrupted event stream from the durable history, navigates the graph by keyboard and compares an assumed scenario with a worker-produced run. It is a functional test fixture, not a forecast-quality benchmark or a completed external usability study.
 
 Stop the stack with `Ctrl+C`. The workspace database and generated token remain under `.local/demo`; removing that directory deletes the local demo state.
 

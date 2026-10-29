@@ -2,7 +2,9 @@
 
 Connect explicit data sources, compose forecasts in a **Future Graph**, and inspect what changed, which inputs were available, and which results have evidence behind them.
 
-Forecast Anything is a local forecasting observatory under development. The Python runtime validates typed graphs, freezes point-in-time inputs, records immutable forecasts in SQLite, and evaluates them against later observations. A React console uses the same authenticated API. The working name, public owner, package registry and domain remain provisional; this checkout prepares a release candidate and does not identify a published package or hosted service.
+Forecast Anything is an open-source forecasting infrastructure under development, with an **MCP-first product direction**: use it through your own assistant, with a website for setup and examples and an optional console for graphs and evidence. The MCP server and dedicated website are planned, not implemented. See the [product direction](docs/superpowers/specs/2026-10-29-mcp-first-product-design.md).
+
+The current implementation is a local forecasting observatory. The Python runtime validates typed graphs, freezes point-in-time inputs, records immutable forecasts in SQLite, and evaluates them against later observations. A React console uses the same authenticated API. The working name, public owner, package registry and domain remain provisional; this checkout prepares a release candidate and does not identify a published package or hosted service.
 
 ## Try a forecast without model keys or weights
 
