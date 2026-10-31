@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "preview": "vite preview",
     "build": "vite build",
     "test": "vitest",
     "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",

@@ -144,6 +144,10 @@ Il [test osservato con cinque persone](research/console-usability-study.md) è i
 
 La [verifica della candidata tecnica del 27 ottobre](research/release-candidate-check.md) copre wheel installata fuori dal checkout e immagini baseline ricostruite in workspace temporaneo, con primo forecast, invio idempotente e run invariato dopo riavvio. Il pacchetto sorgente esclude ora i materiali locali di lavoro con un test di regressione. La candidata resta locale: nessun pacchetto o immagine è stato pubblicato su registry.
 
+Il 29 ottobre 2026 il [frontend di prodotto](superpowers/specs/2026-10-27-product-frontend-design.md), approvato dal proprietario, sostituisce la console su pagina unica: Home con fonti e previsioni registrate, Fonti con mappatura guidata, Osservatorio con risultato e Future Graph prima della cronologia tecnica, e Workspace per la connessione al core. Il progetto visivo segue TasteSkill; grafici ed evidenze consumano gli stessi contratti del runtime. Lo storico del grafico richiede la fonte risolta dal grafo e dal binding registrato nel run. Le metriche mostrate sono valutazioni già persistite, non un nuovo backtesting interattivo.
+
+I prossimi interventi funzionali per arrivare al percorso completo sono il caricamento CSV dal browser e la previsione configurabile con backtesting su più origini, seguiti dall’integrazione accessibile della scoperta e sorveglianza continua. Questi interventi completano l’esperienza sopra il nucleo esistente; demo e pubblicazione accompagnano il prodotto e non sostituiscono queste capacità.
+
 ## Fonti tecniche per le scelte del piano
 
 - [Timestral](https://github.com/mistralai/timestral): capacità e dipendenze del provider.

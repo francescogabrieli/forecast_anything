@@ -35,7 +35,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-The Playwright configuration starts a Python API/worker and a Vite console on loopback ports 8000 and 4173. Keep those ports free so the test uses its own fixture services. Its synthetic source, fixed clock and seasonal-naive provider exercise the browser/API path, SSE reconnect and scenario comparison without external model calls. They do not validate live LLM discovery, Timestral quality or real-world data freshness.
+The Playwright configuration starts a Python API/worker and builds/serves the production Vite console on loopback ports 8000 and 4173. Keep those ports free so the test uses its own fixture services. Its synthetic source, fixed clock and seasonal-naive provider exercise the browser/API path, guided mapping, browser-history navigation, SSE reconnect and scenario comparison without external model calls. They do not validate live LLM discovery, Timestral quality or real-world data freshness.
 
 For a development console on port 5173, configure the API with `FORECAST_ANYTHING_CONSOLE_ORIGINS=http://127.0.0.1:5173,http://localhost:5173`. Origins must match the browser's scheme, host and port. Keep workspace tokens in memory and out of URLs, browser storage, logs and screenshots.
 

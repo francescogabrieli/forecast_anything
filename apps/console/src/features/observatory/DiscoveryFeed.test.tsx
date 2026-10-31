@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Candidate } from "../../api/schema.generated";
 import { makeWatch } from "../../test/fixtures";
@@ -16,6 +16,7 @@ describe("DiscoveryFeed", () => {
   it("deduplicates events replayed at the same cursor", () => {
     render(<DiscoveryFeed watches={[]} events={[event(2, "event-2"), event(2, "event-2-replay")]} onSelectRun={vi.fn()} />);
 
+    fireEvent.click(screen.getByText("Cronologia", { exact: true }));
     expect(screen.getAllByRole("button", { name: /run-1/i })).toHaveLength(1);
     expect(screen.getByText(/1 eventi unici/i)).toBeVisible();
   });

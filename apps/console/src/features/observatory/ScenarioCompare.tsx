@@ -42,7 +42,7 @@ export function ScenarioCompare({ baseRun, scenarioRun, baseGraph, scenarioGraph
 
   return (
     <section className="scenario-card" aria-labelledby="scenario-compare-title">
-      <div className="section-heading"><div><p className="kicker">SCENARI</p><h2 id="scenario-compare-title">Confronto sulle date comuni</h2></div><span className="scenario-id">{scenarioRun.scenario_id ?? "scenario"}</span></div>
+      <div className="section-heading"><div><h2 id="scenario-compare-title">Confronto sulle date comuni</h2></div><span className="scenario-id">{scenarioRun.scenario_id ?? "scenario"}</span></div>
       <p className="muted">Confronto puntuale tra {baseRun.run_id} e {scenarioRun.run_id}. Quantili e probabilità restano quelli registrati dai rispettivi run.</p>
       {rows.length === 0 ? <p className="muted">Nessun valore puntuale con serie, unità e timestamp comuni.</p> : <div className="table-scroll"><table><caption>Valori puntuali sui timestamp comuni</caption><thead><tr><th>Previsione</th><th>Serie</th><th>Timestamp</th><th>Base</th><th>Scenario</th><th>Differenza</th></tr></thead><tbody>
         {rows.map((row) => <tr key={`${row.nodeId}-${row.seriesId}-${row.timestamp}`}><td>{row.nodeId}</td><td>{row.seriesId} ({row.unit})</td><td>{new Date(row.timestamp).toLocaleDateString("it-IT")}</td><td>{row.base}</td><td>{row.scenario}</td><td>{row.delta > 0 ? "+" : ""}{row.delta}</td></tr>)}

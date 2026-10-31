@@ -41,7 +41,7 @@ export function DiscoveryFeed({ watches, events, onSelectRun, onToggleWatch }: P
   return (
     <section className="feed-card" aria-labelledby="discovery-feed-title">
       <div className="section-heading">
-        <div><p className="kicker">ATTIVITÀ</p><h2 id="discovery-feed-title">Scoperte e aggiornamenti</h2></div>
+        <div><h2 id="discovery-feed-title">Scoperte e aggiornamenti</h2></div>
         <span className="count-pill">{uniqueEvents.length} eventi unici</span>
       </div>
       <div className="feed-columns">
@@ -64,8 +64,8 @@ export function DiscoveryFeed({ watches, events, onSelectRun, onToggleWatch }: P
             </ul>
           )}
         </section>
-        <section aria-labelledby="events-title">
-          <h3 id="events-title">Cronologia</h3>
+        <details className="event-history">
+          <summary id="events-title">Cronologia</summary>
           {uniqueEvents.length === 0 ? <p className="muted">Nessun aggiornamento registrato.</p> : (
             <ol className="event-list">
               {uniqueEvents.map((event) => (
@@ -79,7 +79,7 @@ export function DiscoveryFeed({ watches, events, onSelectRun, onToggleWatch }: P
               ))}
             </ol>
           )}
-        </section>
+        </details>
       </div>
     </section>
   );

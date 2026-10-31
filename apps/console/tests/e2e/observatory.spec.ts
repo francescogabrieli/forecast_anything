@@ -1,23 +1,61 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const sourceCsv = resolve(process.cwd(), "../../tests/fixtures/console-e2e-actuals.csv");
 
+async function visualSnapshot(page: Page, name: string) {
+  if (!process.env.FA_VISUAL_OUTPUT) return;
+  const directory = resolve(process.env.FA_VISUAL_OUTPUT);
+  await mkdir(directory, { recursive: true });
+  const html = await page.evaluate(() => {
+    const copy = document.documentElement.cloneNode(true) as HTMLElement;
+    copy.querySelectorAll("script").forEach((element) => element.remove());
+    const originals = document.querySelectorAll("input, select, textarea");
+    copy.querySelectorAll("input, select, textarea").forEach((element, index) => {
+      const original = originals[index];
+      if (element instanceof HTMLSelectElement && original instanceof HTMLSelectElement) {
+        [...element.options].forEach((option, i) => option.toggleAttribute("selected", original.options[i].selected));
+      } else if (element instanceof HTMLTextAreaElement && original instanceof HTMLTextAreaElement) {
+        element.textContent = original.value;
+      } else if (element instanceof HTMLInputElement && original instanceof HTMLInputElement) {
+        if (element.type !== "password") element.setAttribute("value", original.value);
+        element.toggleAttribute("checked", original.checked);
+      }
+    });
+    copy.querySelectorAll('input[type="password"]').forEach((element) => element.removeAttribute("value"));
+    const base = document.createElement("base");
+    base.href = "http://127.0.0.1:4175/";
+    copy.querySelector("head")!.prepend(base);
+    return `<!doctype html>${copy.outerHTML}`;
+  });
+  await writeFile(resolve(directory, `${name}.html`), html);
+  await page.screenshot({ path: resolve(directory, `${name}.png`), fullPage: true });
+}
+
+async function navigate(page: Page, label: string) {
+  const menu = page.getByRole("button", { name: "Apri navigazione" });
+  if (await menu.isVisible()) await menu.click();
+  await page.getByRole("navigation", { name: "Navigazione principale" }).getByRole("link", { name: label, exact: true }).click();
+}
+
 test("connects a source and issues its first forecast through the worker", async ({ page, request }) => {
   await page.addInitScript(() => { Date.now = () => Date.parse("2026-10-24T12:00:00Z"); });
-  await page.goto("/");
+  await page.goto("/#workspace");
   await page.getByLabel("Indirizzo API").fill("http://127.0.0.1:8000");
   await page.getByLabel("Token workspace").fill("local-e2e-token");
-  await page.getByLabel("ID della fonte").fill("first-sales");
   await page.getByRole("button", { name: /Apri il workspace/ }).click();
+  await page.getByLabel("ID della fonte").fill("first-sales");
   await page.getByLabel("Percorso o URL").fill(sourceCsv);
-  await page.getByLabel("Mappatura JSON").fill(JSON.stringify({
-    event_time: "time", value: "value", available_at: "available_at", revision: { constant: "1" },
-    series_id: { constant: "first-sales" }, unit: { constant: "count" }, frequency: { constant: "1d" },
-    timezone: { constant: "UTC" }, calendar: { constant: "gregorian" }, missing_values: { constant: [""] },
-  }));
+  await page.getByLabel("Data osservazione — campo", { exact: true }).fill("time");
+  await page.getByLabel("Valore — campo", { exact: true }).fill("value");
+  await page.getByRole("combobox", { name: /^Disponibile dal — origine/ }).selectOption("column");
+  await page.getByLabel("Disponibile dal — campo", { exact: true }).fill("available_at");
+  await page.getByLabel("Serie — campo", { exact: true }).fill("first-sales");
+  await page.getByLabel("Unità — campo", { exact: true }).fill("count");
   await page.getByRole("button", { name: "Analizza fonte" }).click();
   await expect(page.getByText("Profilo pronto per la revisione.")).toBeVisible();
+  await visualSnapshot(page, "sources");
   await page.getByRole("button", { name: "Attiva fonte" }).click();
   const calculate = page.getByRole("button", { name: "Calcola la prima previsione" });
   await expect(calculate).toBeVisible();
@@ -33,8 +71,7 @@ test("connects a source and issues its first forecast through the worker", async
   expect((await refresh).status()).toBe(202);
   await expect(calculate).toBeVisible();
   await calculate.click();
-  await expect(page.getByText(/Previsione pronta: il dettaglio/)).toBeVisible();
-  await expect(page.getByRole("group", { name: "Previsione iniziale" })).toContainText("3 count");
+  await expect(page.getByRole("heading", { name: "Osservatorio", exact: true })).toBeVisible();
 
   const api = "http://127.0.0.1:8000/v1";
   const headers = { Authorization: "Bearer local-e2e-token" };
@@ -48,7 +85,18 @@ test("connects a source and issues its first forecast through the worker", async
   expect(run.results.forecast.point).toEqual([[3]]);
   expect(new Date(run.results.forecast.timestamps[0]).getTime()).toBeGreaterThan(new Date(run.as_of).getTime());
   await expect(page.locator(".run-card").getByText(`ID run: ${run.run_id}`)).toBeVisible();
-  await expect(page.locator(".run-card").getByText("first-sales", { exact: true }).first()).toBeVisible();
+  await expect(page.locator(".run-card .forecast-summary")).toContainText("first-sales");
+  await navigate(page, "Home");
+  await expect(page.getByRole("heading", { name: "Home", exact: true })).toBeVisible();
+  await expect(page.locator(".recent-run-list")).toContainText("first-sales");
+  await visualSnapshot(page, "home-connected");
+  await page.goBack();
+  await expect(page.getByRole("heading", { name: "Osservatorio", exact: true })).toBeVisible();
+  await expect(page.locator(".run-card").getByText(`ID run: ${run.run_id}`)).toBeVisible();
+  await navigate(page, "Fonti");
+  await page.getByRole("link", { name: "Vai al dettaglio", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Osservatorio", exact: true })).toBeVisible();
+  await expect(page.locator(".run-card").getByText(`ID run: ${run.run_id}`)).toBeVisible();
 });
 
 test("reviews two-source evaluation, revision notification and immutable scenario", async ({ page, request }) => {
@@ -66,11 +114,12 @@ test("reviews two-source evaluation, revision notification and immutable scenari
     }
     await route.continue();
   });
-  await page.goto("/");
+  await page.goto("/#workspace");
   await page.getByLabel("Indirizzo API").fill("http://127.0.0.1:8000");
   await page.getByLabel("Token workspace").fill("local-e2e-token");
-  await page.getByLabel("ID della fonte").fill("sales");
   await page.getByRole("button", { name: /Apri il workspace/ }).click();
+  await page.getByLabel("ID della fonte").fill("sales");
+  await navigate(page, "Osservatorio");
   await expect(page.getByRole("heading", { name: "Scoperte e aggiornamenti" })).toBeVisible();
   const api = "http://127.0.0.1:8000/v1";
   const headers = { Authorization: "Bearer local-e2e-token" };
@@ -94,8 +143,10 @@ test("reviews two-source evaluation, revision notification and immutable scenari
 
   await page.getByRole("button", { name: "Riattiva segnalazioni" }).click();
   await expect(page.getByRole("button", { name: "Silenzia segnalazioni" })).toBeVisible();
+  await navigate(page, "Fonti");
   await page.getByLabel("ID della fonte").fill("sales");
   await page.getByLabel("Percorso o URL").fill(sourceCsv);
+  await page.getByText("Mappatura avanzata", { exact: true }).click();
   await page.getByLabel("Mappatura JSON").fill(JSON.stringify({
     event_time: "time",
     value: "value",
@@ -112,6 +163,7 @@ test("reviews two-source evaluation, revision notification and immutable scenari
   await expect(page.getByText("Profilo pronto per la revisione.")).toBeVisible();
   await page.getByRole("button", { name: "Attiva fonte" }).click();
   await expect(page.getByText("Fonte attiva. Profilo riletto dal servizio.")).toBeVisible();
+  await navigate(page, "Osservatorio");
 
   await expect.poll(async () => {
     const events = await (await request.get(`${api}/events?limit=1000`, { headers })).json();
@@ -139,6 +191,7 @@ test("reviews two-source evaluation, revision notification and immutable scenari
   await expect(page.getByText(`${revisedEvents.length} eventi unici`)).toBeVisible();
 
   // Each event has an open action; choose the single run-completion entry.
+  await page.getByText("Cronologia", { exact: true }).click();
   const runButton = page.locator(".event-list li").filter({ hasText: "run completed" })
     .getByRole("button", { name: `Apri run ${baseRunId}`, exact: true });
   await expect(runButton).toBeVisible();
@@ -157,6 +210,23 @@ test("reviews two-source evaluation, revision notification and immutable scenari
   expect(evaluation.run_id).toBe(baseRunId);
   await expect(page.getByRole("heading", { name: `Valutazione ${evaluation.evaluation_id}`, exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: `Input effettivi: ${evaluation.actuals_snapshot_id}`, exact: true })).toBeVisible();
+  await page.getByRole("link", { name: `Input effettivi: ${evaluation.actuals_snapshot_id}`, exact: true }).click();
+  await navigate(page, "Home");
+  await page.goBack();
+  await expect(page.getByRole("heading", { name: "Osservatorio", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: `Snapshot ${evaluation.actuals_snapshot_id}`, exact: true })).toBeInViewport();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await visualSnapshot(page, "observatory");
+  // Reopen the same home request after a different run was selected inside the observer.
+  await navigate(page, "Home");
+  await page.locator(`button[data-run-id="${baseRunId}"]`).click();
+  await expect(page.locator(".run-card").getByText(`ID run: ${baseRunId}`)).toBeVisible();
+  await page.locator(".event-list li").filter({ hasText: "run completed" })
+    .getByRole("button", { name: `Apri run ${notification.run_id}`, exact: true }).click();
+  await expect(page.locator(".run-card").getByText(`ID run: ${notification.run_id}`)).toBeVisible();
+  await navigate(page, "Home");
+  await page.locator(`button[data-run-id="${baseRunId}"]`).click();
+  await expect(page.locator(".run-card").getByText(`ID run: ${baseRunId}`)).toBeVisible();
 
   const forecastNode = page.getByRole("button", { name: /forecast, previsione/ });
   await forecastNode.focus();
