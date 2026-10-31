@@ -1,6 +1,6 @@
 # Configured forecasts and frozen historical evidence
 
-Local acceptance on 31 October 2026, following the [approved implementation plan](../superpowers/plans/2026-10-30-forecast-evidence.md). Changes remain unstaged and uncommitted. This extends the [original MCP baseline verification](mcp-vertical-slice.md); no package, site or service has been published.
+Local acceptance and independent review on 31 October 2026, following the [approved implementation plan](../superpowers/plans/2026-10-30-forecast-evidence.md). The increment is committed as `a9302c9` and pushed in [PR #13](https://github.com/francescogabrieli/forecast_anything/pull/13), stacked on the still-open frontend PR #12. No package, site or service has been published.
 
 The 19-tool adapter submits configured forecasts and CSV backtests to the authenticated API and independent worker. The core computes results and persists immutable evidence. Generic backtests have no discovery attestation and do not qualify or activate watches. [Usage](../quickstart.md), [operating guide](../implementation/mcp.md), [remaining release gates](../first-release.md).
 
@@ -28,7 +28,8 @@ Scope remains one CSV source/series/unit on fixed UTC hourly/daily grids, suppli
 
 | Check | Result |
 | --- | --- |
-| Full Python suite | 798 passed, 1 skipped, 38.37 seconds |
+| Full Python suite after final review fixes | 819 passed, 1 skipped, 38.65 seconds |
+| Focused final-fix Python suite | 465 passed, 30.41 seconds |
 | Checkout and installed-wheel MCP process tests | 6 passed, 16.36 seconds |
 | Console component suite | 82 passed |
 | Agent unit suite | 29 passed |
@@ -40,8 +41,8 @@ Scope remains one CSV source/series/unit on fixed UTC hourly/daily grids, suppli
 
 The single skip is the guarded real Timestral check. Node emitted its existing `NO_COLOR`/`FORCE_COLOR` warning during browser runs.
 
-## Remaining review and release work
+## Final review and remaining release work
 
-An independently reproduced finite-extreme numeric overflow in scoring is reserved for the final whole-change review/fix wave. This ordinary-value acceptance does not resolve that risk; final review is still required. No additional numerical defect was observed here.
+The independent whole-change review's three Important findings were fixed and re-reviewed: extreme finite metric calculations preserve representable means and give explicit results for unrepresentable scores/ratios; HTTP/SSE/MCP/job status redact private provider diagnostics; and concurrent identical submissions return the accepted original job. A valid but extremely large origin-page offset beyond SQLite's signed 64-bit range remains a deferred minor edge.
 
 The complete first-release journey remains open: managed installed service setup/status/stop/recovery; one actual desktop assistant host; recurring-question selection and lifecycle; assistant summaries/reports tied to stored evidence; a public site and guided onboarding; clean-install checks on declared platforms and approved release destinations. Generic report-to-discovery policy integration also remains future work. External usability and general forecasting quality are unvalidated.
