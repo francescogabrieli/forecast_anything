@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from threading import Event, Thread
 from uuid import uuid4
 
+from .backtesting.service import execute_job as execute_backtest_job
 from .connectors.http_json import SecretResolver
 from .contracts import (
     Candidate,
@@ -109,7 +110,15 @@ class Worker:
 
     def _execute(self, job: Job, now: datetime) -> dict | None:
         payload = job.payload
-        if payload.get("kind") == "run":
+        if payload.get("kind") == "backtest":
+            return execute_backtest_job(
+                self.runtime,
+                self.catalog,
+                job,
+                now,
+                secret_resolver=self.secret_resolver,
+            )
+        if payload.get("kind") in {"run", "configured_run"}:
             run = self.runtime.run(
                 GraphSpec.model_validate(payload["graph"]),
                 {

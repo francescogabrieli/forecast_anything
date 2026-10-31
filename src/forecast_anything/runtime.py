@@ -247,9 +247,9 @@ class Runtime:
                 )
                 calendars[node_id] = expected
 
-        self.ledger.put_graph(spec)
+        self.ledger.put_graph(spec, lease_guard=lease_guard)
         for snapshot in snapshots.values():
-            self.ledger.put_snapshot(snapshot)
+            self.ledger.put_snapshot(snapshot, lease_guard=lease_guard)
         emitted_at = self.clock()
         if emitted_at.tzinfo is None or emitted_at.utcoffset() is None:
             raise DomainError("naive_timestamp", {"field": "clock"})

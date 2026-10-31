@@ -28,7 +28,7 @@ export function RunDetails({ run, evaluations, snapshots = [], watch, evaluation
   const evaluationsById = new Map(evaluations.map((evaluation) => [evaluation.evaluation_id, evaluation]));
 
   const entries = Object.entries(run.results);
-  const primary = entries.find(([id]) => id === "forecast") ?? entries[0];
+  const primary = entries.find(([id]) => id === "forecast") ?? entries.find(([id]) => id === "model") ?? entries[0];
   const others = entries.filter(([id]) => id !== primary?.[0]);
   const primaryNode = graph?.graph_id === run.graph_id && graph.version === run.graph_version
     ? graph.nodes.find(node => node.node_id === primary?.[0]) : undefined;

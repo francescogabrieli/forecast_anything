@@ -5,6 +5,7 @@ other field is inferred. Additional/duplicate columns and ragged rows fail.
 """
 
 import csv
+from itertools import islice
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -69,9 +70,8 @@ def load_csv_rows(
                 raise DomainError(
                     "invalid_source_data", {"reason": "invalid_csv_header"}
                 )
-            for row_number, row in enumerate(reader, start=2):
-                if limit is not None and len(rows) >= limit:
-                    break
+            bounded = reader if limit is None else islice(reader, limit)
+            for row_number, row in enumerate(bounded, start=2):
                 if None in row or any(value is None for value in row.values()):
                     raise DomainError("invalid_source_row", {"row": row_number})
                 rows.append(row)

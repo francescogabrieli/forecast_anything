@@ -5,8 +5,12 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
+from ..backtesting import service as backtesting
+from ..backtesting.store import BacktestStore
 from ..contracts import (
+    BacktestJobRequest,
     CandidateRequest,
+    ConfiguredRunJobRequest,
     DiscoveryBudget,
     DiscoveryEpoch,
     DomainError,
@@ -34,7 +38,7 @@ from ..sources.profiling import inspect_source
 from ..store import _json
 from ..watches import create_watch
 from ..worker import Worker
-from .errors import public_error_details
+from .errors import public_event, public_failure
 
 
 def validate_run(runtime, graph, snapshots, as_of):
@@ -329,6 +333,29 @@ class Observatory:
         return next(w for w in self.watches() if w.watch_id == watch_id)
 
     def submit(self, request):
+        configured = None
+        if isinstance(request, (ConfiguredRunJobRequest, BacktestJobRequest)):
+            request = type(request).model_validate_json(request.model_dump_json())
+            prior = backtesting.replay_job(self.queue, request)
+            if prior is not None:
+                return self.job(prior.job_id)
+            if isinstance(request, BacktestJobRequest):
+                payload = backtesting.backtest_payload(
+                    self.runtime, self.catalog, request
+                )
+                try:
+                    job = self.queue.enqueue(f"api/{request.key}", payload)
+                except DomainError as error:
+                    if error.code != "idempotency_conflict":
+                        raise
+                    # A competing insert may bind a different current revision.
+                    # Its original public intent, not derived metadata, wins.
+                    job = backtesting.replay_job(self.queue, request)
+                    if job is None:
+                        raise
+                return self.job(job.job_id)
+            configured = request
+            request = backtesting.configured_run(self.ledger, self.catalog, configured)
         if isinstance(request, RunJobRequest):
             request = RunJobRequest.model_validate(request.model_dump())
             snapshots = {
@@ -418,8 +445,27 @@ class Observatory:
             payload = request.model_dump(exclude={"key"})
         else:
             raise DomainError("invalid_job", {})
+        if configured is not None:
+            payload = {
+                **payload,
+                "kind": "configured_run",
+                "request": backtesting.original_request(configured),
+            }
         job = self.queue.enqueue(f"api/{request.key}", payload)
         return self.job(job.job_id)
+
+    def backtest(self, backtest_id):
+        return BacktestStore(self.ledger).get_report(backtest_id)
+
+    def backtest_origins(self, backtest_id, *, offset=0, limit=25):
+        store = BacktestStore(self.ledger)
+        store.get_report(backtest_id)
+        return store.list_origins(backtest_id, offset=offset, limit=limit)
+
+    def events(self, after, limit=100):
+        return tuple(
+            public_event(event) for event in self.ledger.events_after(after, limit)
+        )
 
     def job(self, job_id):
         job = self.queue.get(job_id)
@@ -430,5 +476,5 @@ class Observatory:
             state=job.state,
             attempt=job.attempt,
             result=current.get("result"),
-            error=public_error_details(current.get("error")),
+            error=public_failure(current.get("error")),
         )

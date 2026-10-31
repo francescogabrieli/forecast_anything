@@ -63,6 +63,20 @@ class Contract(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
+class ForecastSelection(Contract):
+    provider: Identifier
+    options: Annotated[dict[str, JsonValue], AfterValidator(_require_finite_nested)] = (
+        Field(default_factory=dict)
+    )
+    horizon: Annotated[int, Field(ge=1, le=366, strict=True)]
+    baseline_period: Annotated[int, Field(ge=1, le=10000, strict=True)] = 1
+
+
+class BacktestSettings(Contract):
+    max_origins_per_partition: Annotated[int, Field(ge=1, le=50, strict=True)] = 10
+    origin_offset_seconds: Annotated[int, Field(ge=0, strict=True)] = 0
+
+
 class Observation(Contract):
     series_id: Identifier
     event_time: AwareDatetime
@@ -543,6 +557,22 @@ class RunJobRequest(Contract):
     previous_run_id: Identifier | None = None
 
 
+class ConfiguredRunJobRequest(Contract):
+    kind: Literal["configured_run"]
+    key: Identifier
+    source_id: Identifier
+    snapshot_id: Identifier
+    selection: ForecastSelection
+
+
+class BacktestJobRequest(Contract):
+    kind: Literal["backtest"]
+    key: Identifier
+    source_id: Identifier
+    selection: ForecastSelection
+    settings: BacktestSettings = Field(default_factory=BacktestSettings)
+
+
 class EvaluationJobRequest(Contract):
     kind: Literal["evaluation"]
     key: Identifier
@@ -557,7 +587,12 @@ class ResumeJobRequest(Contract):
 
 
 JobRequest = Annotated[
-    RunJobRequest | EvaluationJobRequest | ResumeJobRequest, Field(discriminator="kind")
+    RunJobRequest
+    | ConfiguredRunJobRequest
+    | BacktestJobRequest
+    | EvaluationJobRequest
+    | ResumeJobRequest,
+    Field(discriminator="kind"),
 ]
 
 

@@ -1,5 +1,7 @@
 # Product frontend — design for review
 
+> Aggiornamento / update 2026-10-29: The console remains a supporting view. Its role as primary product entrance is superseded by the assistant/MCP-first journey; browser upload and proprietary chat are not prerequisites for initial distribution. See [MCP-first product direction](2026-10-29-mcp-first-product-design.md). Historical details below are retained.
+
 Status: approved by the owner in chat on 2026-10-27. The product direction follows the owner's approved journey; this document makes the frontend structure and its implementation boundary concrete.
 
 ## Intent

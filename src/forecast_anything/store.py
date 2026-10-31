@@ -41,6 +41,7 @@ MIGRATIONS = (
     "005_jobs.sql",
     "006_scenarios.sql",
     "007_agent_operations.sql",
+    "008_backtests.sql",
 )
 
 
@@ -106,11 +107,14 @@ class Ledger(AgentStorageMixin):
             self._get("snapshots", {"snapshot_id": snapshot_id})
         )
 
-    def put_graph(self, spec: GraphSpec) -> tuple[str, int]:
+    def put_graph(
+        self, spec: GraphSpec, *, lease_guard: LeaseGuard | None = None
+    ) -> tuple[str, int]:
         self._put(
             "graphs",
             {"graph_id": spec.graph_id, "version": spec.version},
             _json(spec.model_dump(mode="json")),
+            lease_guard=lease_guard,
         )
         return spec.graph_id, spec.version
 
@@ -235,6 +239,19 @@ class Ledger(AgentStorageMixin):
 
     def get_run(self, run_id: str) -> RunRecord:
         return RunRecord.model_validate_json(self._get("runs", {"run_id": run_id}))
+
+    def run_events(self, run_id: str) -> tuple[EventRecord, ...]:
+        """Read the atomic event batch of one published run (without global scans)."""
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT events_content FROM runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+        if row is None:
+            raise DomainError("not_found", {"run_id": run_id})
+        return tuple(
+            EventRecord.model_validate({**value, "cursor": 0})
+            for value in json.loads(row[0])
+        )
 
     def append_evaluation(
         self, record: EvaluationRecord, *, lease_guard: LeaseGuard | None = None

@@ -1,4 +1,438 @@
 {
+  "BacktestJobRequest": {
+    "$defs": {
+      "BacktestSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "max_origins_per_partition": {
+            "default": 10,
+            "maximum": 50,
+            "minimum": 1,
+            "title": "Max Origins Per Partition",
+            "type": "integer"
+          },
+          "origin_offset_seconds": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Origin Offset Seconds",
+            "type": "integer"
+          }
+        },
+        "title": "BacktestSettings",
+        "type": "object"
+      },
+      "ForecastSelection": {
+        "additionalProperties": false,
+        "properties": {
+          "baseline_period": {
+            "default": 1,
+            "maximum": 10000,
+            "minimum": 1,
+            "title": "Baseline Period",
+            "type": "integer"
+          },
+          "horizon": {
+            "maximum": 366,
+            "minimum": 1,
+            "title": "Horizon",
+            "type": "integer"
+          },
+          "options": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "title": "Options",
+            "type": "object"
+          },
+          "provider": {
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "horizon"
+        ],
+        "title": "ForecastSelection",
+        "type": "object"
+      },
+      "JsonValue": {}
+    },
+    "additionalProperties": false,
+    "properties": {
+      "key": {
+        "minLength": 1,
+        "title": "Key",
+        "type": "string"
+      },
+      "kind": {
+        "const": "backtest",
+        "title": "Kind",
+        "type": "string"
+      },
+      "selection": {
+        "$ref": "#/$defs/ForecastSelection"
+      },
+      "settings": {
+        "$ref": "#/$defs/BacktestSettings"
+      },
+      "source_id": {
+        "minLength": 1,
+        "title": "Source Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "kind",
+      "key",
+      "source_id",
+      "selection"
+    ],
+    "title": "BacktestJobRequest",
+    "type": "object"
+  },
+  "BacktestReport": {
+    "$defs": {
+      "BacktestSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "max_origins_per_partition": {
+            "default": 10,
+            "maximum": 50,
+            "minimum": 1,
+            "title": "Max Origins Per Partition",
+            "type": "integer"
+          },
+          "origin_offset_seconds": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Origin Offset Seconds",
+            "type": "integer"
+          }
+        },
+        "title": "BacktestSettings",
+        "type": "object"
+      },
+      "Capabilities": {
+        "additionalProperties": false,
+        "properties": {
+          "provider_id": {
+            "minLength": 1,
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "provider_revision": {
+            "minLength": 1,
+            "title": "Provider Revision",
+            "type": "string"
+          },
+          "representations": {
+            "items": {
+              "enum": [
+                "point",
+                "marginal_quantiles",
+                "joint_paths"
+              ],
+              "type": "string"
+            },
+            "title": "Representations",
+            "type": "array"
+          },
+          "supports_known_future": {
+            "title": "Supports Known Future",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "provider_id",
+          "provider_revision",
+          "representations",
+          "supports_known_future"
+        ],
+        "title": "Capabilities",
+        "type": "object"
+      },
+      "ForecastSelection": {
+        "additionalProperties": false,
+        "properties": {
+          "baseline_period": {
+            "default": 1,
+            "maximum": 10000,
+            "minimum": 1,
+            "title": "Baseline Period",
+            "type": "integer"
+          },
+          "horizon": {
+            "maximum": 366,
+            "minimum": 1,
+            "title": "Horizon",
+            "type": "integer"
+          },
+          "options": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "title": "Options",
+            "type": "object"
+          },
+          "provider": {
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "horizon"
+        ],
+        "title": "ForecastSelection",
+        "type": "object"
+      },
+      "JsonValue": {},
+      "PartitionScore": {
+        "additionalProperties": false,
+        "properties": {
+          "baseline_mae": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Baseline Mae"
+          },
+          "evaluated": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Evaluated",
+            "type": "integer"
+          },
+          "excluded": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Excluded",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "insufficient": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Insufficient",
+            "type": "integer"
+          },
+          "matched_count": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Matched Count",
+            "type": "integer"
+          },
+          "model_mae": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Mae"
+          },
+          "partition": {
+            "enum": [
+              "exploration",
+              "selection",
+              "final"
+            ],
+            "title": "Partition",
+            "type": "string"
+          },
+          "planned": {
+            "minimum": 0,
+            "title": "Planned",
+            "type": "integer"
+          },
+          "relative_mae": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Relative Mae"
+          },
+          "relative_mae_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "no_matched_cells",
+                  "zero_baseline_mae",
+                  "ratio_unrepresentable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "no_matched_cells",
+            "title": "Relative Mae Reason"
+          }
+        },
+        "required": [
+          "partition",
+          "planned"
+        ],
+        "title": "PartitionScore",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "actuals_snapshot_id": {
+        "minLength": 1,
+        "title": "Actuals Snapshot Id",
+        "type": "string"
+      },
+      "archive_id": {
+        "minLength": 1,
+        "title": "Archive Id",
+        "type": "string"
+      },
+      "assumptions": {
+        "default": [],
+        "items": {
+          "type": "string"
+        },
+        "title": "Assumptions",
+        "type": "array"
+      },
+      "backtest_id": {
+        "minLength": 1,
+        "title": "Backtest Id",
+        "type": "string"
+      },
+      "captured_at": {
+        "format": "date-time",
+        "title": "Captured At",
+        "type": "string"
+      },
+      "frequency": {
+        "minLength": 1,
+        "title": "Frequency",
+        "type": "string"
+      },
+      "partitions": {
+        "items": {
+          "$ref": "#/$defs/PartitionScore"
+        },
+        "title": "Partitions",
+        "type": "array"
+      },
+      "plan_id": {
+        "minLength": 1,
+        "title": "Plan Id",
+        "type": "string"
+      },
+      "protocol_version": {
+        "const": "backtest-v1",
+        "default": "backtest-v1",
+        "title": "Protocol Version",
+        "type": "string"
+      },
+      "provider_contracts": {
+        "additionalProperties": {
+          "$ref": "#/$defs/Capabilities"
+        },
+        "propertyNames": {
+          "minLength": 1
+        },
+        "title": "Provider Contracts",
+        "type": "object"
+      },
+      "report_id": {
+        "default": "",
+        "title": "Report Id",
+        "type": "string"
+      },
+      "selection": {
+        "$ref": "#/$defs/ForecastSelection"
+      },
+      "settings": {
+        "$ref": "#/$defs/BacktestSettings"
+      },
+      "source_id": {
+        "minLength": 1,
+        "title": "Source Id",
+        "type": "string"
+      },
+      "source_revision": {
+        "minLength": 1,
+        "title": "Source Revision",
+        "type": "string"
+      },
+      "status": {
+        "enum": [
+          "completed",
+          "insufficient_evidence"
+        ],
+        "title": "Status",
+        "type": "string"
+      }
+    },
+    "required": [
+      "backtest_id",
+      "plan_id",
+      "archive_id",
+      "source_id",
+      "source_revision",
+      "captured_at",
+      "actuals_snapshot_id",
+      "selection",
+      "settings",
+      "provider_contracts",
+      "frequency",
+      "status",
+      "partitions"
+    ],
+    "title": "BacktestReport",
+    "type": "object"
+  },
+  "BacktestSettings": {
+    "additionalProperties": false,
+    "properties": {
+      "max_origins_per_partition": {
+        "default": 10,
+        "maximum": 50,
+        "minimum": 1,
+        "title": "Max Origins Per Partition",
+        "type": "integer"
+      },
+      "origin_offset_seconds": {
+        "default": 0,
+        "minimum": 0,
+        "title": "Origin Offset Seconds",
+        "type": "integer"
+      }
+    },
+    "title": "BacktestSettings",
+    "type": "object"
+  },
   "Candidate": {
     "$defs": {
       "CandidateCostEstimate": {
@@ -721,6 +1155,82 @@
       "dependencies"
     ],
     "title": "CompiledGraph",
+    "type": "object"
+  },
+  "ConfiguredRunJobRequest": {
+    "$defs": {
+      "ForecastSelection": {
+        "additionalProperties": false,
+        "properties": {
+          "baseline_period": {
+            "default": 1,
+            "maximum": 10000,
+            "minimum": 1,
+            "title": "Baseline Period",
+            "type": "integer"
+          },
+          "horizon": {
+            "maximum": 366,
+            "minimum": 1,
+            "title": "Horizon",
+            "type": "integer"
+          },
+          "options": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "title": "Options",
+            "type": "object"
+          },
+          "provider": {
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "horizon"
+        ],
+        "title": "ForecastSelection",
+        "type": "object"
+      },
+      "JsonValue": {}
+    },
+    "additionalProperties": false,
+    "properties": {
+      "key": {
+        "minLength": 1,
+        "title": "Key",
+        "type": "string"
+      },
+      "kind": {
+        "const": "configured_run",
+        "title": "Kind",
+        "type": "string"
+      },
+      "selection": {
+        "$ref": "#/$defs/ForecastSelection"
+      },
+      "snapshot_id": {
+        "minLength": 1,
+        "title": "Snapshot Id",
+        "type": "string"
+      },
+      "source_id": {
+        "minLength": 1,
+        "title": "Source Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "kind",
+      "key",
+      "source_id",
+      "snapshot_id",
+      "selection"
+    ],
+    "title": "ConfiguredRunJobRequest",
     "type": "object"
   },
   "Contract": {
@@ -1466,6 +1976,45 @@
     "title": "ForecastResult",
     "type": "object"
   },
+  "ForecastSelection": {
+    "$defs": {
+      "JsonValue": {}
+    },
+    "additionalProperties": false,
+    "properties": {
+      "baseline_period": {
+        "default": 1,
+        "maximum": 10000,
+        "minimum": 1,
+        "title": "Baseline Period",
+        "type": "integer"
+      },
+      "horizon": {
+        "maximum": 366,
+        "minimum": 1,
+        "title": "Horizon",
+        "type": "integer"
+      },
+      "options": {
+        "additionalProperties": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "title": "Options",
+        "type": "object"
+      },
+      "provider": {
+        "minLength": 1,
+        "title": "Provider",
+        "type": "string"
+      }
+    },
+    "required": [
+      "provider",
+      "horizon"
+    ],
+    "title": "ForecastSelection",
+    "type": "object"
+  },
   "GraphSpec": {
     "$defs": {
       "Node": {
@@ -1751,6 +2300,455 @@
       "units_rule"
     ],
     "title": "OperatorContract",
+    "type": "object"
+  },
+  "OriginOutcome": {
+    "additionalProperties": false,
+    "properties": {
+      "backtest_id": {
+        "minLength": 1,
+        "title": "Backtest Id",
+        "type": "string"
+      },
+      "baseline_mae": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Baseline Mae"
+      },
+      "evaluation_id": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Evaluation Id"
+      },
+      "issuance_time": {
+        "format": "date-time",
+        "title": "Issuance Time",
+        "type": "string"
+      },
+      "matched_count": {
+        "default": 0,
+        "minimum": 0,
+        "title": "Matched Count",
+        "type": "integer"
+      },
+      "model_mae": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Model Mae"
+      },
+      "nominal_origin": {
+        "format": "date-time",
+        "title": "Nominal Origin",
+        "type": "string"
+      },
+      "ordinal": {
+        "minimum": 0,
+        "title": "Ordinal",
+        "type": "integer"
+      },
+      "partition": {
+        "enum": [
+          "exploration",
+          "selection",
+          "final"
+        ],
+        "title": "Partition",
+        "type": "string"
+      },
+      "plan_id": {
+        "minLength": 1,
+        "title": "Plan Id",
+        "type": "string"
+      },
+      "reason_code": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Reason Code"
+      },
+      "run_id": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Run Id"
+      },
+      "status": {
+        "enum": [
+          "evaluated",
+          "excluded",
+          "failed",
+          "insufficient_evidence"
+        ],
+        "title": "Status",
+        "type": "string"
+      },
+      "target_end": {
+        "format": "date-time",
+        "title": "Target End",
+        "type": "string"
+      },
+      "target_start": {
+        "format": "date-time",
+        "title": "Target Start",
+        "type": "string"
+      }
+    },
+    "required": [
+      "ordinal",
+      "partition",
+      "nominal_origin",
+      "issuance_time",
+      "target_start",
+      "target_end",
+      "backtest_id",
+      "plan_id",
+      "status"
+    ],
+    "title": "OriginOutcome",
+    "type": "object"
+  },
+  "OriginPage": {
+    "$defs": {
+      "OriginOutcome": {
+        "additionalProperties": false,
+        "properties": {
+          "backtest_id": {
+            "minLength": 1,
+            "title": "Backtest Id",
+            "type": "string"
+          },
+          "baseline_mae": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Baseline Mae"
+          },
+          "evaluation_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Evaluation Id"
+          },
+          "issuance_time": {
+            "format": "date-time",
+            "title": "Issuance Time",
+            "type": "string"
+          },
+          "matched_count": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Matched Count",
+            "type": "integer"
+          },
+          "model_mae": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Mae"
+          },
+          "nominal_origin": {
+            "format": "date-time",
+            "title": "Nominal Origin",
+            "type": "string"
+          },
+          "ordinal": {
+            "minimum": 0,
+            "title": "Ordinal",
+            "type": "integer"
+          },
+          "partition": {
+            "enum": [
+              "exploration",
+              "selection",
+              "final"
+            ],
+            "title": "Partition",
+            "type": "string"
+          },
+          "plan_id": {
+            "minLength": 1,
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason Code"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          },
+          "status": {
+            "enum": [
+              "evaluated",
+              "excluded",
+              "failed",
+              "insufficient_evidence"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "target_end": {
+            "format": "date-time",
+            "title": "Target End",
+            "type": "string"
+          },
+          "target_start": {
+            "format": "date-time",
+            "title": "Target Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ordinal",
+          "partition",
+          "nominal_origin",
+          "issuance_time",
+          "target_start",
+          "target_end",
+          "backtest_id",
+          "plan_id",
+          "status"
+        ],
+        "title": "OriginOutcome",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "backtest_id": {
+        "minLength": 1,
+        "title": "Backtest Id",
+        "type": "string"
+      },
+      "limit": {
+        "maximum": 50,
+        "minimum": 1,
+        "title": "Limit",
+        "type": "integer"
+      },
+      "next_offset": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Next Offset"
+      },
+      "offset": {
+        "minimum": 0,
+        "title": "Offset",
+        "type": "integer"
+      },
+      "origins": {
+        "items": {
+          "$ref": "#/$defs/OriginOutcome"
+        },
+        "maxItems": 50,
+        "title": "Origins",
+        "type": "array"
+      }
+    },
+    "required": [
+      "backtest_id",
+      "origins",
+      "offset",
+      "limit"
+    ],
+    "title": "OriginPage",
+    "type": "object"
+  },
+  "PartitionScore": {
+    "additionalProperties": false,
+    "properties": {
+      "baseline_mae": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Baseline Mae"
+      },
+      "evaluated": {
+        "default": 0,
+        "minimum": 0,
+        "title": "Evaluated",
+        "type": "integer"
+      },
+      "excluded": {
+        "default": 0,
+        "minimum": 0,
+        "title": "Excluded",
+        "type": "integer"
+      },
+      "failed": {
+        "default": 0,
+        "minimum": 0,
+        "title": "Failed",
+        "type": "integer"
+      },
+      "insufficient": {
+        "default": 0,
+        "minimum": 0,
+        "title": "Insufficient",
+        "type": "integer"
+      },
+      "matched_count": {
+        "default": 0,
+        "minimum": 0,
+        "title": "Matched Count",
+        "type": "integer"
+      },
+      "model_mae": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Model Mae"
+      },
+      "partition": {
+        "enum": [
+          "exploration",
+          "selection",
+          "final"
+        ],
+        "title": "Partition",
+        "type": "string"
+      },
+      "planned": {
+        "minimum": 0,
+        "title": "Planned",
+        "type": "integer"
+      },
+      "relative_mae": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Relative Mae"
+      },
+      "relative_mae_reason": {
+        "anyOf": [
+          {
+            "enum": [
+              "no_matched_cells",
+              "zero_baseline_mae",
+              "ratio_unrepresentable"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "no_matched_cells",
+        "title": "Relative Mae Reason"
+      }
+    },
+    "required": [
+      "partition",
+      "planned"
+    ],
+    "title": "PartitionScore",
     "type": "object"
   },
   "ResumeJobRequest": {
