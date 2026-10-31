@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, "codex/**"]
   push:
     branches: [main]
   workflow_dispatch:
@@ -25,21 +25,21 @@ jobs:
           version: "0.12.3"
           python-version: ${{ matrix.python-version }}
       - name: Install locked dependencies
-        run: uv sync --locked --extra dev
+        run: uv sync --locked --extra dev --extra mcp
       - name: Lint Python
-        run: uv run --locked ruff check src tests apps/agent/egress-proxy/proxy.py
+        run: uv run --locked --extra dev --extra mcp ruff check src tests apps/agent/egress-proxy/proxy.py
       - name: Check Python formatting
-        run: uv run --locked ruff format --check src tests apps/agent/egress-proxy/proxy.py
+        run: uv run --locked --extra dev --extra mcp ruff format --check src tests apps/agent/egress-proxy/proxy.py
       - name: Check exported contract drift
-        run: uv run --locked python scripts/export_contracts.py contracts/v1 --check
+        run: uv run --locked --extra dev --extra mcp python scripts/export_contracts.py contracts/v1 --check
       - name: Check exported console contract drift
-        run: uv run --locked python scripts/export_contracts.py apps/console/src/api --check
+        run: uv run --locked --extra dev --extra mcp python scripts/export_contracts.py apps/console/src/api --check
       - name: Run tests
-        run: uv run --locked pytest -q
+        run: uv run --locked --extra dev --extra mcp pytest -q
       - name: Build wheel and source distribution
         run: uv build
       - name: Smoke-test the installed wheel outside the checkout
-        run: uv run --locked python scripts/check_release.py --dist dist
+        run: uv run --locked --extra dev --extra mcp python scripts/check_release.py --dist dist
 
   agent:
     name: Agent package (Node 24)

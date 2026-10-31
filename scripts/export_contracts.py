@@ -8,6 +8,12 @@ from tempfile import TemporaryDirectory
 
 from forecast_anything import contracts
 from forecast_anything.api.app import create_app
+from forecast_anything.backtesting.contracts import (
+    BacktestReport,
+    OriginOutcome,
+    OriginPage,
+    PartitionScore,
+)
 from forecast_anything.operators import register_builtin_operators
 from forecast_anything.providers.baseline import SeasonalNaiveProvider
 from forecast_anything.runtime import Runtime
@@ -39,6 +45,10 @@ def export_contracts(output: Path) -> None:
             if issubclass(model, contracts.Contract)
             and model.__module__ == contracts.__name__
         }
+        schemas.update(
+            (model.__name__, model.model_json_schema(mode="serialization"))
+            for model in (BacktestReport, OriginOutcome, OriginPage, PartitionScore)
+        )
         output.mkdir(parents=True, exist_ok=True)
         openapi = _normalize_openapi(app.openapi())
         for name, value in (("schemas.json", schemas), ("openapi.json", openapi)):

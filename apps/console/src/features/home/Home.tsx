@@ -69,7 +69,7 @@ export function Home({ client, onRunReady, reloadKey = 0, active = true }: Props
     <div className="home-secondary">
       <section className="recent-forecasts" aria-labelledby="recent-title"><div className="section-heading"><h2 id="recent-title">Previsioni recenti</h2><a href="#observatory">Osservatorio <span aria-hidden="true">↗</span></a></div>
         {!client ? <p className="empty-copy">Le previsioni registrate nel workspace compariranno qui.</p> : historyError ? <div><p role="alert">Cronologia non disponibile: {historyError}</p><button className="text-button" onClick={() => setRetry((value) => value + 1)}>Riprova cronologia</button></div> : runs === undefined ? <p role="status">Caricamento della cronologia…</p> : runs.length === 0 ? <p className="empty-copy">Nessuna previsione registrata.</p> : <ul className="recent-run-list">{runs.map((run) => {
-          const forecast = run.results.forecast ?? Object.values(run.results)[0];
+          const forecast = run.results.forecast ?? run.results.model ?? Object.values(run.results)[0];
           return <li key={run.run_id}><button className="run-row" data-run-id={run.run_id} onClick={() => onRunReady(run.run_id)}><span><strong>{forecast?.series_ids.join(", ") || run.run_id}</strong><span className="muted">{formatUtc(run.as_of)} · {run.scenario_id ? "Scenario" : "Valutazioni nel dettaglio"}</span></span><span className="run-row-value">{forecast?.point?.[0]?.[0] ?? "—"} <small>{forecast?.units[0]}</small><span aria-hidden="true"> ↗</span></span></button></li>;
         })}</ul>}
       </section>

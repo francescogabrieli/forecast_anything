@@ -8,23 +8,27 @@ Questa roadmap ordina risultati e dipendenze, senza assegnare date. Non è un el
 
 [Specifica approvata](superpowers/specs/2026-10-24-forecast-anything-design.md). Il prodotto è un osservatorio predittivo continuo, generale e open source, basato su un Future Graph. Scopre domande candidate, le verifica e mantiene prospettive componibili. Timestral e agenti sono componenti; il runtime conserva il significato delle operazioni e le evidenze.
 
+## Prima release pubblicabile (30 ottobre 2026)
+
+Il proprietario ha confermato un prodotto installabile e usabile dal proprio assistente, con sito pubblico curato e console locale opzionale. Il lancio richiede il ciclo completo installazione → fonti → previsione → verifica → domande ricorrenti → spiegazione degli aggiornamenti. I [criteri di rilascio e gap verificati](first-release.md) distinguono le prove già disponibili dai gate ancora aperti. Il [piano per previsioni configurabili e backtesting](superpowers/plans/2026-10-30-forecast-evidence.md) è implementato localmente e in verifica: [evidenze, limiti e gate ancora aperti](research/forecast-evidence.md).
+
 ## Direzione corrente — MCP-first (29 ottobre 2026)
 
 Il proprietario ha scelto l’approccio di REA: **MCP come ingresso principale dal proprio assistente, sito per presentazione/onboarding e console opzionale per grafici ed evidenze**. La [specifica MCP-first](superpowers/specs/2026-10-29-mcp-first-product-design.md) aggiorna il canale e le priorità; conserva infrastruttura OSS, Future Graph, previsioni verificabili e scoperta autonoma di domande.
 
-Il server MCP e il sito dedicato non sono implementati. Il frontend esistente resta una console di supporto. Upload dal browser e chat proprietaria non precedono più il percorso dall’assistente. L’agente Eve resta opzionale e distinto dal MCP; il percorso iniziale non richiede Eve, Postgres o una chiave LLM del progetto.
+L’adattatore MCP locale stdio è implementato e verificato con il client SDK Python ufficiale `mcp==2.3.0`, API e worker indipendente, anche tramite wheel installata fuori dal checkout. Il sito dedicato e la validazione con host desktop restano da realizzare. Il frontend esistente resta una console di supporto. Upload dal browser e chat proprietaria non precedono più il percorso dall’assistente. L’agente Eve resta opzionale e distinto dal MCP; il percorso iniziale non richiede Eve, Postgres o una chiave LLM del progetto.
 
 ### Prossime consegne, in ordine
 
 | Priorità | Risultato da chiudere | Criterio di completamento |
 | --- | --- | --- |
-| 1. Integrazione MCP verticale | Collegare fonte supportata, avviare forecast, leggere job/run, Future Graph e prove dal proprio assistente | Un client MCP reale verificato sul runtime/worker, baseline senza pesi, retry idempotenti e riconnessione allo stesso run |
+| 1. Integrazione MCP verticale — verificata nel checkout | 15 strumenti stdio: CSV, forecast da candidato, letture immutabili e valutazione singola | SDK ufficiale, API/worker reali, baseline senza pesi, disconnessione e replay della stessa richiesta/chiave; wheel installata fuori dal checkout. Host desktop ancora da validare. |
 | 2. Verifica delle previsioni | Configurazione supportata e backtesting su più origini accessibili tramite strumenti | Origini point-in-time, confronto baseline, split separati e metriche persistite; esiti non maturi e limiti multi-fonte dichiarati |
 | 3. Setup e sito | Installazione locale riproducibile, collegamento al client, esempi e documentazione; console opzionale | Ambiente pulito e percorso completo dal setup a una previsione verificabile; solo client provati nella matrice di compatibilità |
 | 4. Continuità e scoperta | Consultare aggiornamenti, proporre/verificare domande e sorvegliarle | Worker indipendente dalla chat, recovery, cursori durevoli, budget e promozione con evidenze |
 | 5. Distribuzione e adozione | Pacchetti, sito e materiali coerenti con ciò che funziona | Artifact verificati e destinazioni approvate prima della pubblicazione |
 
-Il nucleo già costruito viene riusato. Il backtest multi-origine resta lavoro di prodotto/core, non si ottiene aggiungendo un wrapper MCP. La chiusura del client non cancella i job; elaborazione e watch richiedono runtime/worker attivi. La prova con cinque persone resta sospesa, senza bloccare queste consegne o dichiarare usabilità validata.
+Il nucleo già costruito viene riusato. Il backtest multi-origine è implementato nel core con cattura congelata, runner e job durevoli; MCP invia richieste e legge evidenze. Il collegamento dei report generici alla policy discovery/watch resta successivo. La chiusura del client non cancella i job; elaborazione e watch richiedono runtime/worker attivi. La prova con cinque persone resta sospesa, senza bloccare queste consegne o dichiarare usabilità validata.
 
 ## Scelte tecniche proposte dal builder
 
@@ -60,7 +64,7 @@ Queste sono decisioni del piano, non preferenze già espresse dall’utente:
 3. [Osservatorio autonomo e agenti](superpowers/plans/2026-10-24-03-observatory-and-agents.md): sei task; termina con un servizio headless sorvegliabile via API.
 4. [Esperienza, packaging e pubblicazione](superpowers/plans/2026-10-24-04-experience-and-release.md): quattro task; termina con una release candidata utilizzabile.
 
-I piani elencati documentano l’esecuzione precedente e i relativi contratti. Dal 29 ottobre le prossime consegne seguono l’ordine MCP-first sopra; il nuovo adattatore richiede un piano esecutivo dedicato. Il lavoro indipendente può essere parallelizzato soltanto dopo aver fissato le interfacce condivise.
+I piani elencati documentano l’esecuzione precedente e i relativi contratti. Dal 29 ottobre le prossime consegne seguono l’ordine MCP-first sopra; l’adattatore verticale è descritto nel [piano MCP](superpowers/plans/2026-10-29-mcp-vertical-slice.md) e nella [guida operativa](implementation/mcp.md). Il lavoro indipendente può essere parallelizzato soltanto dopo aver fissato le interfacce condivise.
 
 ## Controlli di qualità del repository
 
@@ -166,7 +170,9 @@ La [verifica della candidata tecnica del 27 ottobre](research/release-candidate-
 
 Il 29 ottobre 2026 il [frontend di prodotto](superpowers/specs/2026-10-27-product-frontend-design.md), approvato dal proprietario, sostituisce la console su pagina unica: Home con fonti e previsioni registrate, Fonti con mappatura guidata, Osservatorio con risultato e Future Graph prima della cronologia tecnica, e Workspace per la connessione al core. Il progetto visivo segue TasteSkill; grafici ed evidenze consumano gli stessi contratti del runtime. Lo storico del grafico richiede la fonte risolta dal grafo e dal binding registrato nel run. Le metriche mostrate sono valutazioni già persistite, non un nuovo backtesting interattivo.
 
-La priorità frontend qui descritta è stata aggiornata dalla decisione MCP-first del 29 ottobre: il prossimo intervento è il piano e l’integrazione verticale MCP sopra il runtime esistente, poi previsione configurabile e backtesting su più origini tramite strumenti, setup/sito e scoperta continua. L’upload CSV dal browser è differito. Demo e pubblicazione accompagnano queste capacità senza sostituirle.
+La priorità frontend qui descritta è stata aggiornata dalla decisione MCP-first del 29 ottobre: l’integrazione verticale MCP sopra il runtime esistente è verificata con il client SDK ufficiale, inclusi permessi delle fonti dopo riconnessione, esiti osservati e wheel installata; previsione configurabile e backtesting su più origini tramite strumenti sono ora implementati localmente; restano host desktop, setup/sito e scoperta continua. L’upload CSV dal browser è differito. Demo e pubblicazione accompagnano queste capacità senza sostituirle.
+
+La consegna MCP del 30 ottobre usa CSV locali con root approvate e allowlist degli ID per profile/refresh dopo riavvio. Risposte degli strumenti limitate a 64 KiB e richieste/risposte upstream a 1 MiB: la paginazione non elimina questi limiti. La registrazione HTTP via MCP, i controlli autonomi del ciclo di vita e il setup/sito guidato restano successivi. Il successivo incremento locale porta il catalogo a 19 strumenti con forecast configurabili e backtest CSV multi-origine congelati; i report non qualificano automaticamente le watch. API, worker e MCP sono processi separati; il percorso baseline non richiede chiavi LLM.
 
 ## Fonti tecniche per le scelte del piano
 

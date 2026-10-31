@@ -10,6 +10,8 @@
 
 **Spec:** [MCP-first product direction](../specs/2026-10-29-mcp-first-product-design.md), direction approved by the owner on 2026-10-29. This plan implements delivery step 1 and the existing single-run evaluation interface, not the subsequent multi-origin backtesting, public site or autonomy milestones.
 
+**Delivery update (owner, 2026-10-30):** continue implementation locally without any further commits or pushes. Reviews use working-tree snapshots including untracked files. No new PR is created. Existing commits predate this instruction.
+
 ## Global Constraints
 
 - The runtime remains the authority for source semantics, snapshots, graphs, computation, evidence, budgets and policy.
@@ -42,6 +44,7 @@
 - `tests/integration/test_mcp_stdio.py`: real SDK client, MCP subprocess, API and independent worker.
 - `tests/integration/test_packaged_mcp.py`: installed-wheel stdio smoke outside checkout.
 - `docs/implementation/mcp.md`: exact tool surface, configuration, setup and limits.
+- `.github/workflows/ci.yml`: install/test the optional MCP extra in Python checks; run checks for stacked PRs too.
 - `README.md`, `docs/quickstart.md`, `docs/capabilities.md`, `docs/roadmap.md`, `CONTRIBUTING.md`: current capability and verification updates.
 
 ## Task 1: Authenticated, bounded core adapter
@@ -55,13 +58,13 @@
 - `CoreRequestError(code: str)` carries a stable safe public code; never stores raw bodies for rendering.
 - `McpConfig.validate_csv(spec: SourceSpec) -> SourceSpec` accepts only CSV with no `secret_ref`, resolved existing files contained in a configured root, with symlink escape rejected. MCP and API must use the same local filesystem namespace; this is a local workspace boundary, not OS-level sandboxing.
 
-- [ ] Write failing tests for missing token, malformed roots, non-loopback host, userinfo/query/fragment/base path in API URL, root traversal/symlink escape, non-CSV kind and secret references. Permit only explicit `127.0.0.1` or `[::1]` loopback origins; no hostnames/DNS resolution or redirects.
-- [ ] Run `uv run --locked pytest tests/unit/test_mcp_client.py -q` and record failures before implementation.
-- [ ] Implement configuration and source guards. Add extra `mcp = ["mcp>=2,<3", "httpx>=0.27,<1"]`, resolve exact versions into the lock and use the optional extra when running MCP tests. Keep base dependencies unchanged.
-- [ ] Write failing HTTP tests using `httpx.MockTransport`: Authorization from configuration only, `trust_env=False`, `follow_redirects=False`, 15-second request timeout, 1 MiB maximum response bytes, 1 MiB maximum serialized request body, safe 401/404/409/422/network/invalid-response/too-large codes. Ignore raw upstream error bodies; never echo locations, headers or submitted data. One attempt per mutating request.
-- [ ] Implement bounded streaming reads, JSON validation and percent-encoded single identifiers (never concatenate unvalidated agent strings as URLs). All requests use fixed `/v1/...` routes; no generic request tool is exposed.
-- [ ] Run `uv run --locked --extra mcp pytest tests/unit/test_mcp_client.py -q` and Ruff for the touched modules; require all pass.
-- [ ] Commit the adapter with its tests and lock.
+- [x] Write failing tests for missing token, malformed roots, non-loopback host, userinfo/query/fragment/base path in API URL, root traversal/symlink escape, non-CSV kind and secret references. Permit only explicit `127.0.0.1` or `[::1]` loopback origins; no hostnames/DNS resolution or redirects.
+- [x] Run `uv run --locked pytest tests/unit/test_mcp_client.py -q` and record failures before implementation.
+- [x] Implement configuration and source guards. Add extra `mcp = ["mcp>=2,<3", "httpx>=0.27,<1"]`, resolve exact versions into the lock and use the optional extra when running MCP tests. Keep base dependencies unchanged.
+- [x] Write failing HTTP tests using `httpx.MockTransport`: Authorization from configuration only, `trust_env=False`, `follow_redirects=False`, 15-second request timeout, 1 MiB maximum response bytes, 1 MiB maximum serialized request body, safe 401/404/409/422/network/invalid-response/too-large codes. Ignore raw upstream error bodies; never echo locations, headers or submitted data. One attempt per mutating request.
+- [x] Implement bounded streaming reads, JSON validation and percent-encoded single identifiers (never concatenate unvalidated agent strings as URLs). All requests use fixed `/v1/...` routes; no generic request tool is exposed.
+- [x] Run `uv run --locked --extra mcp pytest tests/unit/test_mcp_client.py -q` and Ruff for the touched modules; require all pass.
+- [x] Commit the adapter with its tests and lock.
 
 ## Task 2: Typed stdio tools and CLI
 
@@ -93,12 +96,12 @@ The tool layer returns a uniform typed envelope: success has `ok=true, data`; er
 
 Existing source operations need an operator boundary too: add an explicit `FORECAST_ANYTHING_MCP_SOURCE_IDS` JSON string-array allowlist (default `[]`) for profile/refresh of pre-registered sources. Sources successfully registered through this process are also allowed for that process; after restart an operator must include their IDs in the allowlist. Listing sources exposes only API-safe metadata. Do not resolve registered locations through a new API endpoint. Client knowledge of a source ID alone must not grant permission to refresh a previously configured network/private source. Config validation belongs in Task 1's module with tests here.
 
-- [ ] Write failing tests for tool discovery, JSON input/output schemas, read-only vs mutating annotations and protocol stdout discipline.
-- [ ] Write failing cases for source allowlist enforcement, unsupported/non-executable candidate, explicit snapshot bindings/as-of, unchanged idempotency keys, no invented evaluation fields, encoded identifiers, output bounds and sanitized errors including validation failure.
-- [ ] Run the focused tests and record the expected failures.
-- [ ] Implement catalog and lazy CLI subcommand `forecast-anything mcp`; use official SDK v2 stdio transport, async client lifecycle and typed schemas. Declare no network access through MCP beyond the configured loopback API.
-- [ ] Run focused unit tests plus `tests/integration/test_cli.py`; verify the baseline CLI still works with the SDK import intentionally unavailable.
-- [ ] Commit the tool layer and tests.
+- [x] Write failing tests for tool discovery, JSON input/output schemas, read-only vs mutating annotations and protocol stdout discipline.
+- [x] Write failing cases for source allowlist enforcement, unsupported/non-executable candidate, explicit snapshot bindings/as-of, unchanged idempotency keys, no invented evaluation fields, encoded identifiers, output bounds and sanitized errors including validation failure.
+- [x] Run the focused tests and record the expected failures.
+- [x] Implement catalog and lazy CLI subcommand `forecast-anything mcp`; use official SDK v2 stdio transport, async client lifecycle and typed schemas. Declare no network access through MCP beyond the configured loopback API.
+- [x] Run focused unit tests plus `tests/integration/test_cli.py`; verify the baseline CLI still works with the SDK import intentionally unavailable.
+- [x] Leave the tool layer and tests uncommitted for working-tree review, per owner instruction.
 
 ## Task 3: Real protocol journey, installable artifact and documentation
 
@@ -106,16 +109,17 @@ Existing source operations need an operator boundary too: add an explicit `FOREC
 
 **Interfaces:** official SDK `Client` connected with `StdioServerParameters` to `forecast-anything mcp`. The Python SDK client is the protocol reference, not an assertion that a desktop assistant was tested. Fixtures launch loopback API and worker in separate processes with a temporary local ledger, root and fixed synthetic CSV dates.
 
-- [ ] Write a failing stdio journey: initialize/negotiate, discover tools, register explicit CSV mapping under an allowed root, poll discovery job, obtain candidate and snapshot IDs, inspect snapshot origin, submit a one-step baseline forecast with a stable key.
-- [ ] Extend it to close MCP after acceptance, wait for the independent worker, reconnect with the explicit source allowlist, read job/run/graph/snapshot, repeat the original submission and assert same job/run and immutable result. Include a lost-response test at the HTTP boundary in Task 1 and replay here.
-- [ ] Extend the same registered history CSV with availability-aware observed outcomes, refresh that source with a new stable key and read the new actuals snapshot, submit evaluation and read persisted metrics. Preserve its catalog identity: an unrelated actuals source cannot authorize scoring. Assert assumptions cannot count as observed outcomes and unsupported multi-history scoring stays rejected. This tests single-run evaluation, not multi-origin backtesting.
-- [ ] Exercise protocol errors: unauthorized API, forbidden CSV, bad IDs, output limits and invalid mapping; assert no token, private location or raw source instruction appears in tool errors or stderr. Source content remains untrusted data, never an operational command.
-- [ ] Run `uv run --locked --extra dev --extra mcp pytest tests/integration/test_mcp_stdio.py -q`; require process timeouts and teardown so failures do not leave services running.
-- [ ] Add installed-wheel smoke outside checkout: build wheel, install its MCP extra using locked/pinned artifact dependencies, run official client tool discovery and real baseline journey through the installed executable. Assert no accidental checkout import or bundled credentials/weights.
-- [ ] Document three explicit processes (API, worker, MCP launched by host), environment/token configuration, allowed roots/source IDs, shared filesystem requirement, generic stdio launch configuration, tested SDK version, complete example request and actual measured result. Do not publish desktop-specific compatibility without exercising that host; do not call SDK-only tests a live-model demonstration.
-- [ ] Update README/capability matrix/quickstart/roadmap from planned to implemented only for verified operations. Keep multi-origin backtesting, HTTP registration through MCP, autonomous lifecycle controls, full site/setup wizard and desktop-host validation pending. Explain the upstream list/response bounds and reconnect source allowlist.
-- [ ] Run `uv run --locked --extra dev --extra mcp ruff check src tests`, `ruff format --check src tests`, the full Python suite, generated-contract `--check` and `uv build`. Expected: all ordinary tests pass, guarded real-provider tests retain explicit skips, existing API schemas unchanged. No frontend changes: no extra browser build is necessary unless a regression calls for it.
-- [ ] Commit delivery and evidence. Request independent whole-branch review; resolve material findings, then push/open a PR under the owner's existing authorization. Do not merge or publish packages.
+- [x] Write a failing stdio journey: initialize/negotiate, discover tools, register explicit CSV mapping under an allowed root, poll discovery job, obtain candidate and snapshot IDs, inspect snapshot origin, submit a one-step baseline forecast with a stable key.
+- [x] Extend it to close MCP after acceptance, wait for the independent worker, reconnect with the explicit source allowlist, read job/run/graph/snapshot, repeat the original submission and assert same job/run and immutable result. Include a lost-response test at the HTTP boundary in Task 1 and replay here.
+- [x] Extend the same registered history CSV with availability-aware observed outcomes, refresh that source with a new stable key and read the new actuals snapshot, submit evaluation and read persisted metrics. Preserve its catalog identity: an unrelated actuals source cannot authorize scoring. Assert assumptions cannot count as observed outcomes and unsupported multi-history scoring stays rejected. This tests single-run evaluation, not multi-origin backtesting.
+- [x] Exercise protocol errors: unauthorized API, forbidden CSV, bad IDs, output limits and invalid mapping; assert no token, private location or raw source instruction appears in tool errors or stderr. Source content remains untrusted data, never an operational command.
+- [x] Run `uv run --locked --extra dev --extra mcp pytest tests/integration/test_mcp_stdio.py -q`; require process timeouts and teardown so failures do not leave services running.
+- [x] Add installed-wheel smoke outside checkout: build wheel, install its MCP extra using locked/pinned artifact dependencies, run official client tool discovery and real baseline journey through the installed executable. Assert no accidental checkout import or bundled credentials/weights.
+- [x] Document three explicit processes (API, worker, MCP launched by host), environment/token configuration, allowed roots/source IDs, shared filesystem requirement, generic stdio launch configuration, tested SDK version, complete example request and actual measured result. Do not publish desktop-specific compatibility without exercising that host; do not call SDK-only tests a live-model demonstration.
+- [x] Update README/capability matrix/quickstart/roadmap from planned to implemented only for verified operations. Keep multi-origin backtesting, HTTP registration through MCP, autonomous lifecycle controls, full site/setup wizard and desktop-host validation pending. Explain the upstream list/response bounds and reconnect source allowlist.
+- [x] Update Python CI checks to install and retain `--extra dev --extra mcp` for validation; allow pull requests against `main` and `codex/**` so the stacked MCP PR receives checks. MCP-dependent test modules must skip explicitly when the optional extra is absent, while CLI missing-extra behavior remains tested.
+- [x] Run `uv run --locked --extra dev --extra mcp ruff check src tests`, `ruff format --check src tests`, the full Python suite, generated-contract `--check` and `uv build`. Expected: all ordinary tests pass, guarded real-provider tests retain explicit skips, existing API schemas unchanged. No frontend changes: no extra browser build is necessary unless a regression calls for it.
+- [x] Leave delivery and evidence uncommitted. Request independent working-tree review; resolve material findings. Do not commit, push, open a PR, merge or publish, per owner instruction.
 
 ## Execution and self-review
 
@@ -128,3 +132,7 @@ Coverage: all spec step-1 capabilities map to Tasks 1–3; existing evaluation i
 - [Official MCP Python SDK](https://py.sdk.modelcontextprotocol.io/): current stable v2 line, server/tool and client interfaces.
 - [SDK v2 changes](https://py.sdk.modelcontextprotocol.io/whats-new/): client and stdio configuration changes; do not copy legacy v1 examples into v2 code.
 - Existing [API contracts](../../implementation/api.md) and [capability boundaries](../../capabilities.md) define what the adapter may actually execute.
+
+## Local completion — 2026-10-30
+
+All three task reviews and the final scoped re-review passed. Final verification: 665 Python tests passed, 1 guarded provider test skipped; real stdio and installed-wheel acceptance passed; Ruff, generated API contracts and build passed. Profile inspection is correctly advertised as mutating because the existing core can enqueue discovery; source-I/O descriptions acknowledge explicitly approved stored HTTP sources. Delivery remains uncommitted and unpushed per owner instruction. See [verification evidence](../../research/mcp-vertical-slice.md).

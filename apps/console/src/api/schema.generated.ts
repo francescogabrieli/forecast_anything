@@ -1,5 +1,244 @@
 // Generated from src/api/schemas.json. Run npm run generate:types.
 
+export namespace ForecastSelectionGenerated {
+  export type BaselinePeriod = number;
+  export type Horizon = number;
+  export type JsonValue = unknown;
+  export type Provider = string;
+
+  export interface ForecastSelection {
+    baseline_period?: BaselinePeriod;
+    horizon: Horizon;
+    options?: Options;
+    provider: Provider;
+  }
+  export interface Options {
+    [k: string]: JsonValue;
+  }
+}
+export type ForecastSelection = ForecastSelectionGenerated.ForecastSelection;
+
+export namespace BacktestSettingsGenerated {
+  export type MaxOriginsPerPartition = number;
+  export type OriginOffsetSeconds = number;
+
+  export interface BacktestSettings {
+    max_origins_per_partition?: MaxOriginsPerPartition;
+    origin_offset_seconds?: OriginOffsetSeconds;
+  }
+}
+export type BacktestSettings = BacktestSettingsGenerated.BacktestSettings;
+
+export namespace BacktestReportGenerated {
+  export type ActualsSnapshotId = string;
+  export type ArchiveId = string;
+  export type Assumptions = string[];
+  export type BacktestId = string;
+  export type CapturedAt = string;
+  export type Frequency = string;
+  export type BaselineMae = number | null;
+  export type Evaluated = number;
+  export type Excluded = number;
+  export type Failed = number;
+  export type Insufficient = number;
+  export type MatchedCount = number;
+  export type ModelMae = number | null;
+  export type Partition = "exploration" | "selection" | "final";
+  export type Planned = number;
+  export type RelativeMae = number | null;
+  export type RelativeMaeReason = ("no_matched_cells" | "zero_baseline_mae" | "ratio_unrepresentable") | null;
+  export type Partitions = PartitionScore[];
+  export type PlanId = string;
+  export type ProtocolVersion = "backtest-v1";
+  export type ProviderId = string;
+  export type ProviderRevision = string;
+  export type Representations = ("point" | "marginal_quantiles" | "joint_paths")[];
+  export type SupportsKnownFuture = boolean;
+  export type ReportId = string;
+  export type BaselinePeriod = number;
+  export type Horizon = number;
+  export type JsonValue = unknown;
+  export type Provider = string;
+  export type MaxOriginsPerPartition = number;
+  export type OriginOffsetSeconds = number;
+  export type SourceId = string;
+  export type SourceRevision = string;
+  export type Status = "completed" | "insufficient_evidence";
+
+  export interface BacktestReport {
+    actuals_snapshot_id: ActualsSnapshotId;
+    archive_id: ArchiveId;
+    assumptions?: Assumptions;
+    backtest_id: BacktestId;
+    captured_at: CapturedAt;
+    frequency: Frequency;
+    partitions: Partitions;
+    plan_id: PlanId;
+    protocol_version?: ProtocolVersion;
+    provider_contracts: ProviderContracts;
+    report_id?: ReportId;
+    selection: ForecastSelection;
+    settings: BacktestSettings;
+    source_id: SourceId;
+    source_revision: SourceRevision;
+    status: Status;
+  }
+  export interface PartitionScore {
+    baseline_mae?: BaselineMae;
+    evaluated?: Evaluated;
+    excluded?: Excluded;
+    failed?: Failed;
+    insufficient?: Insufficient;
+    matched_count?: MatchedCount;
+    model_mae?: ModelMae;
+    partition: Partition;
+    planned: Planned;
+    relative_mae?: RelativeMae;
+    relative_mae_reason?: RelativeMaeReason;
+  }
+  export interface ProviderContracts {
+    [k: string]: Capabilities;
+  }
+  export interface Capabilities {
+    provider_id: ProviderId;
+    provider_revision: ProviderRevision;
+    representations: Representations;
+    supports_known_future: SupportsKnownFuture;
+  }
+  export interface ForecastSelection {
+    baseline_period?: BaselinePeriod;
+    horizon: Horizon;
+    options?: Options;
+    provider: Provider;
+  }
+  export interface Options {
+    [k: string]: JsonValue;
+  }
+  export interface BacktestSettings {
+    max_origins_per_partition?: MaxOriginsPerPartition;
+    origin_offset_seconds?: OriginOffsetSeconds;
+  }
+}
+export type BacktestReport = BacktestReportGenerated.BacktestReport;
+
+export namespace OriginOutcomeGenerated {
+  export type BacktestId = string;
+  export type BaselineMae = number | null;
+  export type EvaluationId = string | null;
+  export type IssuanceTime = string;
+  export type MatchedCount = number;
+  export type ModelMae = number | null;
+  export type NominalOrigin = string;
+  export type Ordinal = number;
+  export type Partition = "exploration" | "selection" | "final";
+  export type PlanId = string;
+  export type ReasonCode = string | null;
+  export type RunId = string | null;
+  export type Status = "evaluated" | "excluded" | "failed" | "insufficient_evidence";
+  export type TargetEnd = string;
+  export type TargetStart = string;
+
+  export interface OriginOutcome {
+    backtest_id: BacktestId;
+    baseline_mae?: BaselineMae;
+    evaluation_id?: EvaluationId;
+    issuance_time: IssuanceTime;
+    matched_count?: MatchedCount;
+    model_mae?: ModelMae;
+    nominal_origin: NominalOrigin;
+    ordinal: Ordinal;
+    partition: Partition;
+    plan_id: PlanId;
+    reason_code?: ReasonCode;
+    run_id?: RunId;
+    status: Status;
+    target_end: TargetEnd;
+    target_start: TargetStart;
+  }
+}
+export type OriginOutcome = OriginOutcomeGenerated.OriginOutcome;
+
+export namespace OriginPageGenerated {
+  export type BacktestId = string;
+  export type Limit = number;
+  export type NextOffset = number | null;
+  export type Offset = number;
+  export type BacktestId1 = string;
+  export type BaselineMae = number | null;
+  export type EvaluationId = string | null;
+  export type IssuanceTime = string;
+  export type MatchedCount = number;
+  export type ModelMae = number | null;
+  export type NominalOrigin = string;
+  export type Ordinal = number;
+  export type Partition = "exploration" | "selection" | "final";
+  export type PlanId = string;
+  export type ReasonCode = string | null;
+  export type RunId = string | null;
+  export type Status = "evaluated" | "excluded" | "failed" | "insufficient_evidence";
+  export type TargetEnd = string;
+  export type TargetStart = string;
+  /**
+   * @maxItems 50
+   */
+  export type Origins = OriginOutcome[];
+
+  export interface OriginPage {
+    backtest_id: BacktestId;
+    limit: Limit;
+    next_offset?: NextOffset;
+    offset: Offset;
+    origins: Origins;
+  }
+  export interface OriginOutcome {
+    backtest_id: BacktestId1;
+    baseline_mae?: BaselineMae;
+    evaluation_id?: EvaluationId;
+    issuance_time: IssuanceTime;
+    matched_count?: MatchedCount;
+    model_mae?: ModelMae;
+    nominal_origin: NominalOrigin;
+    ordinal: Ordinal;
+    partition: Partition;
+    plan_id: PlanId;
+    reason_code?: ReasonCode;
+    run_id?: RunId;
+    status: Status;
+    target_end: TargetEnd;
+    target_start: TargetStart;
+  }
+}
+export type OriginPage = OriginPageGenerated.OriginPage;
+
+export namespace PartitionScoreGenerated {
+  export type BaselineMae = number | null;
+  export type Evaluated = number;
+  export type Excluded = number;
+  export type Failed = number;
+  export type Insufficient = number;
+  export type MatchedCount = number;
+  export type ModelMae = number | null;
+  export type Partition = "exploration" | "selection" | "final";
+  export type Planned = number;
+  export type RelativeMae = number | null;
+  export type RelativeMaeReason = ("no_matched_cells" | "zero_baseline_mae" | "ratio_unrepresentable") | null;
+
+  export interface PartitionScore {
+    baseline_mae?: BaselineMae;
+    evaluated?: Evaluated;
+    excluded?: Excluded;
+    failed?: Failed;
+    insufficient?: Insufficient;
+    matched_count?: MatchedCount;
+    model_mae?: ModelMae;
+    partition: Partition;
+    planned: Planned;
+    relative_mae?: RelativeMae;
+    relative_mae_reason?: RelativeMaeReason;
+  }
+}
+export type PartitionScore = PartitionScoreGenerated.PartitionScore;
+
 export namespace SourceFieldGenerated {
   export type DataType = "string" | "integer" | "number" | "boolean" | "datetime" | "null" | "mixed";
   export type Nullable = boolean;

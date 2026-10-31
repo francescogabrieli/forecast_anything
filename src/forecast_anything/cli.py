@@ -102,7 +102,18 @@ def main() -> int:
     worker.add_argument("--limit", type=int, default=10)
     worker.add_argument("--poll-seconds", type=float, default=1)
     worker.add_argument("--lease-seconds", type=int, default=60)
+    commands.add_parser("mcp", help="Serve optional MCP tools over stdio")
     args = parser.parse_args()
+    if args.command == "mcp":
+        try:
+            from .mcp_adapter.server import run_stdio
+        except ImportError:
+            print(
+                "Install forecast-anything[mcp] to use the MCP stdio server.",
+                file=sys.stderr,
+            )
+            return 2
+        return run_stdio()
     try:
         if args.command in {"serve", "worker"}:
             from .operators import register_builtin_operators

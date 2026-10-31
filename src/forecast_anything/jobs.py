@@ -68,6 +68,16 @@ class JobQueue:
             raise DomainError("not_found", {"job_id": job_id})
         return self._decode(row)
 
+    def original_payload(self, job_id: str) -> dict:
+        """Read detached immutable submission intent, independent of checkpoints."""
+        with self.ledger._connection() as connection:
+            row = connection.execute(
+                "SELECT original_payload FROM jobs WHERE job_id = ?", (job_id,)
+            ).fetchone()
+        if row is None:
+            raise DomainError("not_found", {"job_id": job_id})
+        return json.loads(row[0])
+
     def enqueue(
         self, key: str, payload: dict, *, lease_guard: LeaseGuard | None = None
     ) -> Job:

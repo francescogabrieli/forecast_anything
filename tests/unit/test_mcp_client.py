@@ -587,3 +587,36 @@ def test_query_parameters_are_encoded_without_overriding_origin_or_auth():
     )
     assert str(seen[0].url) == "http://127.0.0.1:8000/v1/graphs/g?version=2"
     assert seen[0].headers["Authorization"] == "Bearer operator-secret"
+
+
+@pytest.mark.parametrize(
+    "path", ["/v1/backtests/a%2Fb%3Fx%23z%25", "/v1/backtests/b/origins"]
+)
+def test_backtest_client_permits_only_fixed_public_read_shapes(path):
+    def respond(req):
+        assert req.method == "GET"
+        return httpx.Response(200, json={"backtest_id": "b"})
+
+    assert request(httpx.MockTransport(respond), path=path) == {"backtest_id": "b"}
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/v1/backtests"),
+        ("GET", "/v1/backtests/b/archive"),
+        ("GET", "/v1/backtests/b/plan"),
+        ("GET", "/v1/backtests/b/origins/0"),
+        ("POST", "/v1/backtests/b"),
+        ("DELETE", "/v1/backtests/b"),
+    ],
+)
+def test_backtest_client_rejects_unexposed_private_or_mutating_routes(method, path):
+    with pytest.raises(client_module().CoreRequestError, match="^invalid_request$"):
+        request(
+            httpx.MockTransport(
+                lambda req: pytest.fail("unexposed route reached HTTP")
+            ),
+            method=method,
+            path=path,
+        )

@@ -134,3 +134,22 @@ it("collapses raw result and snapshot data while retaining visible evidence targ
   expect(snapshotDetails).not.toHaveAttribute("open");
   expect(snapshotDetails).toHaveTextContent("Recorded snapshot assumption");
 });
+
+it.each(["forecast", "model", "fallback"])("selects %s while preserving source history validation", (kind) => {
+  const run = makeRun({ snapshot_ids: ["input-a", "input-b"] });
+  const result = run.results.forecast;
+  run.results = { baseline: { ...result, point: [[91, 92]] }, model: { ...result, point: [[7, 8]] } };
+  if (kind === "forecast") run.results.forecast = { ...result, point: [[5, 6]] };
+  if (kind === "fallback") delete run.results.model;
+  const graph = structuredClone(historyGraph);
+  graph.nodes.push({ ...graph.nodes[2], node_id: "model" });
+  const { container } = render(<RunDetails run={run} evaluations={[]} graph={graph} sourceBindings={{ a: "input-a", b: "input-b" }} snapshots={[historySnapshot("input-a", 3), historySnapshot("input-b", 300)]} />);
+  const summary = container.querySelector(".forecast-summary")!;
+  expect(summary).toHaveTextContent(`${kind === "fallback" ? "baseline" : kind} · seasonal_naive`);
+  expect(summary.querySelector("strong")).toHaveTextContent(kind === "forecast" ? "5" : kind === "model" ? "7" : "91");
+  const observed = container.querySelector("[data-observed-path]")!;
+  if (kind === "fallback") expect(observed.getAttribute("d")).toBe("");
+  else expect(observed.getAttribute("d")).toMatch(/^M/);
+  expect(screen.getAllByRole("img")).toHaveLength(1);
+  if (kind !== "fallback") expect(screen.getByText("Altri risultati del grafo").closest("details")).toHaveTextContent("91");
+});

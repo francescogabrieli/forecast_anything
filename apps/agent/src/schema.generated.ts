@@ -1,5 +1,757 @@
 // Generated from contracts/v1/schemas.json and openapi.json. Run npm run contracts:generate.
 
+export const forecastSelectionSchema = {
+  "$defs": {
+    "JsonValue": {}
+  },
+  "additionalProperties": false,
+  "properties": {
+    "baseline_period": {
+      "default": 1,
+      "maximum": 10000,
+      "minimum": 1,
+      "title": "Baseline Period",
+      "type": "integer"
+    },
+    "horizon": {
+      "maximum": 366,
+      "minimum": 1,
+      "title": "Horizon",
+      "type": "integer"
+    },
+    "options": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Options",
+      "type": "object"
+    },
+    "provider": {
+      "minLength": 1,
+      "title": "Provider",
+      "type": "string"
+    }
+  },
+  "required": [
+    "provider",
+    "horizon"
+  ],
+  "title": "ForecastSelection",
+  "type": "object"
+} as const;
+
+export namespace ForecastSelectionGenerated {
+  export type BaselinePeriod = number;
+  export type Horizon = number;
+  export type JsonValue = unknown;
+  export type Provider = string;
+
+  export interface ForecastSelection {
+    baseline_period?: BaselinePeriod;
+    horizon: Horizon;
+    options?: Options;
+    provider: Provider;
+  }
+  export interface Options {
+    [k: string]: JsonValue;
+  }
+}
+export type ForecastSelection = ForecastSelectionGenerated.ForecastSelection;
+
+export const backtestSettingsSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "max_origins_per_partition": {
+      "default": 10,
+      "maximum": 50,
+      "minimum": 1,
+      "title": "Max Origins Per Partition",
+      "type": "integer"
+    },
+    "origin_offset_seconds": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Origin Offset Seconds",
+      "type": "integer"
+    }
+  },
+  "title": "BacktestSettings",
+  "type": "object"
+} as const;
+
+export namespace BacktestSettingsGenerated {
+  export type MaxOriginsPerPartition = number;
+  export type OriginOffsetSeconds = number;
+
+  export interface BacktestSettings {
+    max_origins_per_partition?: MaxOriginsPerPartition;
+    origin_offset_seconds?: OriginOffsetSeconds;
+  }
+}
+export type BacktestSettings = BacktestSettingsGenerated.BacktestSettings;
+
+export const backtestReportSchema = {
+  "$defs": {
+    "BacktestSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "max_origins_per_partition": {
+          "default": 10,
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Max Origins Per Partition",
+          "type": "integer"
+        },
+        "origin_offset_seconds": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Origin Offset Seconds",
+          "type": "integer"
+        }
+      },
+      "title": "BacktestSettings",
+      "type": "object"
+    },
+    "Capabilities": {
+      "additionalProperties": false,
+      "properties": {
+        "provider_id": {
+          "minLength": 1,
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "provider_revision": {
+          "minLength": 1,
+          "title": "Provider Revision",
+          "type": "string"
+        },
+        "representations": {
+          "items": {
+            "enum": [
+              "point",
+              "marginal_quantiles",
+              "joint_paths"
+            ],
+            "type": "string"
+          },
+          "title": "Representations",
+          "type": "array"
+        },
+        "supports_known_future": {
+          "title": "Supports Known Future",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "provider_id",
+        "provider_revision",
+        "representations",
+        "supports_known_future"
+      ],
+      "title": "Capabilities",
+      "type": "object"
+    },
+    "ForecastSelection": {
+      "additionalProperties": false,
+      "properties": {
+        "baseline_period": {
+          "default": 1,
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Baseline Period",
+          "type": "integer"
+        },
+        "horizon": {
+          "maximum": 366,
+          "minimum": 1,
+          "title": "Horizon",
+          "type": "integer"
+        },
+        "options": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Options",
+          "type": "object"
+        },
+        "provider": {
+          "minLength": 1,
+          "title": "Provider",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "horizon"
+      ],
+      "title": "ForecastSelection",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "PartitionScore": {
+      "additionalProperties": false,
+      "properties": {
+        "baseline_mae": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Mae"
+        },
+        "evaluated": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Evaluated",
+          "type": "integer"
+        },
+        "excluded": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Excluded",
+          "type": "integer"
+        },
+        "failed": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Failed",
+          "type": "integer"
+        },
+        "insufficient": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Insufficient",
+          "type": "integer"
+        },
+        "matched_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Matched Count",
+          "type": "integer"
+        },
+        "model_mae": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Mae"
+        },
+        "partition": {
+          "enum": [
+            "exploration",
+            "selection",
+            "final"
+          ],
+          "title": "Partition",
+          "type": "string"
+        },
+        "planned": {
+          "minimum": 0,
+          "title": "Planned",
+          "type": "integer"
+        },
+        "relative_mae": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Mae"
+        },
+        "relative_mae_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "no_matched_cells",
+                "zero_baseline_mae",
+                "ratio_unrepresentable"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "no_matched_cells",
+          "title": "Relative Mae Reason"
+        }
+      },
+      "required": [
+        "partition",
+        "planned"
+      ],
+      "title": "PartitionScore",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "actuals_snapshot_id": {
+      "minLength": 1,
+      "title": "Actuals Snapshot Id",
+      "type": "string"
+    },
+    "archive_id": {
+      "minLength": 1,
+      "title": "Archive Id",
+      "type": "string"
+    },
+    "assumptions": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Assumptions",
+      "type": "array"
+    },
+    "backtest_id": {
+      "minLength": 1,
+      "title": "Backtest Id",
+      "type": "string"
+    },
+    "captured_at": {
+      "format": "date-time",
+      "title": "Captured At",
+      "type": "string"
+    },
+    "frequency": {
+      "minLength": 1,
+      "title": "Frequency",
+      "type": "string"
+    },
+    "partitions": {
+      "items": {
+        "$ref": "#/$defs/PartitionScore"
+      },
+      "title": "Partitions",
+      "type": "array"
+    },
+    "plan_id": {
+      "minLength": 1,
+      "title": "Plan Id",
+      "type": "string"
+    },
+    "protocol_version": {
+      "const": "backtest-v1",
+      "default": "backtest-v1",
+      "title": "Protocol Version",
+      "type": "string"
+    },
+    "provider_contracts": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Capabilities"
+      },
+      "propertyNames": {
+        "minLength": 1
+      },
+      "title": "Provider Contracts",
+      "type": "object"
+    },
+    "report_id": {
+      "default": "",
+      "title": "Report Id",
+      "type": "string"
+    },
+    "selection": {
+      "$ref": "#/$defs/ForecastSelection"
+    },
+    "settings": {
+      "$ref": "#/$defs/BacktestSettings"
+    },
+    "source_id": {
+      "minLength": 1,
+      "title": "Source Id",
+      "type": "string"
+    },
+    "source_revision": {
+      "minLength": 1,
+      "title": "Source Revision",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "insufficient_evidence"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "backtest_id",
+    "plan_id",
+    "archive_id",
+    "source_id",
+    "source_revision",
+    "captured_at",
+    "actuals_snapshot_id",
+    "selection",
+    "settings",
+    "provider_contracts",
+    "frequency",
+    "status",
+    "partitions"
+  ],
+  "title": "BacktestReport",
+  "type": "object"
+} as const;
+
+export namespace BacktestReportGenerated {
+  export type ActualsSnapshotId = string;
+  export type ArchiveId = string;
+  export type Assumptions = string[];
+  export type BacktestId = string;
+  export type CapturedAt = string;
+  export type Frequency = string;
+  export type BaselineMae = number | null;
+  export type Evaluated = number;
+  export type Excluded = number;
+  export type Failed = number;
+  export type Insufficient = number;
+  export type MatchedCount = number;
+  export type ModelMae = number | null;
+  export type Partition = "exploration" | "selection" | "final";
+  export type Planned = number;
+  export type RelativeMae = number | null;
+  export type RelativeMaeReason = ("no_matched_cells" | "zero_baseline_mae" | "ratio_unrepresentable") | null;
+  export type Partitions = PartitionScore[];
+  export type PlanId = string;
+  export type ProtocolVersion = "backtest-v1";
+  export type ProviderId = string;
+  export type ProviderRevision = string;
+  export type Representations = ("point" | "marginal_quantiles" | "joint_paths")[];
+  export type SupportsKnownFuture = boolean;
+  export type ReportId = string;
+  export type BaselinePeriod = number;
+  export type Horizon = number;
+  export type JsonValue = unknown;
+  export type Provider = string;
+  export type MaxOriginsPerPartition = number;
+  export type OriginOffsetSeconds = number;
+  export type SourceId = string;
+  export type SourceRevision = string;
+  export type Status = "completed" | "insufficient_evidence";
+
+  export interface BacktestReport {
+    actuals_snapshot_id: ActualsSnapshotId;
+    archive_id: ArchiveId;
+    assumptions?: Assumptions;
+    backtest_id: BacktestId;
+    captured_at: CapturedAt;
+    frequency: Frequency;
+    partitions: Partitions;
+    plan_id: PlanId;
+    protocol_version?: ProtocolVersion;
+    provider_contracts: ProviderContracts;
+    report_id?: ReportId;
+    selection: ForecastSelection;
+    settings: BacktestSettings;
+    source_id: SourceId;
+    source_revision: SourceRevision;
+    status: Status;
+  }
+  export interface PartitionScore {
+    baseline_mae?: BaselineMae;
+    evaluated?: Evaluated;
+    excluded?: Excluded;
+    failed?: Failed;
+    insufficient?: Insufficient;
+    matched_count?: MatchedCount;
+    model_mae?: ModelMae;
+    partition: Partition;
+    planned: Planned;
+    relative_mae?: RelativeMae;
+    relative_mae_reason?: RelativeMaeReason;
+  }
+  export interface ProviderContracts {
+    [k: string]: Capabilities;
+  }
+  export interface Capabilities {
+    provider_id: ProviderId;
+    provider_revision: ProviderRevision;
+    representations: Representations;
+    supports_known_future: SupportsKnownFuture;
+  }
+  export interface ForecastSelection {
+    baseline_period?: BaselinePeriod;
+    horizon: Horizon;
+    options?: Options;
+    provider: Provider;
+  }
+  export interface Options {
+    [k: string]: JsonValue;
+  }
+  export interface BacktestSettings {
+    max_origins_per_partition?: MaxOriginsPerPartition;
+    origin_offset_seconds?: OriginOffsetSeconds;
+  }
+}
+export type BacktestReport = BacktestReportGenerated.BacktestReport;
+
+export const originPageSchema = {
+  "$defs": {
+    "OriginOutcome": {
+      "additionalProperties": false,
+      "properties": {
+        "backtest_id": {
+          "minLength": 1,
+          "title": "Backtest Id",
+          "type": "string"
+        },
+        "baseline_mae": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Mae"
+        },
+        "evaluation_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluation Id"
+        },
+        "issuance_time": {
+          "format": "date-time",
+          "title": "Issuance Time",
+          "type": "string"
+        },
+        "matched_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Matched Count",
+          "type": "integer"
+        },
+        "model_mae": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Mae"
+        },
+        "nominal_origin": {
+          "format": "date-time",
+          "title": "Nominal Origin",
+          "type": "string"
+        },
+        "ordinal": {
+          "minimum": 0,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "partition": {
+          "enum": [
+            "exploration",
+            "selection",
+            "final"
+          ],
+          "title": "Partition",
+          "type": "string"
+        },
+        "plan_id": {
+          "minLength": 1,
+          "title": "Plan Id",
+          "type": "string"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Code"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        },
+        "status": {
+          "enum": [
+            "evaluated",
+            "excluded",
+            "failed",
+            "insufficient_evidence"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "target_end": {
+          "format": "date-time",
+          "title": "Target End",
+          "type": "string"
+        },
+        "target_start": {
+          "format": "date-time",
+          "title": "Target Start",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ordinal",
+        "partition",
+        "nominal_origin",
+        "issuance_time",
+        "target_start",
+        "target_end",
+        "backtest_id",
+        "plan_id",
+        "status"
+      ],
+      "title": "OriginOutcome",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "backtest_id": {
+      "minLength": 1,
+      "title": "Backtest Id",
+      "type": "string"
+    },
+    "limit": {
+      "maximum": 50,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "next_offset": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Next Offset"
+    },
+    "offset": {
+      "minimum": 0,
+      "title": "Offset",
+      "type": "integer"
+    },
+    "origins": {
+      "items": {
+        "$ref": "#/$defs/OriginOutcome"
+      },
+      "maxItems": 50,
+      "title": "Origins",
+      "type": "array"
+    }
+  },
+  "required": [
+    "backtest_id",
+    "origins",
+    "offset",
+    "limit"
+  ],
+  "title": "OriginPage",
+  "type": "object"
+} as const;
+
+export namespace OriginPageGenerated {
+  export type BacktestId = string;
+  export type Limit = number;
+  export type NextOffset = number | null;
+  export type Offset = number;
+  export type BacktestId1 = string;
+  export type BaselineMae = number | null;
+  export type EvaluationId = string | null;
+  export type IssuanceTime = string;
+  export type MatchedCount = number;
+  export type ModelMae = number | null;
+  export type NominalOrigin = string;
+  export type Ordinal = number;
+  export type Partition = "exploration" | "selection" | "final";
+  export type PlanId = string;
+  export type ReasonCode = string | null;
+  export type RunId = string | null;
+  export type Status = "evaluated" | "excluded" | "failed" | "insufficient_evidence";
+  export type TargetEnd = string;
+  export type TargetStart = string;
+  /**
+   * @maxItems 50
+   */
+  export type Origins = OriginOutcome[];
+
+  export interface OriginPage {
+    backtest_id: BacktestId;
+    limit: Limit;
+    next_offset?: NextOffset;
+    offset: Offset;
+    origins: Origins;
+  }
+  export interface OriginOutcome {
+    backtest_id: BacktestId1;
+    baseline_mae?: BaselineMae;
+    evaluation_id?: EvaluationId;
+    issuance_time: IssuanceTime;
+    matched_count?: MatchedCount;
+    model_mae?: ModelMae;
+    nominal_origin: NominalOrigin;
+    ordinal: Ordinal;
+    partition: Partition;
+    plan_id: PlanId;
+    reason_code?: ReasonCode;
+    run_id?: RunId;
+    status: Status;
+    target_end: TargetEnd;
+    target_start: TargetStart;
+  }
+}
+export type OriginPage = OriginPageGenerated.OriginPage;
+
 export const candidateRequestSchema = {
   "additionalProperties": false,
   "properties": {
@@ -46,7 +798,7 @@ export namespace CandidateRequestGenerated {
   export type SelectionMethod = "prespecified_holdout" | "exploratory" | "corrected";
   export type SourceIds = string[];
   export type TemplateId = string;
-  
+
   export interface CandidateRequest {
     reason: Reason;
     selection_method?: SelectionMethod;
@@ -443,7 +1195,7 @@ export namespace CandidateGenerated {
   export type SourceProfiles = SourceProfile[];
   export type TemplateId = string;
   export type Unresolved1 = string[];
-  
+
   export interface Candidate {
     candidate_id: CandidateId;
     epoch_id: EpochId;
@@ -653,7 +1405,7 @@ export namespace SourceProfileGenerated {
   export type SourceId = string;
   export type SourceRevision = string | null;
   export type Unresolved = string[];
-  
+
   /**
    * Sanitized agent-facing view, bounded independently of source size.
    */
@@ -950,7 +1702,7 @@ export namespace RunRecordGenerated {
   export type ScenarioId = string | null;
   export type SnapshotIds = string[];
   export type State = string;
-  
+
   export interface RunRecord {
     actual_provider: ActualProvider;
     as_of: AsOf;
@@ -1050,7 +1802,7 @@ export namespace AgentOperationRequestGenerated {
   export type JobId = string;
   export type SessionId = string;
   export type Tool = "inspectSource" | "proposeCandidates" | "explainRun";
-  
+
   export interface AgentOperationRequest {
     call_key: CallKey;
     epoch_id: EpochId;
@@ -1095,7 +1847,7 @@ export const agentOperationResponseSchema = {
 export namespace AgentOperationResponseGenerated {
   export type OperationId = string;
   export type JsonValue = unknown;
-  
+
   export interface AgentOperationResponse {
     operation_id: OperationId;
     result: Result;
