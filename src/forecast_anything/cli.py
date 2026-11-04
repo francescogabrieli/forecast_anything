@@ -102,18 +102,58 @@ def main() -> int:
     worker.add_argument("--limit", type=int, default=10)
     worker.add_argument("--poll-seconds", type=float, default=1)
     worker.add_argument("--lease-seconds", type=int, default=60)
+    init = commands.add_parser("init", help="Create a private local workspace")
+    init.add_argument("--workspace", type=Path, required=True)
+    init.add_argument("--csv-root", type=Path, required=True)
+    init.add_argument("--port", type=int, default=8000)
     up = commands.add_parser("up", help="Run the local API and worker together")
-    up.add_argument("--db", type=Path, required=True)
-    up.add_argument("--port", type=int, default=8000)
-    commands.add_parser("mcp", help="Serve optional MCP tools over stdio")
+    target = up.add_mutually_exclusive_group(required=True)
+    target.add_argument("--db", type=Path)
+    target.add_argument("--config", type=Path)
+    up.add_argument("--port", type=int)
+    status = commands.add_parser("status", help="Check the configured local API")
+    status.add_argument("--config", type=Path, required=True)
+    mcp = commands.add_parser("mcp", help="Serve optional MCP tools over stdio")
+    mcp.add_argument("--config", type=Path)
     args = parser.parse_args()
+    if args.command in {"init", "status", "up", "mcp"}:
+        from .workspace_config import apply_workspace, create_workspace, load_workspace
+
+        try:
+            if args.command == "init":
+                path = create_workspace(args.workspace, args.csv_root, args.port)
+                print(json.dumps({"config": str(path)}))
+                return 0
+            if getattr(args, "config", None):
+                config = load_workspace(args.config)
+                apply_workspace(config)
+            if args.command == "status":
+                from .workspace_config import check_api
+
+                result = check_api(config)
+                print(json.dumps(result))
+                return 0 if result["api"] == "available" else 1
+            if args.command == "up" and args.config:
+                if args.port is not None:
+                    raise ValueError("--port cannot be used with --config")
+                args.db, args.port = Path(config["db"]), config["port"]
+        except FileExistsError:
+            print(
+                "Workspace config already exists; it was not changed.", file=sys.stderr
+            )
+            return 2
+        except (OSError, ValueError) as error:
+            print(f"Workspace configuration error: {error}", file=sys.stderr)
+            return 2
     if args.command == "up":
         from .local_services import run_services
 
         try:
             # Initialize the shared database before starting concurrent processes.
             Ledger(args.db)
-            return run_services(args.db, "127.0.0.1", args.port)
+            return run_services(
+                args.db, "127.0.0.1", args.port if args.port is not None else 8000
+            )
         except (OSError, sqlite3.Error) as error:
             print(
                 json.dumps({"code": "input_error", "details": {"message": str(error)}}),

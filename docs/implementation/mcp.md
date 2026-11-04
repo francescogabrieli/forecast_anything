@@ -6,6 +6,32 @@ The reference client is the official Python `mcp==2.3.0` SDK, locked in `uv.lock
 
 ## Install and operate
 
+### Private workspace configuration
+
+The following uses one configuration file for the API, worker and MCP adapter. It creates a new token and refuses to overwrite an existing configuration:
+
+```sh
+uv sync --locked --extra dev --extra mcp
+mkdir -p .local/mcp/sources
+uv run --locked --extra mcp forecast-anything init --workspace .local/mcp --csv-root .local/mcp/sources
+uv run --locked --extra mcp forecast-anything up --config .local/mcp/config.json
+```
+
+Keep `config.json` private: it contains the workspace token and is created with owner-only file permissions. Back up the configuration and database together; losing or changing the token requires updating every client using it. `--port` may be supplied to `init` (default 8000). The CSV root must already exist. The file records absolute paths, so update them deliberately if moving the workspace. To grant access to previously registered sources after an MCP restart, edit the `source_ids` JSON array in this private file; CSV roots are likewise explicit. Restart MCP to apply changes.
+
+Configure the host to launch the installed executable with arguments `mcp --config /absolute/path/to/config.json`. For example:
+
+```json
+{
+  "command": "/absolute/path/forecast_anything/.venv/bin/forecast-anything",
+  "args": ["mcp", "--config", "/absolute/path/forecast_anything/.local/mcp/config.json"]
+}
+```
+
+In another terminal, `forecast-anything status --config .local/mcp/config.json` checks authenticated API access. `worker: unknown` is intentional: the check cannot establish that the worker is running or that the responding API uses the intended database. `up` stops both services on Ctrl+C; accepted jobs remain in the database for the next start. The command remains in the foreground and does not install an OS service. No desktop host has been validated.
+
+### Environment-based setup
+
 From the checkout with Python 3.12+ and uv:
 
 ```sh

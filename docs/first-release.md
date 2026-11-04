@@ -14,7 +14,7 @@ Il registro appartiene a Forecast Anything. La chat può chiudersi senza perdere
 
 | Gate | Evidenza disponibile | Da completare prima del lancio |
 | --- | --- | --- |
-| Installazione e operatività semplici | Wheel installata fuori dal checkout e baseline eseguita; API e worker persistenti separati | Percorso installato di configurazione, avvio, stato e arresto senza tre terminali o dashboard obbligatoria; errori e recupero leggibili |
+| Installazione e operatività semplici | Wheel installata fuori dal checkout e baseline eseguita; configurazione privata locale, avvio/arresto API e worker in primo piano e controllo autenticato dell'API | Verificare il nuovo percorso da wheel installata; stato e recupero del worker osservabili, senza dashboard obbligatoria |
 | Un assistente realmente utilizzabile | Client SDK ufficiale MCP verificato su stdio reale | Almeno un host assistente desktop scelto e provato: configurazione, collegamento, fonte, disconnessione e ritorno |
 | Fonti accessibili | CSV mappato via MCP, policy per cartelle e ID fonte; core con HTTP JSON limitato | Percorso guidato sulle fonti dichiarate, semantica temporale correggibile e amministrazione persistente delle autorizzazioni. Non promettere connettori generici |
 | Previsioni configurabili e verificabili | 19 strumenti MCP, selezione provider/opzioni/orizzonte e confronto multi-origine con revisioni e report persistiti; percorso wheel, recovery e review indipendente | Prova con host desktop reale e interpretazione dei report nel percorso assistente |
