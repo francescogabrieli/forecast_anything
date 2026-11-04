@@ -102,8 +102,24 @@ def main() -> int:
     worker.add_argument("--limit", type=int, default=10)
     worker.add_argument("--poll-seconds", type=float, default=1)
     worker.add_argument("--lease-seconds", type=int, default=60)
+    up = commands.add_parser("up", help="Run the local API and worker together")
+    up.add_argument("--db", type=Path, required=True)
+    up.add_argument("--port", type=int, default=8000)
     commands.add_parser("mcp", help="Serve optional MCP tools over stdio")
     args = parser.parse_args()
+    if args.command == "up":
+        from .local_services import run_services
+
+        try:
+            # Initialize the shared database before starting concurrent processes.
+            Ledger(args.db)
+            return run_services(args.db, "127.0.0.1", args.port)
+        except (OSError, sqlite3.Error) as error:
+            print(
+                json.dumps({"code": "input_error", "details": {"message": str(error)}}),
+                file=sys.stderr,
+            )
+            return 2
     if args.command == "mcp":
         try:
             from .mcp_adapter.server import run_stdio

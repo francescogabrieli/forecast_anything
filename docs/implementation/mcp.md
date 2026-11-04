@@ -4,7 +4,7 @@ The optional stdio adapter exposes the existing authenticated API to an MCP clie
 
 The reference client is the official Python `mcp==2.3.0` SDK, locked in `uv.lock`. Real subprocess tests exercise stdio, loopback HTTP and an independent worker, including an installed wheel outside the checkout. No desktop assistant host has been validated. These tests use synthetic observations and the real seasonal baseline; they make no language-model or forecast-quality claim.
 
-## Install and operate three processes
+## Install and operate
 
 From the checkout with Python 3.12+ and uv:
 
@@ -19,9 +19,10 @@ export FORECAST_ANYTHING_MCP_SOURCE_IDS='["sales"]'
 
 Keep the token private. Supply the same token to the API and the MCP host using its private environment configuration. Separate terminals do not automatically share exported variables.
 
-1. API: `uv run --locked --extra mcp forecast-anything serve --db .local/mcp/state.db`
-2. One worker: `uv run --locked --extra mcp forecast-anything worker --db .local/mcp/state.db`
-3. The MCP host launches the absolute `.venv/bin/forecast-anything` executable with argument `mcp` and the environment below. A terminal alone is not an MCP client; stdout carries protocol messages only.
+1. Start API and worker together: `uv run --locked --extra mcp forecast-anything up --db .local/mcp/state.db`. The command stays in the foreground, binds the API to `127.0.0.1:8000` (change the port with `--port`), and stops both processes on Ctrl+C or SIGTERM. If either process exits unexpectedly, it stops the other and returns an error; restart the command to resume durable jobs.
+2. The MCP host launches the absolute `.venv/bin/forecast-anything` executable with argument `mcp` and the environment below. A terminal alone is not an MCP client; stdout carries protocol messages only.
+
+For separate process management, `forecast-anything serve --db .local/mcp/state.db` and `forecast-anything worker --db .local/mcp/state.db` remain available. The foreground command is not a background service manager and does not provide persistent setup or a status command.
 
 The API and worker must use the same local SQLite file. MCP and API must see the same absolute CSV paths in the same filesystem namespace. Container paths and host paths are not interchangeable. The adapter does not start or stop either service. Accepted work survives a disconnected MCP process and finishes when the independently operated worker runs. The baseline path requires no LLM keys, model weights, Eve or Postgres.
 

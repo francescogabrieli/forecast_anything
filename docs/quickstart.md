@@ -2,7 +2,7 @@
 
 Forecast Anything runs locally with a seasonal baseline. The default path needs no LLM key, model weights or hosted account.
 
-The local stdio MCP adapter is implemented. The [MCP guide](implementation/mcp.md) documents installation with `uv sync --locked --extra dev --extra mcp`, three separate API/worker/MCP processes, CSV roots and source-ID permissions, all 19 tools and a complete official-SDK request. The `mcp==2.3.0` SDK is the tested reference client; desktop assistant hosts and a guided setup website remain unvalidated. The CLI and optional console paths below remain available.
+The local stdio MCP adapter is implemented. The [MCP guide](implementation/mcp.md) documents installation with `uv sync --locked --extra dev --extra mcp`, foreground API/worker startup, CSV roots and source-ID permissions, all 19 tools and a complete official-SDK request. The `mcp==2.3.0` SDK is the tested reference client; desktop assistant hosts and a guided setup website remain unvalidated. The CLI and optional console paths below remain available.
 
 After an MCP restart, put previously registered IDs in `FORECAST_ANYTHING_MCP_SOURCE_IDS` before profiling, refreshing or backtesting them. Preserve the original forecast body/key after an ambiguous response; the independent worker can finish while the assistant is disconnected. MCP output is bounded at 64 KiB and upstream requests/responses at 1 MiB; listing pagination cannot bypass those bounds. New MCP registration accepts local CSV under configured roots, with no secret reference; HTTP registration remains pending. Configured forecasts and frozen CSV backtests are available through the tools below.
 
