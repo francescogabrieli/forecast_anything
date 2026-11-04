@@ -220,7 +220,9 @@ class BacktestStore:
             )
             rows = connection.execute(
                 "SELECT ordinal, content FROM backtest_origins WHERE backtest_id = ? ORDER BY ordinal LIMIT ? OFFSET ?",
-                (backtest_id, limit + 1, offset),
+                # SQLite accepts only signed 64-bit integers. An offset beyond
+                # that range cannot address a row in a SQLite table.
+                (backtest_id, limit + 1, min(offset, 2**63 - 1)),
             ).fetchall()
             outcomes = []
             for ordinal, content in rows[:limit]:

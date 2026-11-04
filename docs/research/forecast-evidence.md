@@ -43,6 +43,6 @@ The single skip is the guarded real Timestral check. Node emitted its existing `
 
 ## Final review and remaining release work
 
-The independent whole-change review's three Important findings were fixed and re-reviewed: extreme finite metric calculations preserve representable means and give explicit results for unrepresentable scores/ratios; HTTP/SSE/MCP/job status redact private provider diagnostics; and concurrent identical submissions return the accepted original job. A valid but extremely large origin-page offset beyond SQLite's signed 64-bit range remains a deferred minor edge.
+The independent whole-change review's three Important findings were fixed and re-reviewed: extreme finite metric calculations preserve representable means and give explicit results for unrepresentable scores/ratios; HTTP/SSE/MCP/job status redact private provider diagnostics; and concurrent identical submissions return the accepted original job. A later fix returns an empty origin page for valid offsets beyond SQLite's signed 64-bit range, preserving the requested offset.
 
 The complete first-release journey remains open: managed installed service setup/status/stop/recovery; one actual desktop assistant host; recurring-question selection and lifecycle; assistant summaries/reports tied to stored evidence; a public site and guided onboarding; clean-install checks on declared platforms and approved release destinations. Generic report-to-discovery policy integration also remains future work. External usability and general forecasting quality are unvalidated.
