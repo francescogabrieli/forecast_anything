@@ -29,7 +29,8 @@ describe("RunDetails", () => {
 
     expect(screen.getByText(/risultato sperimentale/i)).toBeVisible();
     expect(screen.getByRole("link", { name: "evaluation-1" })).toHaveAttribute("href", "#evaluation-evaluation-1");
-    expect(screen.getByRole("link", { name: /snapshot-actuals/ })).toHaveAttribute("href", "#snapshot-snapshot-actuals");
+    fireEvent.click(screen.getByText("Input e metodo"));
+    expect(screen.getByRole("link", { name: "Apri snapshot effettivi" })).toHaveAttribute("href", "#snapshot-snapshot-actuals");
   });
 
   it("shows the time and timezone for hourly forecast targets", () => {
@@ -50,7 +51,7 @@ it("shows issued values before technical metadata and names unevaluated forecast
 });
 it("shows supplied evaluation metrics", () => {
   render(<RunDetails run={makeRun()} evaluations={[{ evaluation_id: 'e', run_id: 'run-1', actuals_snapshot_id: 'a', status: 'evaluated', metrics: { mae: 0.5 }, origin_count: 4, assumptions: [] }]} />);
-  expect(screen.getByText('MAE')).toBeVisible();
+  expect(screen.getByText('Errore assoluto medio · MAE')).toBeVisible();
   expect(screen.getByText('0.5')).toBeVisible();
 });
 
@@ -69,9 +70,9 @@ it('selects forecast as the primary result and retains other nodes in technical 
 
 it('renders recorded nested metrics with their node and preserves count/status', () => {
   render(<RunDetails run={makeRun()} evaluations={[{ evaluation_id: 'e', run_id: 'run-1', actuals_snapshot_id: 'a', status: 'evaluated', metrics: { forecast: { mae: 0.5, count: 1, status: 'evaluated' } }, origin_count: 1, assumptions: [] }]} />);
-  expect(screen.getByText('forecast · MAE')).toBeVisible();
-  expect(screen.getByText('forecast · count')).toBeVisible();
-  expect(screen.getByText('forecast · status')).toBeVisible();
+  expect(screen.getByText('forecast · Errore assoluto medio · MAE')).toBeVisible();
+  expect(screen.getByText('forecast · Valori confrontati')).toBeVisible();
+  expect(screen.getByText('forecast · Esito')).toBeVisible();
   expect(screen.queryByText('[object Object]')).not.toBeInTheDocument();
 });
 it('distinguishes failed evaluation reads from an unevaluated forecast', () => {
@@ -114,9 +115,9 @@ it("preserves nested interval and pinball metric leaves in a collapsed disclosur
   expect(container).not.toHaveTextContent("[object Object]");
   const disclosure = screen.getByText("Altre metriche registrate").closest("details")!;
   expect(disclosure).not.toHaveAttribute("open");
-  expect(disclosure).not.toContainElement(screen.getByText("forecast · MAE"));
+  expect(disclosure).not.toContainElement(screen.getByText("forecast · Errore assoluto medio · MAE"));
   fireEvent.click(screen.getByText("Altre metriche registrate"));
-  for (const [label, value] of [["forecast · pinball · 0.1", "0.1"], ["forecast · pinball · 0.5", "0"], ["forecast · intervals · 0.1:0.9 · COVERAGE", "1"], ["forecast · intervals · 0.1:0.9 · WIDTH", "2"], ["forecast · intervals · 0.1:0.9 · LEVEL", "0.8"], ["forecast · intervals · UNAVAILABLE", "—"]]) {
+  for (const [label, value] of [["forecast · pinball · 0.1", "0.1"], ["forecast · pinball · 0.5", "0"], ["forecast · intervals · 0.1:0.9 · Copertura", "1"], ["forecast · intervals · 0.1:0.9 · Ampiezza", "2"], ["forecast · intervals · 0.1:0.9 · Livello", "0.8"], ["forecast · intervals · unavailable", "—"]]) {
     expect(within(disclosure).getByText(label).nextElementSibling).toHaveTextContent(value);
   }
 });

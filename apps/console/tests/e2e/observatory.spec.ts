@@ -126,7 +126,7 @@ test("reviews two-source evaluation, revision notification and immutable scenari
   await page.getByRole("button", { name: /Apri il workspace/ }).click();
   await page.getByLabel("ID della fonte").fill("sales");
   await navigate(page, "Osservatorio");
-  await expect(page.getByRole("heading", { name: "Scoperte e aggiornamenti" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sorveglianza e cronologia" })).toBeVisible();
   const api = "http://127.0.0.1:8000/v1";
   const headers = { Authorization: "Bearer local-e2e-token" };
   const initialEvents = await (await request.get(`${api}/events?limit=1000`, { headers })).json();
@@ -190,7 +190,9 @@ test("reviews two-source evaluation, revision notification and immutable scenari
   const watches = await (await request.get(`${api}/watches`, { headers })).json();
   expect(watches).toHaveLength(2);
   expect(watches.some((watch: { candidate_invalidated: boolean; quality: string }) => watch.candidate_invalidated && watch.quality === "stale")).toBe(true);
-  await expect(page.getByText(/In verifica · Scaduta/)).toBeVisible();
+  const staleWatch = page.locator(".watch-list li").filter({ has: page.getByText("Scaduta", { exact: true }) });
+  await expect(staleWatch).toBeVisible();
+  await expect(staleWatch).toContainText("In verifica");
   await expect.poll(() => replayRequests).toBeGreaterThan(1);
   expect(new Set(revisedEvents.map((event: { cursor: number }) => event.cursor)).size).toBe(revisedEvents.length);
   await expect(page.locator(".event-list li")).toHaveCount(revisedEvents.length);
@@ -215,8 +217,10 @@ test("reviews two-source evaluation, revision notification and immutable scenari
   expect(evaluation.metrics.forecast.mae).toBe(8);
   expect(evaluation.run_id).toBe(baseRunId);
   await expect(page.getByRole("heading", { name: `Valutazione ${evaluation.evaluation_id}`, exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: `Input effettivi: ${evaluation.actuals_snapshot_id}`, exact: true })).toBeVisible();
-  await page.getByRole("link", { name: `Input effettivi: ${evaluation.actuals_snapshot_id}`, exact: true }).click();
+  await page.getByText("Input e metodo", { exact: true }).click();
+  const actualsLink = page.getByRole("link", { name: "Apri snapshot effettivi", exact: true });
+  await expect(actualsLink).toHaveAttribute("href", `#snapshot-${evaluation.actuals_snapshot_id}`);
+  await actualsLink.click();
   await navigate(page, "Home");
   await page.goBack();
   await expect(page.getByRole("heading", { name: "Osservatorio", exact: true })).toBeVisible();
