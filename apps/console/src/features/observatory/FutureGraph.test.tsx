@@ -25,6 +25,8 @@ describe("FutureGraph", () => {
     fireEvent.keyDown(node, { key: "Enter" });
 
     expect(onSelectNode).toHaveBeenCalledWith("forecast");
-    expect(screen.getByText(/fonte.*previsione.*evento/i)).toBeVisible();
+    expect(screen.getByRole("button", { name: "sales, fonte" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "question, evento" })).toBeVisible();
+    expect(screen.getByText(/le righe mostrano i livelli/i)).toBeVisible();
   });
 });
