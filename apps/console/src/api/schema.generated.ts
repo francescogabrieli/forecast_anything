@@ -630,6 +630,7 @@ export namespace WatchGenerated {
   export type CandidateId1 = string;
   export type CandidateInvalidated = boolean;
   export type Action = "activate" | "provisional" | "reject";
+  export type BacktestId = string | null;
   export type CandidateId2 = string | null;
   export type EpochId1 = string | null;
   export type EvaluationIds = string[];
@@ -750,6 +751,7 @@ export namespace WatchGenerated {
   }
   export interface EligibilityDecision {
     action: Action;
+    backtest_id?: BacktestId;
     candidate_id?: CandidateId2;
     epoch_id?: EpochId1;
     evaluation_ids?: EvaluationIds;
@@ -800,6 +802,7 @@ export namespace WatchViewGenerated {
   export type CandidateId1 = string;
   export type CandidateInvalidated = boolean;
   export type Action = "activate" | "provisional" | "reject";
+  export type BacktestId = string | null;
   export type CandidateId2 = string | null;
   export type EpochId1 = string | null;
   export type EvaluationIds = string[];
@@ -916,6 +919,7 @@ export namespace WatchViewGenerated {
   }
   export interface EligibilityDecision {
     action: Action;
+    backtest_id?: BacktestId;
     candidate_id?: CandidateId2;
     epoch_id?: EpochId1;
     evaluation_ids?: EvaluationIds;

@@ -1,8 +1,8 @@
 # Local MCP adapter
 
-The optional stdio adapter exposes the existing authenticated API to an MCP client. It registers mapped CSV sources, submits existing executable candidates or explicit configured forecasts, submits bounded historical backtests, reads immutable results and submits single-run evaluations. The API owns graphs, snapshots, jobs, computation and evidence; MCP creates no second ledger.
+The optional stdio adapter exposes the existing authenticated API to an MCP client. It registers mapped CSV sources, submits existing executable candidates or explicit configured forecasts, submits bounded historical backtests, manages recurring-question watches, reads immutable results and submits single-run evaluations. The API owns graphs, snapshots, jobs, computation, watch scheduling and evidence; MCP creates no second ledger.
 
-The reference client is the official Python `mcp==2.3.0` SDK, locked in `uv.lock`. Real subprocess tests exercise stdio, loopback HTTP and an independent worker, including an installed wheel outside the checkout. No desktop assistant host has been validated. These tests use synthetic observations and the real seasonal baseline; they make no language-model or forecast-quality claim.
+The reference client is the official Python `mcp==2.3.0` SDK, locked in `uv.lock`. Real subprocess tests exercise stdio, loopback HTTP and an independent worker, including an installed wheel outside the checkout. A separate configured-forecast smoke used Codex CLI as an MCP client; the Codex Desktop UI has not been directly verified. These tests use synthetic observations and the real seasonal baseline; they make no language-model or forecast-quality claim.
 
 ## Install and operate
 
@@ -17,7 +17,7 @@ uv run --locked --extra mcp forecast-anything init --workspace .local/mcp --csv-
 uv run --locked --extra mcp forecast-anything up --config .local/mcp/config.json
 ```
 
-Keep `config.json` private: it contains the workspace token and is created with owner-only file permissions. Back up the configuration and database together; losing or changing the token requires updating every client using it. `--port` may be supplied to `init` (default 8000). The CSV root must already exist. The file records absolute paths, so update them deliberately if moving the workspace. To grant access to previously registered sources after an MCP restart, edit the `source_ids` JSON array in this private file; CSV roots are likewise explicit. Restart MCP to apply changes.
+Keep `config.json` private: it contains the workspace token and is created with owner-only file permissions. Back up the configuration and database together; losing or changing the token requires updating every client using it. `--port` may be supplied to `init` (default 8000). The CSV root must already exist. The file records absolute paths, so update them deliberately if moving the workspace. Use the `permissions` CLI to administer `source_ids`; CSV roots remain an explicit operator setting. Restart MCP to apply permission changes.
 
 Configure the host to launch the installed executable with arguments `mcp --config /absolute/path/to/config.json`. For example:
 
@@ -28,7 +28,7 @@ Configure the host to launch the installed executable with arguments `mcp --conf
 }
 ```
 
-In another terminal, `forecast-anything status --config .local/mcp/config.json` checks authenticated API access. `worker: unknown` is intentional: the check cannot establish that the worker is running or that the responding API uses the intended database. `up` stops both services on Ctrl+C; accepted jobs remain in the database for the next start. The command remains in the foreground and does not install an OS service. No desktop host has been validated.
+In another terminal, `forecast-anything status --config .local/mcp/config.json` checks authenticated API access and the worker heartbeat recorded in the API's SQLite database. `worker` is `running` when its heartbeat is no more than ten seconds old, `stale` when an earlier worker stopped updating it, and `not_running` before a worker has started or after a clean stop. A heartbeat shows that the worker process is alive; it does not guarantee that a particular job or provider will succeed. `status` exits successfully only when both API and worker report as running. `up` stops both services on Ctrl+C; accepted jobs remain in the database for the next start. The command remains in the foreground and does not install an OS service. Codex CLI was exercised with the same MCP server configuration surface; direct desktop UI setup remains unverified.
 
 ### Environment-based setup
 
@@ -78,13 +78,23 @@ For an artifact installation, build with `uv build` and install the local wheel'
 | `FORECAST_ANYTHING_MCP_CSV_ROOTS` | JSON array of absolute existing directories; default `[]` denies new CSV registrations. Existing absolute CSV files must resolve inside one root; traversal and symlink escapes are refused. |
 | `FORECAST_ANYTHING_MCP_SOURCE_IDS` | JSON array of operator-approved existing source IDs; default `[]` denies their profile/refresh/backtest operations. Successfully registered CSV IDs also become permitted for the lifetime of that MCP process. |
 
-Registration accepts CSV only, without a `secret_ref`. The API separately supports HTTP JSON, but MCP has no HTTP registration tool. An operator can explicitly allow profile/refresh of a source already registered through the API, including an HTTP source; this grants use of that stored source configuration and may cause the core to fetch it over the network. These two tools advertise `openWorldHint=true`; the adapter itself delegates only to the configured loopback API and exposes no arbitrary network request tool. Knowledge of a source ID alone grants no such permission. Backtesting also requires this source-ID permission before any API request, and the current backend accepts CSV capture only. After restarting MCP, add previously registered IDs to the environment allowlist before profiling, refreshing or backtesting them. Configured forecasts reuse stored CSV or HTTP snapshot vintages without source I/O and need no source grant; their selected numerical provider may still use configured external resources, such as opt-in weight loading. Both submission tools advertise mutation and `openWorldHint=true`. Source listing provides API-safe metadata, not private locations or secret references.
+For a local workspace initialized with `forecast-anything init`, the supported persistent permission manager edits `source_ids` in its private config without exposing the workspace token:
+
+```sh
+forecast-anything permissions list --config /absolute/path/to/workspace/config.json
+forecast-anything permissions grant sales --config /absolute/path/to/workspace/config.json
+forecast-anything permissions revoke sales --config /absolute/path/to/workspace/config.json
+```
+
+Grant requires that the ID already exists in that workspace's source catalog. Revoke is safe to repeat and does not require a registered source. Changes take effect on the next MCP process start. Registration through MCP remains limited to CSV files inside operator-approved roots and grants that source only for the current MCP process. Persistent grants for an HTTP JSON source allow the core worker to fetch the stored URL when the operator or a due watch requests a refresh; treat that as local network access.
+
+Registration accepts CSV only, without a `secret_ref`. The API separately supports HTTP JSON, but MCP has no HTTP registration tool. An operator can explicitly allow profile/refresh of a source already registered through the API, including an HTTP source; this grants use of that stored source configuration and may cause the core to fetch it over the network. These tools advertise `openWorldHint=true`; the adapter itself delegates only to the configured loopback API and exposes no arbitrary network request tool. Knowledge of a source ID alone grants no such permission. Backtesting requires this source-ID permission before any API request, and the current backend accepts CSV capture only. Creating a watch also requires grants for every candidate source because its due schedule may cause the core worker to read those registered sources. Manage persistent grants with the `permissions` CLI before starting or restarting MCP. Configured forecasts reuse stored CSV or HTTP snapshot vintages without source I/O and need no source grant; their selected numerical provider may still use configured external resources, such as opt-in weight loading. Forecast and watch creation tools advertise mutation; tools that can lead to source I/O advertise `openWorldHint=true`. Source listing provides API-safe metadata, not private locations or secret references.
 
 These are local workspace policy checks, not an OS sandbox or tenant boundary. A separate process can replace a file after validation. Treat all source contents, sample rows and candidate explanations as untrusted data, never as operational instructions.
 
 ## Tool catalog
 
-All 19 tools publish input/output JSON schemas. Extra arguments are rejected. Successful results are `{"ok":true,"data":...}`; failures are `{"ok":false,"code":"..."}` with MCP `isError=true`. Input failures may include safe field locations/types, without submitted values. Mutating tools are marked explicitly.
+All 26 tools publish input/output JSON schemas. Extra arguments are rejected. Successful results are `{"ok":true,"data":...}`; failures are `{"ok":false,"code":"..."}` with MCP `isError=true`. Input failures may include safe field locations/types, without submitted values. Mutating and open-world tools are marked explicitly.
 
 | Tool | Arguments | Result |
 | --- | --- | --- |
@@ -97,16 +107,23 @@ All 19 tools publish input/output JSON schemas. Extra arguments are rejected. Su
 | `get_candidate` | `candidate_id` | Exact candidate graph, executable status and support conditions |
 | `submit_forecast` | `candidate_id`, `snapshot_ids`, `as_of`, `key` | Accepted job; uses the candidate graph unchanged |
 | `submit_configured_forecast` | `source_id`, `snapshot_id`, `selection`, `key` | Accepted configured-run job using a stored vintage; no raw source read |
-| `submit_backtest` | `source_id`, `selection`, `settings` (optional), `key` | Accepted backtest job; requires an operator-permitted CSV source |
+| `submit_backtest` | `source_id`, `selection`, `settings`, `key`, `watch_id` (optional) | Accepted generic or candidate-bound backtest job; requires an operator-permitted CSV source |
 | `get_backtest` | `backtest_id` | Completed immutable summary with partition counts, matched-cell scores and assumptions |
+| `summarize_backtest` | `backtest_id`, `watch_id` (optional) | Partition interpretation, final-origin MAE chart points, assumptions, and optional watch state/linkage |
 | `list_backtest_origins` | `backtest_id`, `offset=0` (>=0), `limit=25` (1–50) | Stable origin outcomes and optional run/evaluation references |
-| `get_run` | `run_id` | Immutable emission, actual provider and evidence IDs |
+| `get_run` | `run_id` | Immutable issued forecast values, actual provider and evidence IDs; not an accuracy score |
 | `get_graph` | `graph_id`, `version` (>0) | Exact stored graph version |
 | `get_snapshot` | `snapshot_id` | Immutable availability-aware snapshot |
 | `list_run_evaluations` | `run_id` | Persisted evaluations; `[]` means unevaluated |
 | `get_evaluation` | `evaluation_id` | Recorded metrics and assumptions |
 | `submit_evaluation` | `run_id`, `actuals_snapshot_id`, `key` | Evaluation job; core computes metrics |
 | `get_events` | `after=0` (>=0), `limit=100` (1–1000) | Durable events and continuation cursor |
+| `create_watch` | `candidate_id`, `next_due_at` | Save a recurring question; core decides its lifecycle and owns its future schedule |
+| `list_watches` | `offset=0`, `limit=25` (1–100) | Bounded page of current watch states |
+| `get_watch` | `watch_id` | Current lifecycle, evidence quality, controls and next due time |
+| `update_watch` | `watch_id`, `muted?`, `priority?` | Mute or reprioritize; cannot qualify or activate a watch |
+| `get_watch_history` | `watch_id`, `offset=0`, `limit=25` (1–100) | Page of append-only transitions and state snapshots |
+| `summarize_watch_change` | `watch_id`, `previous_run_id`, `current_run_id` | Observed differences and snapshots for comparable recorded runs |
 
 Profiling is a mutating operation (`readOnlyHint=false`): the existing core GET route inspects the source and enqueues template discovery. A changed profile can create a new durable job; its worker can persist epochs, snapshots, candidates and graphs, and enqueue optional agent discovery when configured. The profile response contains the profile only, without that job ID. Profiling has no caller key, so it advertises `idempotentHint=false`; do not assume that repeating it is side-effect-free.
 
@@ -125,9 +142,27 @@ Profiling is a mutating operation (`readOnlyHint=false`): the existing core GET 
 
 Pass this object to `submit_backtest`; the adapter injects the fixed `backtest` job kind. `submit_configured_forecast` takes the same `source_id`, `selection` and caller `key`, plus `snapshot_id`, with no `settings`, and injects `configured_run`. Neither tool accepts arbitrary jobs or graphs. Caller keys and route identities are never silently trimmed; replay the exact original request with the same key. JSON option values `true`, `1` and `1.0` retain their types for the backend's intent comparison.
 
-Poll `get_job` after submission. A configured job completes with `run_id`; a backtest completes with `backtest_id` and `report_id`. Only then read `get_backtest` and `list_backtest_origins`. Until a completed report is published, reads return `not_found`, rather than empty reports; inspect a pending or failed job's recorded state/error. Completed reads do not compute, enqueue or expose the private archive/plan. Failed and excluded origins retain reason codes and the planned denominator.
+Poll `get_job` after submission. A configured job completes with `run_id`; a backtest completes with `backtest_id` and `report_id`. Only then call `summarize_backtest` for a compact explanation and chart-ready final-origin MAE points. Use `get_backtest` for the full immutable partition report and `list_backtest_origins` for paged outcome details. Until a completed report is published, reads return `not_found`, rather than empty reports; inspect a pending or failed job's recorded state/error. Completed reads do not compute, enqueue or expose the private archive/plan. Failed and excluded origins retain reason codes and the planned denominator.
 
-The initial backtest backend supports one registered CSV source, one numerical series/unit, and fixed UTC hourly/daily grids. It captures the supplied revision archive once and freezes origin membership before inference. It cannot reconstruct revisions removed upstream or invent historical publication dates. Partition summaries compare matched cells only, retain failed/excluded/insufficient counts and express unavailable relative MAE explicitly. An `insufficient_evidence` summary is not a qualification or model-quality certificate. Scenarios, multiple history sources and automatic tuning/watch promotion are outside this workflow.
+The summary's `relative_mae` is the stored model MAE divided by baseline MAE on matched evaluated cells: below 1 is lower error for this backtest, 1 is equal and above 1 is higher. An unavailable value includes its stored reason, such as a zero baseline. This comparison does not establish future accuracy or statistical significance. `final_origin_points` contains persisted per-origin MAE and status fields, not forecast values or raw actuals. Read issued forecasts with `get_run`; read persisted accuracy metrics with `list_run_evaluations` or `get_evaluation`.
+
+The initial backtest backend supports one registered CSV source, one numerical series/unit, and fixed UTC hourly/daily grids. It captures the supplied revision archive once and freezes origin membership before inference. It cannot reconstruct revisions removed upstream or invent historical publication dates. Partition summaries compare matched cells only, retain failed/excluded/insufficient counts and express unavailable relative MAE explicitly. An `insufficient_evidence` summary is not a qualification or model-quality certificate. Scenarios, multiple history sources and automatic tuning are outside this workflow. A generic report never qualifies a watch; only an explicitly watch-bound backtest can ask the core policy to qualify its frozen candidate.
+
+## Recurring questions and change summaries
+
+Use an existing candidate to create a watch only after inspecting its question, graph and source IDs. Grant each source ID through the workspace `permissions` CLI before restarting MCP; the tool checks these grants before the core stores the watch. For non-workspace deployments, configure `FORECAST_ANYTHING_MCP_SOURCE_IDS` in the MCP process environment. `next_due_at` must be timezone-aware. A newly created watch starts as a candidate or unsupported, according to the core. A forecast alone never qualifies or activates it.
+
+To request qualification, submit the candidate's exact selection with `watch_id` and at least 30 origins per partition. The source revision and graph selection must still match. The core reserves the final target windows, computes the decision after the backtest completes, and records it with the watch transition. Call `summarize_backtest` with the completed `backtest_id` and `watch_id`; it reports whether the current decision is linked to that exact report and includes the action and reason codes only when it is. Only 30 or more evaluated, non-overlapping final origins with lower mean MAE than the declared baseline can make an eligible watch operational. Generic backtests, a forecast, or a mismatched report never change watch state. A final window already used by a generic backtest cannot be reused for watch qualification; the watch needs fresh holdout data.
+
+```python
+watch = await call(client, "create_watch", candidate_id=candidate_id,
+                   next_due_at="2026-11-05T00:00:00Z")
+state = await call(client, "get_watch", watch_id=watch["watch_id"])
+history = await call(client, "get_watch_history", watch_id=watch["watch_id"],
+                     offset=0, limit=25)
+```
+
+Use `update_watch` to mute or change priority, and `list_watches` to page through current states. The worker checks due watches and refreshes their registered sources independently of an MCP connection. Inspect `get_watch_history` for recorded lifecycle transitions; use its returned `next_offset` to continue. If a history page returns `result_too_large`, retry the same offset with a smaller limit (down to 1); state snapshots can be large even on short histories. `summarize_watch_change` compares two completed runs for a selected watch and returns common-target changes, added/removed targets and new snapshot/evidence IDs. The runs must be comparable and use the watch's graph; otherwise the core returns a safe domain error. The explanation concerns observed changes and does not assign causality. Generic backtest reports do not qualify or activate watches.
 
 ## Complete SDK example
 
@@ -238,4 +273,10 @@ Run the acceptance journeys with:
 uv run --locked --extra dev --extra mcp pytest tests/integration/test_mcp_stdio.py tests/integration/test_packaged_mcp.py -q
 ```
 
-SDK-dependent test modules skip explicitly without the optional extra; the ordinary CLI's missing-extra error remains covered separately. The four evidence tools have protocol/schema/HTTP-boundary coverage and a real subprocess/installed-wheel configured/backtest recovery journey. A 24-day alternating series explicitly selects period 2 against comparator period 1: model MAE 0, comparator MAE 1, relative MAE 0. Two planned origins per partition remain fixed, including an early insufficient-history exclusion. The worker is terminated after partial persisted origins; API/worker restart after CSV corruption preserves the original capture, plan, child identities and paginated report. A separate process case retains unavailable-history and missing-target exclusions. A configured horizon-3 forecast separately proves options and future target dates. [Full numerical fixture, verification and limits](../research/forecast-evidence.md). Generic backtest reports contain no discovery attestation and do not activate or qualify watches. Desktop-host validation, a guided setup/site and autonomous lifecycle controls remain pending work in the [roadmap](../roadmap.md).
+SDK-dependent test modules skip explicitly without the optional extra; the ordinary CLI's missing-extra error remains covered separately. The four evidence tools have protocol/schema/HTTP-boundary coverage and a real subprocess/installed-wheel configured/backtest recovery journey. Watch tools also have typed protocol, source-grant, history and comparison coverage. A 24-day alternating series explicitly selects period 2 against comparator period 1: model MAE 0, comparator MAE 1, relative MAE 0. Two planned origins per partition remain fixed, including an early insufficient-history exclusion. The worker is terminated after partial persisted origins; API/worker restart after CSV corruption preserves the original capture, plan, child identities and paginated report. A separate process case retains unavailable-history and missing-target exclusions. A configured horizon-3 forecast separately proves options and future target dates. [Full numerical fixture, verification and limits](../research/forecast-evidence.md). Generic backtest reports contain no discovery attestation and do not activate or qualify watches. Direct desktop-host validation, publication/guided setup for the locally prepared site, and automatic report-to-policy qualification remain open work in the [roadmap](../roadmap.md).
+
+### Desktop acceptance evidence (5 November 2026)
+
+The owner-observed Desktop chat successfully read sources/watches, compared a backtest summary with its persisted report/origins, displayed a textual MAE chart and reread the immutable result. The two isolated real-process acceptance tests additionally cover candidate-bound qualification, 30 final points, persistent CLI grants/revocation, reconnect/restart, automatic source refresh and successor-watch evidence invalidation. Full Desktop quit/reopen was confirmed by the owner; a subsequent live assistant journey completed source correction, watch qualification, automatic refresh and a nonzero recorded forecast-change summary. Native graphical rendering is not established. See [acceptance record](../research/desktop-assistant-acceptance.md).
+
+When explaining a known synthetic example, explicitly label it synthetic. Present MAE as error on recorded matched cells, preserve exclusions and unavailable reasons, and do not infer future accuracy or qualify a watch from a generic report. Chart data are per-origin errors rather than forecast values; identify textual charts as such.

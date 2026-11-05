@@ -101,11 +101,40 @@ def backtest_payload(runtime, catalog, request: BacktestJobRequest) -> dict:
     if request.settings.origin_offset_seconds >= step // timedelta(seconds=1):
         raise DomainError("invalid_origin_offset", {})
     _provider_contracts(runtime, request.selection)
-    return {
+    payload = {
         "kind": "backtest",
         "request": original_request(request),
         "source_revision": revision.revision,
     }
+    if request.watch_id is not None:
+        from ..discovery.policy import candidate_backtest_selection
+
+        watch = runtime.ledger.get_watch(request.watch_id)
+        candidate = runtime.ledger.get_candidate(watch.candidate_id)
+        if watch.candidate_invalidated:
+            raise DomainError("watch_candidate_invalidated", {})
+        try:
+            selection = candidate_backtest_selection(candidate)
+        except ValueError as error:
+            raise DomainError("unsupported_watch_backtest", {}) from error
+        profile_revision = (
+            candidate.source_profiles[0].source_revision
+            if len(candidate.source_profiles) == 1
+            else None
+        )
+        if (
+            candidate.candidate_id != watch.candidate_id
+            or request.source_id not in candidate.source_ids
+            or profile_revision != revision.revision
+        ):
+            raise DomainError("watch_backtest_lineage_mismatch", {})
+        if request.selection != selection:
+            raise DomainError("watch_backtest_selection_mismatch", {})
+        if request.settings.max_origins_per_partition < 30:
+            raise DomainError("insufficient_backtest_budget", {"minimum": 30})
+        payload["candidate_id"] = candidate.candidate_id
+        payload["watch_id"] = watch.watch_id
+    return payload
 
 
 def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
@@ -124,6 +153,32 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
             raise DomainError("source_revision_changed", {})
         if revision.spec.kind != "csv":
             raise DomainError("unsupported_backtest_source", {})
+        watch_id = job.payload.get("watch_id")
+        candidate_id = job.payload.get("candidate_id")
+        if watch_id is not None:
+            from ..discovery.policy import candidate_backtest_selection
+
+            watch = runtime.ledger.get_watch(watch_id)
+            candidate = runtime.ledger.get_candidate(candidate_id)
+            profile_revision = (
+                candidate.source_profiles[0].source_revision
+                if len(candidate.source_profiles) == 1
+                else None
+            )
+            if (
+                watch.candidate_id != candidate.candidate_id
+                or watch.candidate_invalidated
+                or request.source_id not in candidate.source_ids
+                or profile_revision != revision.revision
+                or request.settings.max_origins_per_partition < 30
+            ):
+                raise DomainError("watch_backtest_lineage_mismatch", {})
+            try:
+                selection = candidate_backtest_selection(candidate)
+            except ValueError as error:
+                raise DomainError("unsupported_watch_backtest", {}) from error
+            if request.selection != selection:
+                raise DomainError("watch_backtest_selection_mismatch", {})
         contracts = _provider_contracts(runtime, request.selection)
         observations = read_observations(
             revision.spec, secret_resolver=secret_resolver, max_rows=100000
@@ -136,6 +191,78 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
             request.settings,
             now,
             provider_contracts=contracts,
+            watch_id=watch_id,
+            candidate_id=candidate_id,
         )
     report = execute_backtest(runtime, store, plan, lease_guard=job.guard)
-    return {"backtest_id": job.job_id, "report_id": report.report_id}
+    result = {"backtest_id": job.job_id, "report_id": report.report_id}
+    if plan.watch_id is not None and plan.candidate_id is not None:
+        ledger = runtime.ledger
+        watch = ledger.get_watch(plan.watch_id)
+        event_id = f"backtest/{report.report_id}"
+        previous = next(
+            (
+                entry
+                for entry in ledger.watch_history(watch.watch_id)
+                if entry["event_id"] == event_id
+            ),
+            None,
+        )
+        if previous is not None:
+            # A crash after publication must acknowledge the original payload,
+            # even after its deadline or a later source invalidation.
+            ledger.advance_watch(
+                watch.watch_id,
+                previous["event"],
+                now,
+                event_id=event_id,
+                lease_guard=job.guard,
+            )
+            current = ledger.get_watch(watch.watch_id)
+            decision = previous["event"]["decision"]
+            return result | {
+                "watch_id": current.watch_id,
+                "watch_lifecycle": current.lifecycle,
+                "eligibility": decision["action"],
+                "reason_codes": decision["reason_codes"],
+            }
+        candidate = ledger.get_candidate(plan.candidate_id)
+        if watch.candidate_id != candidate.candidate_id or watch.candidate_invalidated:
+            raise DomainError("watch_candidate_invalidated", {})
+        from ..discovery.policy import assess_candidate_backtest
+
+        outcomes = []
+        offset = 0
+        while True:
+            page = store.list_origins(plan.backtest_id, offset=offset, limit=50)
+            outcomes.extend(page.origins)
+            if page.next_offset is None:
+                break
+            offset = page.next_offset
+        decision = assess_candidate_backtest(candidate, report, plan, tuple(outcomes))
+        ledger.append_eligibility_decision(candidate.candidate_id, decision)
+        next_due_at = watch.next_due_at
+        if next_due_at <= now:
+            next_due_at = now + timedelta(
+                seconds=catalog.get(candidate.source_ids[0]).spec.refresh_seconds
+            )
+        updated = ledger.advance_watch(
+            watch.watch_id,
+            {
+                "kind": "evidence_qualified",
+                "decision": decision,
+                "next_due_at": next_due_at,
+            },
+            now,
+            event_id=event_id,
+            lease_guard=job.guard,
+        )
+        result.update(
+            {
+                "watch_id": updated.watch_id,
+                "watch_lifecycle": updated.lifecycle,
+                "eligibility": decision.action,
+                "reason_codes": list(decision.reason_codes),
+            }
+        )
+    return result

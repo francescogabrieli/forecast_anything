@@ -366,6 +366,7 @@ class EligibilityDecision(Contract):
     protocol_id: Identifier | None = None
     epoch_id: Identifier | None = None
     evaluation_ids: tuple[Identifier, ...] = ()
+    backtest_id: Identifier | None = None
     policy_version: Identifier = "discovery-v1"
 
 
@@ -542,10 +543,31 @@ class WatchPatch(Contract):
 
 
 class WatchView(Watch):
+    @model_validator(mode="before")
+    @classmethod
+    def discard_derived_operational(cls, value):
+        if isinstance(value, dict) and "operational" in value:
+            value = dict(value)
+            value.pop("operational")
+        return value
+
     @computed_field
     @property
     def operational(self) -> bool:
         return super().operational
+
+
+class WatchHistoryEntry(Contract):
+    sequence: Annotated[int, Field(ge=1, strict=True)]
+    event_id: Identifier
+    occurred_at: AwareDatetime
+    event: OpaqueDictionary
+    watch: WatchView
+
+
+class WatchHistoryPage(Contract):
+    entries: tuple[WatchHistoryEntry, ...]
+    next_offset: Annotated[int, Field(ge=0, strict=True)] | None
 
 
 class RunJobRequest(Contract):
@@ -571,6 +593,9 @@ class BacktestJobRequest(Contract):
     source_id: Identifier
     selection: ForecastSelection
     settings: BacktestSettings = Field(default_factory=BacktestSettings)
+    watch_id: Identifier | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class EvaluationJobRequest(Contract):

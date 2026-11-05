@@ -139,7 +139,8 @@ def _profile(spec: SourceSpec, rows) -> SourceProfile:
         elif isinstance(value, dict) and set(value) == {"constant"}:
             constant = value["constant"]
             resolved = not isinstance(constant, (dict, list)) and (
-                not isinstance(constant, str) or sanitize_text(constant) == constant
+                not isinstance(constant, str)
+                or (bool(constant.strip()) and sanitize_text(constant) == constant)
             )
             if role != "value" and constant is None:
                 resolved = False

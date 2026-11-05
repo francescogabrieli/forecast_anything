@@ -8,8 +8,63 @@ The Timestral acceptance and event-method gates remain pending.
 from datetime import timezone
 from math import fsum, isfinite
 
-from ..contracts import Candidate, DiscoveryEpoch, EligibilityDecision, EvaluationRecord
-from .candidates import validate_candidate
+from ..backtesting.contracts import BacktestPlan, BacktestReport, OriginOutcome
+from ..contracts import (
+    Candidate,
+    DiscoveryEpoch,
+    EligibilityDecision,
+    EvaluationRecord,
+    ForecastSelection,
+)
+from .candidates import TEMPLATES, validate_candidate
+
+
+def candidate_backtest_selection(candidate: Candidate) -> ForecastSelection:
+    """Derive the only supported replay selection from a frozen watch candidate."""
+    candidate = Candidate.model_validate(candidate.model_dump())
+    if (
+        not candidate.executable
+        or candidate.template_id not in {"expected_deviation", "forecast_change"}
+        or candidate.protocol.criterion != "mae"
+        or candidate.protocol.selection_method != "prespecified_holdout"
+        or validate_candidate(candidate)
+    ):
+        raise ValueError("unsupported_watch_backtest_candidate")
+    nodes = {node.node_id: node for node in candidate.graph.nodes}
+    source, forecast, reference, question = (
+        nodes.get(name) for name in ("source", "forecast", "reference", "question")
+    )
+    if (
+        any(node is None for node in (source, forecast, reference, question))
+        or len(candidate.source_ids) != 1
+        or len(candidate.source_profiles) != 1
+        or candidate.source_profiles[0].source_id != candidate.source_ids[0]
+        or candidate.protocol.target_node_id != "question"
+        or candidate.protocol.reference_node_id != "reference"
+        or question.kind != "transform"
+        or question.inputs != ("forecast",)
+        or question.config.get("operator") != TEMPLATES[candidate.template_id]
+        or forecast.kind != "forecast"
+        or reference.kind != "forecast"
+        or source.kind != "source"
+    ):
+        raise ValueError("unsupported_watch_backtest_candidate")
+    model, baseline = forecast.config, reference.config
+    model_options = model.get("options")
+    baseline_options = baseline.get("options")
+    if (
+        not isinstance(model_options, dict)
+        or not isinstance(baseline_options, dict)
+        or type(baseline_options.get("period")) is not int
+        or baseline_options["period"] < 1
+    ):
+        raise ValueError("unsupported_watch_backtest_candidate")
+    return ForecastSelection(
+        provider=model.get("provider"),
+        horizon=model.get("horizon"),
+        options=model_options,
+        baseline_period=baseline_options["period"],
+    )
 
 
 def assess_candidate(
@@ -118,4 +173,98 @@ def assess_candidate(
         protocol_id=candidate.protocol_id,
         epoch_id=epoch.epoch_id,
         evaluation_ids=tuple(record.evaluation_id for record in evidence),
+    )
+
+
+def assess_candidate_backtest(
+    candidate: Candidate,
+    report: BacktestReport,
+    plan: BacktestPlan,
+    outcomes: tuple[OriginOutcome, ...],
+) -> EligibilityDecision:
+    """Apply the watch policy to a report explicitly bound to its frozen candidate."""
+    candidate = Candidate.model_validate(candidate.model_dump())
+    report = BacktestReport.model_validate(report.model_dump())
+    plan = BacktestPlan.model_validate(plan.model_dump())
+    outcomes = tuple(
+        OriginOutcome.model_validate(item.model_dump()) for item in outcomes
+    )
+    reject, provisional = [], []
+    try:
+        selection = candidate_backtest_selection(candidate)
+    except ValueError as error:
+        reject.append(str(error))
+        selection = None
+    profile_revision = (
+        candidate.source_profiles[0].source_revision
+        if len(candidate.source_profiles) == 1
+        else None
+    )
+    if (
+        plan.watch_id is None
+        or plan.candidate_id != candidate.candidate_id
+        or plan.backtest_id != report.backtest_id
+        or report.backtest_id != plan.backtest_id
+        or report.source_id
+        != (candidate.source_ids[0] if len(candidate.source_ids) == 1 else None)
+        or not profile_revision
+        or report.source_revision != profile_revision
+        or report.source_revision != plan.archive.source_revision
+        or plan.archive.source_id != report.source_id
+        or report.selection != selection
+        or plan.selection != selection
+    ):
+        reject.append("backtest_lineage_mismatch")
+    if report.protocol_version != "backtest-v1":
+        reject.append("unsupported_backtest_protocol")
+
+    final_score = next(
+        (score for score in report.partitions if score.partition == "final"), None
+    )
+    final = tuple(item for item in outcomes if item.partition == "final")
+    if final_score is None or len(final) != final_score.planned:
+        provisional.append("incomplete_final_block")
+    if report.status != "completed":
+        provisional.append("incomplete_backtest")
+    if any(item.status != "evaluated" for item in final):
+        provisional.append("incomplete_final_evidence")
+
+    windows = sorted((item.target_start, item.target_end) for item in final)
+    if any(
+        current[0] <= previous[1] for previous, current in zip(windows, windows[1:])
+    ):
+        reject.append("overlapping_final_windows")
+    evaluation_ids = tuple(
+        item.evaluation_id
+        for item in final
+        if item.status == "evaluated" and item.evaluation_id is not None
+    )
+    if len(set(evaluation_ids)) != len(evaluation_ids):
+        provisional.append("duplicate_final_evidence")
+    if len(evaluation_ids) < 30:
+        provisional.append("insufficient_final_origins")
+
+    losses = tuple(item.model_mae for item in final if item.status == "evaluated")
+    references = tuple(
+        item.baseline_mae for item in final if item.status == "evaluated"
+    )
+    if losses and all(value is not None for value in (*losses, *references)):
+        mean_loss = fsum(value / len(losses) for value in losses)
+        mean_reference = fsum(value / len(references) for value in references)
+        if mean_reference == 0:
+            provisional.append("undefined_reference_skill")
+        elif mean_loss >= mean_reference:
+            reject.append("nonpositive_final_skill")
+    elif final:
+        provisional.append("missing_matched_score")
+
+    return EligibilityDecision(
+        action="reject" if reject else "provisional" if provisional else "activate",
+        reason_codes=tuple(dict.fromkeys(reject + provisional))
+        or ("qualified_final_backtest_evidence",),
+        candidate_id=candidate.candidate_id,
+        protocol_id=candidate.protocol_id,
+        epoch_id=candidate.epoch_id,
+        evaluation_ids=evaluation_ids,
+        backtest_id=report.backtest_id,
     )

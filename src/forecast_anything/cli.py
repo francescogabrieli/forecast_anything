@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import signal
 import sqlite3
 import sys
 import time
@@ -43,6 +44,10 @@ def configured_providers():
 
         providers["timestral"] = TimestralProvider(**values)
     return providers
+
+
+def _stop_continuous_worker(signum, frame):
+    raise KeyboardInterrupt
 
 
 def _run(args):
@@ -111,11 +116,46 @@ def main() -> int:
     target.add_argument("--db", type=Path)
     target.add_argument("--config", type=Path)
     up.add_argument("--port", type=int)
-    status = commands.add_parser("status", help="Check the configured local API")
+    status = commands.add_parser(
+        "status", help="Check the configured local API and worker"
+    )
     status.add_argument("--config", type=Path, required=True)
     mcp = commands.add_parser("mcp", help="Serve optional MCP tools over stdio")
     mcp.add_argument("--config", type=Path)
+    permissions = commands.add_parser(
+        "permissions", help="Manage persistent MCP source permissions"
+    )
+    permission_actions = permissions.add_subparsers(
+        dest="permission_action", required=True
+    )
+    permission_list = permission_actions.add_parser("list", help="List source grants")
+    permission_list.add_argument("--config", type=Path, required=True)
+    permission_grant = permission_actions.add_parser("grant", help="Grant a source ID")
+    permission_grant.add_argument("source_id")
+    permission_grant.add_argument("--config", type=Path, required=True)
+    permission_revoke = permission_actions.add_parser(
+        "revoke", help="Revoke a source ID"
+    )
+    permission_revoke.add_argument("source_id")
+    permission_revoke.add_argument("--config", type=Path, required=True)
     args = parser.parse_args()
+    if args.command == "permissions":
+        from .workspace_config import manage_source_permissions
+
+        try:
+            result = manage_source_permissions(
+                args.config, args.permission_action, getattr(args, "source_id", None)
+            )
+        except (OSError, ValueError) as error:
+            print(
+                json.dumps(
+                    {"code": "permission_error", "details": {"message": str(error)}}
+                ),
+                file=sys.stderr,
+            )
+            return 2
+        print(json.dumps(result))
+        return 0
     if args.command in {"init", "status", "up", "mcp"}:
         from .workspace_config import apply_workspace, create_workspace, load_workspace
 
@@ -132,7 +172,11 @@ def main() -> int:
 
                 result = check_api(config)
                 print(json.dumps(result))
-                return 0 if result["api"] == "available" else 1
+                return (
+                    0
+                    if result["api"] == "available" and result["worker"] == "running"
+                    else 1
+                )
             if args.command == "up" and args.config:
                 if args.port is not None:
                     raise ValueError("--port cannot be used with --config")
@@ -222,12 +266,18 @@ def main() -> int:
                 discovery_gateway=gateway,
                 lease_seconds=args.lease_seconds,
             )
-            while True:
+            if args.once:
                 completed = worker.run_due(runtime.clock(), limit=args.limit)
-                if args.once:
-                    print(json.dumps({"job_ids": completed}))
-                    return 0
-                time.sleep(args.poll_seconds)
+                print(json.dumps({"job_ids": completed}))
+                return 0
+            previous_sigterm = signal.signal(signal.SIGTERM, _stop_continuous_worker)
+            try:
+                with worker.liveness():
+                    while True:
+                        worker.run_due(runtime.clock(), limit=args.limit)
+                        time.sleep(args.poll_seconds)
+            finally:
+                signal.signal(signal.SIGTERM, previous_sigterm)
         record = (
             _run(args)
             if args.command == "run"

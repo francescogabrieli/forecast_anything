@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from pydantic import AwareDatetime, Field, StringConstraints
+from pydantic import AwareDatetime, Field, StringConstraints, model_validator
 
 from ..contracts import BacktestSettings, Contract, ForecastSelection, SourceSpec
 
@@ -83,10 +83,23 @@ class BacktestArguments(Contract):
     source_id: ToolIdentifier
     selection: ForecastSelection
     settings: BacktestSettings = Field(default_factory=BacktestSettings)
+    watch_id: ToolIdentifier | None = None
+
+    @model_validator(mode="after")
+    def require_qualification_budget(self):
+        if self.watch_id is not None and self.settings.max_origins_per_partition < 30:
+            raise ValueError(
+                "watch backtests require at least 30 origins per partition"
+            )
+        return self
 
 
 class BacktestReadArguments(Contract):
     backtest_id: ToolIdentifier
+
+
+class BacktestSummaryArguments(BacktestReadArguments):
+    watch_id: ToolIdentifier | None = None
 
 
 class BacktestOriginsArguments(BacktestReadArguments):
@@ -97,3 +110,40 @@ class BacktestOriginsArguments(BacktestReadArguments):
 class EventsArguments(Contract):
     after: NonNegative = 0
     limit: Annotated[int, Field(ge=1, le=1000, strict=True)] = 100
+
+
+class WatchListArguments(Contract):
+    offset: NonNegative = 0
+    limit: Annotated[int, Field(ge=1, le=100, strict=True)] = 25
+
+
+class WatchArguments(Contract):
+    watch_id: ToolIdentifier
+
+
+class CreateWatchArguments(Contract):
+    candidate_id: ToolIdentifier
+    next_due_at: AwareDatetime
+
+
+class UpdateWatchArguments(WatchArguments):
+    muted: Annotated[bool, Field(strict=True)] | None = None
+    priority: Annotated[int, Field(ge=0, le=5, strict=True)] | None = None
+
+    @model_validator(mode="after")
+    def require_control(self):
+        controls = self.model_fields_set & {"muted", "priority"}
+        if not controls or any(getattr(self, name) is None for name in controls):
+            raise ValueError("at least one non-null watch control is required")
+        return self
+
+
+class WatchHistoryArguments(Contract):
+    watch_id: ToolIdentifier
+    offset: NonNegative = 0
+    limit: Annotated[int, Field(ge=1, le=100, strict=True)] = 25
+
+
+class WatchChangeArguments(WatchArguments):
+    previous_run_id: ToolIdentifier
+    current_run_id: ToolIdentifier

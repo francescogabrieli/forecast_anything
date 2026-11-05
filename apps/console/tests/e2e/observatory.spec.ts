@@ -55,6 +55,12 @@ test("connects a source and issues its first forecast through the worker", async
   await page.getByLabel("Unità — campo", { exact: true }).fill("count");
   await page.getByRole("button", { name: "Analizza fonte" }).click();
   await expect(page.getByText("Profilo pronto per la revisione.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Attiva fonte" })).toBeDisabled();
+  await page.getByLabel("Frequenza", { exact: true }).fill("1d");
+  await page.getByLabel("Fuso orario", { exact: true }).fill("UTC");
+  await page.getByLabel("Revisione — campo", { exact: true }).fill("1");
+  await page.getByRole("button", { name: "Analizza fonte" }).click();
+  await expect(page.getByRole("button", { name: "Attiva fonte" })).toBeEnabled();
   await visualSnapshot(page, "sources");
   await page.getByRole("button", { name: "Attiva fonte" }).click();
   const calculate = page.getByRole("button", { name: "Calcola la prima previsione" });

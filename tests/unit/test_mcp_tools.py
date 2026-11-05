@@ -37,7 +37,14 @@ NAMES = {
     "submit_evaluation",
     "get_events",
     "get_backtest",
+    "summarize_backtest",
     "list_backtest_origins",
+    "create_watch",
+    "list_watches",
+    "get_watch",
+    "update_watch",
+    "get_watch_history",
+    "summarize_watch_change",
 }
 MUTATIONS = {
     "register_csv_source",
@@ -47,6 +54,8 @@ MUTATIONS = {
     "submit_configured_forecast",
     "submit_backtest",
     "submit_evaluation",
+    "create_watch",
+    "update_watch",
 }
 JOB = {
     "job_id": "job-1",
@@ -93,6 +102,44 @@ CANDIDATE = {
     "protocol_id": "protocol-1",
     "epoch_id": "epoch-1",
     "executable": True,
+}
+WATCH = {
+    "watch_id": "watch-1",
+    "candidate_id": "candidate-1",
+    "lifecycle": "candidate",
+    "quality": "provisional",
+    "graph_id": "graph-1",
+    "graph_version": 2,
+    "policy_version": "discovery-v1",
+    "next_due_at": "2026-10-25T00:00:00Z",
+    "muted": False,
+    "priority": 3,
+    "candidate": CANDIDATE,
+    "eligibility_decision": None,
+    "source_snapshot_ids": [],
+    "evidence_applicable": False,
+    "reevaluation_required": True,
+    "invalidated_evaluation_ids": [],
+    "candidate_invalidated": False,
+    "supersedes_watch_id": None,
+    "operational": False,
+}
+WATCH_CHANGE = {
+    "watch_id": "watch-1",
+    "candidate_id": "candidate-1",
+    "template_id": "next_value",
+    "question": "explicit",
+    "dependencies": ["sales"],
+    "previous_run_id": "run-1",
+    "current_run_id": "run-2",
+    "changes": [],
+    "added_targets": [],
+    "removed_targets": [],
+    "common_target_count": 1,
+    "incomparable": [],
+    "new_snapshot_ids": [],
+    "new_evidence_ids": [],
+    "explanation": "Observed differences do not establish causal effects.",
 }
 PROFILE = {
     "source_id": "sales",
@@ -168,6 +215,7 @@ def test_discovery_has_typed_schemas_and_honest_annotations(monkeypatch):
                     "refresh_source",
                     "submit_configured_forecast",
                     "submit_backtest",
+                    "create_watch",
                 }
             )
             assert tool.annotations.idempotent_hint is (
@@ -186,6 +234,17 @@ def test_discovery_has_typed_schemas_and_honest_annotations(monkeypatch):
         }
         assert "GraphSpec" in catalog["get_candidate"].output_schema["$defs"]
         assert "OperatorContract" in catalog["get_capabilities"].output_schema["$defs"]
+        assert set(catalog["create_watch"].input_schema["required"]) == {
+            "candidate_id",
+            "next_due_at",
+        }
+        assert set(catalog["update_watch"].input_schema["required"]) == {"watch_id"}
+        assert "WatchHistoryPage" in catalog["get_watch_history"].output_schema["$defs"]
+        assert catalog["create_watch"].annotations.open_world_hint is True
+        assert (
+            "operational"
+            in catalog["get_watch"].output_schema["$defs"]["WatchView"]["properties"]
+        )
 
     asyncio.run(check())
 
@@ -197,6 +256,11 @@ def test_discovery_has_typed_schemas_and_honest_annotations(monkeypatch):
         ("list_sources", {"offset": -1}),
         ("get_events", {"limit": 1001}),
         ("get_events", {"after": -1}),
+        ("list_watches", {"limit": 0}),
+        ("get_watch_history", {"watch_id": "w", "limit": 101}),
+        ("create_watch", {"candidate_id": "c", "next_due_at": "2026-10-24"}),
+        ("update_watch", {"watch_id": "w"}),
+        ("update_watch", {"watch_id": "w", "muted": None}),
         ("get_graph", {"graph_id": "x", "version": 0}),
         ("get_graph", {"graph_id": "x", "version": True}),
         ("submit_forecast", {**FORECAST, "as_of": "2026-10-24"}),
@@ -520,6 +584,141 @@ def test_list_sources_is_stable_bounded_metadata_pagination(monkeypatch):
             )["data"]
             assert last["next_offset"] is None
             assert [s["source_id"] for s in last["sources"]] == ["z"]
+
+    asyncio.run(check())
+
+
+def test_watch_tools_preserve_ids_controls_pages_and_run_lineage(monkeypatch):
+    calls = []
+    history = {
+        "entries": [
+            {
+                "sequence": 1,
+                "event_id": "created",
+                "occurred_at": "2026-10-24T00:00:00Z",
+                "event": {"kind": "created"},
+                "watch": WATCH,
+            }
+        ],
+        "next_offset": None,
+    }
+
+    def respond(request):
+        calls.append(request)
+        path = request.url.path
+        if request.method == "GET" and path == "/v1/candidates/candidate-1":
+            return httpx.Response(200, json=CANDIDATE)
+        if request.method == "POST" and path == "/v1/watches":
+            assert json.loads(request.content) == {
+                "candidate_id": "candidate-1",
+                "next_due_at": "2026-10-25T00:00:00Z",
+            }
+            return httpx.Response(201, json=WATCH)
+        if request.method == "GET" and path == "/v1/watches":
+            return httpx.Response(200, json=[{**WATCH, "watch_id": "watch-2"}, WATCH])
+        if request.method == "GET" and path == "/v1/watches/watch-1":
+            return httpx.Response(200, json=WATCH)
+        if request.method == "PATCH" and path == "/v1/watches/watch-1":
+            assert json.loads(request.content) == {"muted": False, "priority": 5}
+            return httpx.Response(200, json={**WATCH, "priority": 5})
+        if request.method == "GET" and path == "/v1/watches/watch-1/history":
+            assert dict(request.url.params) == {"offset": "3", "limit": "4"}
+            return httpx.Response(200, json=history)
+        if request.method == "GET" and path == "/v1/watches/watch-1/changes":
+            assert dict(request.url.params) == {
+                "previous_run_id": "run-1",
+                "current_run_id": "run-2",
+            }
+            return httpx.Response(200, json=WATCH_CHANGE)
+        pytest.fail(f"unexpected watch request: {request.method} {path}")
+
+    async def check():
+        async with connected(
+            monkeypatch,
+            respond,
+            config=McpConfig(
+                workspace_token="private-token", source_ids=frozenset({"sales"})
+            ),
+        ) as client:
+            created_result = payload(
+                await client.call_tool(
+                    "create_watch",
+                    {
+                        "candidate_id": "candidate-1",
+                        "next_due_at": "2026-10-25T00:00:00Z",
+                    },
+                )
+            )
+            assert created_result["ok"], created_result
+            created = created_result["data"]
+            assert created["watch_id"] == "watch-1"
+            page = payload(await client.call_tool("list_watches", {"limit": 1}))["data"]
+            assert [item["watch_id"] for item in page["watches"]] == ["watch-1"]
+            assert page["next_offset"] == 1
+            assert (
+                payload(await client.call_tool("get_watch", {"watch_id": "watch-1"}))[
+                    "data"
+                ]["watch_id"]
+                == "watch-1"
+            )
+            assert (
+                payload(
+                    await client.call_tool(
+                        "update_watch",
+                        {"watch_id": "watch-1", "muted": False, "priority": 5},
+                    )
+                )["data"]["priority"]
+                == 5
+            )
+            history_page = payload(
+                await client.call_tool(
+                    "get_watch_history",
+                    {"watch_id": "watch-1", "offset": 3, "limit": 4},
+                )
+            )["data"]
+            assert history_page["next_offset"] is None
+            assert history_page["entries"][0]["watch"]["watch_id"] == "watch-1"
+            assert history_page["entries"][0]["watch"]["operational"] is False
+            summary = payload(
+                await client.call_tool(
+                    "summarize_watch_change",
+                    {
+                        "watch_id": "watch-1",
+                        "previous_run_id": "run-1",
+                        "current_run_id": "run-2",
+                    },
+                )
+            )["data"]
+            assert summary == WATCH_CHANGE
+        assert calls[0].url.path == "/v1/candidates/candidate-1"
+        assert calls[1].url.path == "/v1/watches"
+        assert dict(calls[2].url.params) == {}
+        assert len(calls) == 7
+
+    asyncio.run(check())
+
+
+def test_create_watch_requires_source_allowlist_before_mutation(monkeypatch):
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        return httpx.Response(200, json=CANDIDATE)
+
+    async def check():
+        async with connected(monkeypatch, respond) as client:
+            result = payload(
+                await client.call_tool(
+                    "create_watch",
+                    {
+                        "candidate_id": "candidate-1",
+                        "next_due_at": "2026-10-25T00:00:00Z",
+                    },
+                )
+            )
+            assert result == {"ok": False, "code": "source_forbidden"}
+        assert len(calls) == 1
+        assert calls[0].url.path == "/v1/candidates/candidate-1"
 
     asyncio.run(check())
 
@@ -929,7 +1128,10 @@ def test_evidence_catalog_uses_nested_contracts_and_fixed_kinds(monkeypatch):
                 "submit_configured_forecast",
                 {"key", "source_id", "snapshot_id", "selection"},
             ),
-            ("submit_backtest", {"key", "source_id", "selection", "settings"}),
+            (
+                "submit_backtest",
+                {"key", "source_id", "selection", "settings", "watch_id"},
+            ),
         ):
             schema = catalog[name].input_schema
             assert set(schema["properties"]) == fields
