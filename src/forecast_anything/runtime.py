@@ -83,7 +83,10 @@ class Runtime:
         providers: dict[str, ForecastProvider],
         operators: dict[str, Operator],
         clock: Callable[[], datetime],
+        *,
+        required_provider: str | None = None,
     ):
+        self.required_provider = required_provider
         self.ledger, self.providers, self.operators, self.clock = (
             ledger,
             providers,
@@ -100,6 +103,7 @@ class Runtime:
         lease_guard: LeaseGuard | None = None,
         previous_run_id: str | None = None,
         scenario_id: str | None = None,
+        primary_node_id: str | None = None,
     ) -> RunRecord:
         if as_of.tzinfo is None or as_of.utcoffset() is None:
             raise DomainError("naive_timestamp", {"field": "as_of"})
@@ -117,6 +121,7 @@ class Runtime:
                 scenario is None
                 or scenario.scenario_id != scenario_id
                 or scenario.parent_run_id != previous_run_id
+                or scenario.primary_node_id != primary_node_id
                 or scenario.snapshot_ids
                 != {name: snap.snapshot_id for name, snap in snapshots.items()}
                 or self.ledger.get_graph(spec.graph_id, spec.version) != spec
@@ -140,6 +145,11 @@ class Runtime:
                 "as_of": as_of.isoformat(),
                 **({"scenario_id": scenario_id} if scenario_id else {}),
                 **(
+                    {"primary_node_id": primary_node_id}
+                    if primary_node_id is not None
+                    else {}
+                ),
+                **(
                     {"previous_run_id": previous_run_id}
                     if previous_run_id is not None
                     else {}
@@ -152,6 +162,13 @@ class Runtime:
             if previous.run_id != run_id:
                 raise DomainError("idempotency_conflict", {"key": key})
             return previous
+
+        from .forecast_policy import ensure_required_model, validate_primary_provider
+
+        resolved_primary = validate_primary_provider(
+            spec, self.required_provider, primary_node_id
+        )
+        ensure_required_model(self)
 
         capabilities = {
             name: Capabilities.model_validate(provider.capabilities().model_dump())
@@ -467,6 +484,7 @@ class Runtime:
         if state == "completed":
             emit("run_completed", {"node_ids": list(results)})
         run = RunRecord(
+            primary_node_id=resolved_primary,
             run_id=run_id,
             graph_id=spec.graph_id,
             graph_version=spec.version,

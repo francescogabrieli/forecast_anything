@@ -4,6 +4,13 @@ Direzione confermata dal proprietario il 30 ottobre 2026: prodotto open source i
 
 Questo documento definisce i criteri di rilascio, non dichiara che siano già superati. Nessuna data di lancio è fissata. Il proprietario ha autorizzato commit, push e PR per questo incremento; la pubblicazione del prodotto resta fuori scope.
 
+
+## Required Timestral — current product gate
+
+Owner decision on 5 November: local Timestral is mandatory for primary product forecasts; the seasonal baseline is only a reference. Earlier baseline-only acceptance below is historical and does not establish this gate. The implementation now has genuine pinned-model CLI/API/worker/MCP, backtest/refresh/change-summary and browser evidence, plus real parity and installed-wheel checks. [Current evidence](research/required-timestral-acceptance.md).
+
+Prepared weights are required; there is no Mistral API key or silent fallback. Missing model setup is distinct from process liveness. Legacy watches pause for migration and new candidates/epochs require fresh evidence. Remaining public release work (destinations/site, declared platforms, login/reboot startup) is unchanged.
+
 ## Percorso da dimostrare
 
 **Installa → collega → prevedi → verifica → segui una domanda → comprendi cosa è cambiato.**
@@ -17,7 +24,7 @@ Il registro appartiene a Forecast Anything. La chat può chiudersi senza perdere
 | Installazione e operatività semplici | Wheel installata fuori dal checkout; la prova MCP esegue baseline, backtest e liveness; dopo un crash simulato lo stato passa a `stale` e torna `running` al riavvio. Il test di processo verifica che SIGTERM rimuova subito l'heartbeat e che un job persistito venga completato. Il 5 novembre il CLI installato è stato verificato su workspace pulito: `status` ha distinto `not_running`, `running`, `stale` e recupero a `running`; `up` è ripartito correttamente dopo uno stop | Ripetere la gestione su tutte le piattaforme di installazione dichiarate; lo stato del worker indica liveness e non successo dei job |
 | Un assistente realmente utilizzabile | SDK ufficiale, CLI e percorso live MCP esposto alla chat Desktop; il proprietario ha confermato rilettura immutabile dopo uscita completa/riapertura. Runtime supervisionato da launchd nella sessione macOS corrente | Accettato nel perimetro locale supportato. Setup grafico e altre piattaforme restano fuori dalle prove osservate |
 | Fonti accessibili | Fonte CSV sintetica nuova registrata tramite MCP, timezone mancante rilevato e corretto; grant/revoke persistenti verificati su nuove connessioni SDK; mapping esplicito verificato anche nel browser | Accettato per CSV locale. HTTP JSON e connettori generici mantengono i limiti dichiarati |
-| Previsioni configurabili e verificabili | 26 strumenti MCP; forecast, backtest vincolato e riepiloghi confrontati con evidenze salvate. Percorsi con wheel, recovery, review indipendente e letture Desktop | Accettato per baseline e sorgenti supportate; nessuna affermazione di accuratezza generale |
+| Previsioni configurabili e verificabili | Timestral locale obbligatorio e 26 strumenti MCP; forecast, backtest vincolato e riepiloghi confrontati con evidenze salvate. Percorsi con wheel, recovery, review indipendente e letture Desktop | Accettato per Timestral locale nel percorso reale documentato e sorgenti supportate; nessuna affermazione di accuratezza generale |
 | Domande ricorrenti e continuità | Watch creata e qualificata tramite 30 origini finali; refresh alla scadenza reale, invalidazione dell’evidenza e successore provvisorio osservati dalla chat MCP. Cronologia e confronto non nullo tra run salvati verificati | Accettato mentre runtime e macchina sono attivi. Finestre finali di qualifica non riutilizzabili; avvio dopo logout/riavvio resta distinto |
 | Vista comprensibile | Trascrizione Desktop con riepilogo, confronto report/origini e grafico testuale; percorso live mostra delta +8 tra valori persistiti e ragioni della watch senza confondere decisione storica con stato attuale | Accettato per report e grafici testuali. Nessun rendering grafico nativo dell’host promesso o dichiarato verificato |
 | Sito pubblico e onboarding | Sorgente statica locale in `site/`, revisionata su desktop/tablet/mobile; selettore basato sugli output sintetici emessi dal runtime, con setup, MCP, limiti e link a documenti/contributi | Pubblicare il sito curato e fissare destinazione/nome. L'esempio resta sintetico e non fa affermazioni di accuratezza; nessun backend pubblico di forecasting è necessario |

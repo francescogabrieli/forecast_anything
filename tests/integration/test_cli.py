@@ -3,12 +3,18 @@
 import csv
 import json
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
 from forecast_anything.cli import configured_providers
-from forecast_anything.contracts import DomainError
+from forecast_anything.connectors.csv import load_csv
+from forecast_anything.contracts import DomainError, GraphSpec
+from forecast_anything.providers.baseline import SeasonalNaiveProvider
+from forecast_anything.runtime import Runtime
+from forecast_anything.store import Ledger
+from forecast_anything.temporal import freeze
 
 ROOT = Path(__file__).resolve().parents[2]
 FIELDS = ["series_id", "event_time", "available_at", "revision", "value", "unit"]
@@ -20,36 +26,32 @@ def cli(*args):
     )
 
 
-def test_optional_timestral_provider_is_not_loaded_by_default(monkeypatch):
+def test_required_timestral_provider_registers_lazily_by_default(monkeypatch):
     monkeypatch.delenv("FORECAST_ANYTHING_TIMESTRAL_ENABLED", raising=False)
+    assert set(configured_providers()) == {"seasonal_naive", "timestral"}
 
-    assert set(configured_providers()) == {"seasonal_naive"}
 
-
-def test_optional_timestral_provider_requires_pins_and_registers_lazily(monkeypatch):
+def test_required_timestral_provider_rejects_unpinned_configuration(monkeypatch):
     monkeypatch.setenv("FORECAST_ANYTHING_TIMESTRAL_ENABLED", "1")
-    with pytest.raises(DomainError, match="incomplete_timestral_configuration"):
-        configured_providers()
-    monkeypatch.setenv(
-        "FORECAST_ANYTHING_TIMESTRAL_CHECKPOINT", "mistralai/Timestral-28M"
-    )
     monkeypatch.setenv("FORECAST_ANYTHING_TIMESTRAL_REVISION", "weights-revision")
-    monkeypatch.setenv("FORECAST_ANYTHING_TIMESTRAL_CODE_REVISION", "code-revision")
-
-    providers = configured_providers()
-
-    assert set(providers) == {"seasonal_naive", "timestral"}
-    assert providers["timestral"].capabilities().provider_id == "timestral"
+    with pytest.raises(DomainError, match="invalid_provider_configuration"):
+        configured_providers()
 
 
 def test_cli_exposes_run_command():
     result = cli("run", "--help")
     assert result.returncode == 0
     assert "--as-of" in result.stdout and "--db" in result.stdout
+    assert "--primary-node-id" in result.stdout
 
 
-def test_cli_two_emissions(tmp_path):
-    graph = ROOT / "examples/minimal/graph.json"
+def test_cli_preserves_legacy_baseline_emissions_and_refuses_new_baseline(tmp_path):
+    graph = tmp_path / "legacy-baseline.json"
+    legacy = json.loads((ROOT / "examples/minimal/graph.json").read_text())
+    legacy["nodes"][1]["config"].update(
+        provider="seasonal_naive", options={"period": 2}
+    )
+    graph.write_text(json.dumps(legacy))
     data = tmp_path / "data.csv"
     data.write_text(
         "series_id,event_time,available_at,revision,value,unit\n"
@@ -60,10 +62,24 @@ def test_cli_two_emissions(tmp_path):
     )
     db = tmp_path / "runs.db"
 
+    # Historical baseline evidence is created through the generic library runtime.
+    # These values establish read compatibility, not current product acceptance.
+    runtime = Runtime(
+        Ledger(db),
+        {"seasonal_naive": SeasonalNaiveProvider(1)},
+        {},
+        lambda: datetime(2026, 10, 24, tzinfo=timezone.utc),
+    )
+    spec = GraphSpec.model_validate_json(graph.read_text())
+
     def run(origin):
-        result = cli("run", graph, "--data", data, "--as-of", origin, "--db", db)
-        assert result.returncode == 0, result.stderr
-        return json.loads(result.stdout)
+        as_of = datetime.fromisoformat(origin).astimezone(timezone.utc)
+        return runtime.run(
+            spec,
+            {"csv_observations": freeze(load_csv(data), as_of)},
+            as_of,
+            as_of.isoformat(),
+        ).model_dump(mode="json")
 
     first = run("2026-10-24T00:00:00Z")
     assert first["state"] == "completed"
@@ -78,6 +94,11 @@ def test_cli_two_emissions(tmp_path):
     shown = cli("show", first["run_id"], "--db", db)
     assert shown.returncode == 0
     assert json.loads(shown.stdout) == first
+    refused = cli(
+        "run", graph, "--data", data, "--as-of", "2026-10-26T00:00:00Z", "--db", db
+    )
+    assert refused.returncode == 2
+    assert json.loads(refused.stderr)["code"] == "required_forecast_provider"
 
 
 @pytest.mark.parametrize(
@@ -127,7 +148,11 @@ def test_csv_rejects_invalid_values(tmp_path, replacement):
 
 
 def test_cli_errors_and_failed_run(tmp_path):
-    graph = ROOT / "examples/minimal/graph.json"
+    graph = tmp_path / "timestral.json"
+    specification = json.loads((ROOT / "examples/minimal/graph.json").read_text())
+    specification["nodes"][1]["config"]["provider"] = "timestral"
+    specification["nodes"][1]["config"]["options"] = {}
+    graph.write_text(json.dumps(specification))
     data = tmp_path / "data.csv"
     data.write_text(
         ",".join(FIELDS) + "\ndemand,2026-10-23T00:00:00Z,2026-10-23T00:00:00Z,1,,kWh\n"

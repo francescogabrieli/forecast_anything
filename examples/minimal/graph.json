@@ -6,8 +6,8 @@
       "source_id": "csv_observations", "series_ids": ["demand"], "units": ["kWh"], "frequency": "1d"
     }},
     {"node_id": "forecast", "kind": "forecast", "inputs": ["history"], "config": {
-      "provider": "seasonal_naive", "history": "history", "horizon": 3, "frequency": "1d",
-      "relation_type": {"history": "statistical"}, "options": {"period": 2}
+      "provider": "timestral", "history": "history", "horizon": 3, "frequency": "1d",
+      "relation_type": {"history": "statistical"}, "options": {}
     }}
   ]
 }

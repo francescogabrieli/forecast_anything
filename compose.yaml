@@ -5,9 +5,13 @@ services:
       target: api
     command: ["serve", "--db", "/data/state.db", "--host", "0.0.0.0", "--port", "8000"]
     environment:
+      HF_HOME: /cache/huggingface
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      DO_NOT_TRACK: "1"
       FORECAST_ANYTHING_WORKSPACE_TOKEN: ${FORECAST_ANYTHING_WORKSPACE_TOKEN:?Run scripts/bootstrap_demo.py first and pass --env-file}
       FORECAST_ANYTHING_CONSOLE_ORIGINS: ${FORECAST_ANYTHING_CONSOLE_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     volumes:
+      - timestral-cache:/cache
       - type: bind
         source: ${FORECAST_ANYTHING_DATA_DIR:-./.local/demo}
         target: /data
@@ -31,8 +35,11 @@ services:
     # Exactly one worker consumes this workspace's durable queue.
     scale: 1
     environment:
-      FORECAST_ANYTHING_PROVIDER: seasonal_naive
+      HF_HOME: /cache/huggingface
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      DO_NOT_TRACK: "1"
     volumes:
+      - timestral-cache:/cache
       - type: bind
         source: ${FORECAST_ANYTHING_DATA_DIR:-./.local/demo}
         target: /data
@@ -55,3 +62,6 @@ services:
         condition: service_healthy
     init: true
     restart: unless-stopped
+
+volumes:
+  timestral-cache:

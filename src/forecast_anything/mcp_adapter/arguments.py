@@ -44,6 +44,7 @@ class CandidateArguments(Contract):
 
 
 class ForecastArguments(CandidateArguments):
+    primary_node_id: ToolIdentifier | None = None
     snapshot_ids: Annotated[dict[ToolIdentifier, ToolIdentifier], Field(min_length=1)]
     as_of: AwareDatetime
     key: ToolIdentifier

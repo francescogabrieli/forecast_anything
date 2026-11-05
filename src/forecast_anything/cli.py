@@ -16,34 +16,10 @@ from pydantic import ValidationError
 from .connectors.csv import load_csv
 from .contracts import DomainError, GraphSpec
 from .graph import SourceConfig, parse_node_config
-from .providers.baseline import SeasonalNaiveProvider
+from .providers.configuration import configured_providers
 from .runtime import Runtime
 from .store import Ledger
 from .temporal import freeze
-
-
-def configured_providers():
-    """Register the baseline and only opt-in, pinned providers from the environment."""
-    providers = {"seasonal_naive": SeasonalNaiveProvider(1)}
-    enabled = os.environ.get("FORECAST_ANYTHING_TIMESTRAL_ENABLED", "").strip()
-    if enabled not in {"", "0", "1"}:
-        raise DomainError("invalid_provider_configuration", {})
-    if enabled == "1":
-        values = {
-            "checkpoint": os.environ.get("FORECAST_ANYTHING_TIMESTRAL_CHECKPOINT"),
-            "revision": os.environ.get("FORECAST_ANYTHING_TIMESTRAL_REVISION"),
-            "code_revision": os.environ.get(
-                "FORECAST_ANYTHING_TIMESTRAL_CODE_REVISION"
-            ),
-        }
-        if not all(
-            isinstance(value, str) and value.strip() for value in values.values()
-        ):
-            raise DomainError("incomplete_timestral_configuration", {})
-        from .providers.timestral import TimestralProvider
-
-        providers["timestral"] = TimestralProvider(**values)
-    return providers
 
 
 def _stop_continuous_worker(signum, frame):
@@ -73,6 +49,8 @@ def _run(args):
             name: value.model_dump(mode="json") for name, value in snapshots.items()
         },
     }
+    if args.primary_node_id is not None:
+        content["primary_node_id"] = args.primary_node_id
     key = sha256(
         json.dumps(
             content, sort_keys=True, separators=(",", ":"), allow_nan=False
@@ -83,7 +61,8 @@ def _run(args):
         configured_providers(),
         {},
         lambda: datetime.now(timezone.utc),
-    ).run(spec, snapshots, origin, key)
+        required_provider="timestral",
+    ).run(spec, snapshots, origin, key, primary_node_id=args.primary_node_id)
 
 
 def main() -> int:
@@ -94,6 +73,20 @@ def main() -> int:
     run.add_argument("--data", type=Path, required=True)
     run.add_argument("--as-of", required=True, help="ISO 8601 origin with timezone")
     run.add_argument("--db", type=Path, required=True)
+    run.add_argument(
+        "--primary-node-id", help="Primary terminal output for a raw graph"
+    )
+    model = commands.add_parser(
+        "model", help="Check or explicitly prepare pinned local Timestral"
+    )
+    model_actions = model.add_subparsers(dest="model_action", required=True)
+    model_actions.add_parser(
+        "status", help="Inspect dependency provenance and local cache without loading"
+    )
+    model_actions.add_parser(
+        "prepare",
+        help="Download pinned weights if needed and load on CPU; review the Modified MIT weights license",
+    )
     show = commands.add_parser("show", help="Read a stored immutable emission")
     show.add_argument("run_id")
     show.add_argument("--db", type=Path, required=True)
@@ -215,6 +208,15 @@ def main() -> int:
             return 2
         return run_stdio()
     try:
+        if args.command == "model":
+            provider = configured_providers()["timestral"]
+            result = (
+                provider.prepare_model()
+                if args.model_action == "prepare"
+                else provider.check_model()
+            )
+            print(json.dumps(result))
+            return 0 if result["status"] in {"cached", "loaded"} else 1
         if args.command in {"serve", "worker"}:
             from .operators import register_builtin_operators
 
@@ -224,6 +226,7 @@ def main() -> int:
                 configured_providers(),
                 register_builtin_operators(),
                 lambda: datetime.now(timezone.utc),
+                required_provider="timestral",
             )
             if args.command == "serve":
                 import uvicorn

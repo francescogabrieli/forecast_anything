@@ -128,10 +128,20 @@ def advance_watch(watch: Watch, event: dict, now: datetime) -> Watch:
         updates = {"muted": event["muted"]}
     elif kind == "priority_changed":
         updates = {"priority": event.get("priority")}
+    elif kind == "provider_migration_required":
+        updates = dict(
+            lifecycle="paused",
+            quality="stale",
+            evidence_applicable=False,
+            reevaluation_required=True,
+            migration_reason="required_provider_migration",
+        )
     elif kind == "paused":
         if watch.lifecycle != "unsupported":
             updates = {"lifecycle": "paused"}
     elif kind == "resumed":
+        if watch.migration_reason:
+            raise DomainError("required_provider_migration", {})
         if watch.lifecycle == "paused":
             qualified = (
                 watch.eligibility_decision is not None

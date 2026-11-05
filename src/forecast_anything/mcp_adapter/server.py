@@ -557,6 +557,7 @@ async def _delegate(
             graph=candidate.graph,
             snapshot_ids=arguments.snapshot_ids,
             as_of=arguments.as_of,
+            primary_node_id=arguments.primary_node_id,
         )
         return await client.request(
             "POST", "/v1/jobs", body=request.model_dump(mode="json")

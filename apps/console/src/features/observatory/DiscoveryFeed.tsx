@@ -81,6 +81,7 @@ export function DiscoveryFeed({
                     {title && candidate?.reason && (
                       <p className="watch-reason">Motivo: {candidate.reason}</p>
                     )}
+                    {watch.migration_reason === "required_provider_migration" && <p>Modello precedente: aggiorna la fonte e crea una nuova domanda Timestral.</p>}
                     <p className="watch-meta">
                       {lifecycleLabels[watch.lifecycle]}{" "}
                       <span aria-hidden="true">·</span> priorità{" "}

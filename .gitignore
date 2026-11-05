@@ -12,7 +12,7 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
-node_modules/
+node_modules
 /apps/console/dist/
 /apps/console/playwright-report/
 /apps/console/test-results/

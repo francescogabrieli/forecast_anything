@@ -1610,6 +1610,19 @@ export const runRecordSchema = {
       ],
       "title": "Parent Run Id"
     },
+    "primary_node_id": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Primary Node Id"
+    },
     "requested_provider": {
       "additionalProperties": {
         "minLength": 1,
@@ -1686,6 +1699,7 @@ export namespace RunRecordGenerated {
   export type GraphId = string;
   export type GraphVersion = number;
   export type ParentRunId = string | null;
+  export type PrimaryNodeId = string | null;
   export type Assumptions = string[];
   export type Paths = number[][][] | null;
   export type Point = number[][] | null;
@@ -1710,6 +1724,7 @@ export namespace RunRecordGenerated {
     graph_id: GraphId;
     graph_version: GraphVersion;
     parent_run_id: ParentRunId;
+    primary_node_id?: PrimaryNodeId;
     requested_provider: RequestedProvider;
     results: Results;
     run_id: RunId;

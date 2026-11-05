@@ -5,7 +5,7 @@ import { formatUtc } from "../../format";
 
 type Client = Pick<ApiClient, "getJob" | "getCandidate" | "getSnapshot" | "submitRun" | "getRun" | "refreshSource">;
 type Props = { client: Client; registration: SourceRegistration; onRunReady: (runId: string) => void };
-type Ready = { candidate: Candidate; snapshot: Snapshot };
+type Ready = { candidate: Candidate; snapshot: Snapshot; provider: string };
 type Issued = { runId: string; series: string; value: number; unit: string; timestamp: string };
 
 class FailedJobError extends Error {}
@@ -100,10 +100,11 @@ export function FirstForecast({ client, registration, onRunReady }: Props) {
         if (controller.signal.aborted) return;
         const candidate = candidates.find((item) => item.template_id === "expected_deviation" && item.executable === true
           && item.epoch_id === currentRegistration.epoch_id && item.source_ids.length === 1 && item.source_ids[0] === currentRegistration.source_id
-          && item.graph.nodes.some((node) => node.node_id === "forecast" && node.kind === "forecast" && node.config.provider === "seasonal_naive" && node.config.horizon === 1));
+          && item.graph.nodes.some((node) => node.node_id === "forecast" && node.kind === "forecast" && typeof node.config.provider === "string" && node.config.horizon === 1));
         if (!candidate || snapshot.snapshot_id !== snapshotIds[0]) { setStatus("Non è disponibile una previsione per questa fonte."); return; }
         if (!targetIsFuture(candidate, snapshot, currentRegistration.source_id)) { setStatus("Dati troppo vecchi per una previsione futura: aggiorna la fonte e controlla l’orologio del dispositivo."); return; }
-        setReady({ candidate, snapshot });
+        const provider = candidate.graph.nodes.find((node) => node.node_id === "forecast")!.config.provider as string;
+        setReady({ candidate, snapshot, provider });
         setStatus("Proposta pronta.");
       } catch (reason) {
         if (!controller.signal.aborted) {
@@ -166,7 +167,7 @@ export function FirstForecast({ client, registration, onRunReady }: Props) {
       const value = forecast?.point?.[0]?.[0];
       if (run.run_id !== runId || run.state !== "completed" || run.graph_id !== ready.candidate.graph.graph_id
         || !run.snapshot_ids.includes(ready.snapshot.snapshot_id) || issued !== Date.parse(ready.snapshot.as_of)
-        || forecast?.provider_id !== "seasonal_naive" || forecast.series_ids.length !== 1 || forecast.units.length !== 1
+        || forecast?.provider_id !== ready.provider || forecast.series_ids.length !== 1 || forecast.units.length !== 1
         || forecast.timestamps.length !== 1 || forecast.point?.length !== 1 || forecast.point[0]?.length !== 1
         || typeof value !== "number" || !Number.isFinite(value) || !Number.isFinite(issued)
         || forecast.timestamps.some((time) => !Number.isFinite(Date.parse(time)) || Date.parse(time) <= Math.max(issued, Date.now()))) {
@@ -189,7 +190,8 @@ export function FirstForecast({ client, registration, onRunReady }: Props) {
   return <section className="first-forecast" aria-labelledby="first-forecast-title">
     <div>
       <h2 id="first-forecast-title">La prima previsione</h2>
-      <p>Una stima iniziale per il prossimo intervallo, basata sulla ripetizione dei dati recenti. È provvisoria e non ancora valutata sui dati reali.</p>
+      <p>Una stima iniziale per il prossimo intervallo, calcolata dal modello indicato nella proposta. È provvisoria e non ancora valutata sui dati reali.</p>
+      {ready && <p>Modello: {ready.provider}</p>}
       {ready && <p className="first-forecast-meta">Fonte {currentRegistration.source_id} · dati disponibili al {formatUtc(ready.snapshot.as_of)}</p>}
       {issuedForecast && <div className="first-forecast-result" role="group" aria-label="Previsione iniziale">
         <p className="first-forecast-value"><strong>{issuedForecast.value}</strong> {issuedForecast.unit}</p>
