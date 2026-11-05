@@ -16,6 +16,7 @@ from ..contracts import (
     DomainError,
     EvaluationJobRequest,
     JobView,
+    OpaqueDictionary,
     ResumeJobRequest,
     RunJobRequest,
     SourceProfile,
@@ -23,6 +24,8 @@ from ..contracts import (
     SourceRegistration,
     SourceSpec,
     SourceView,
+    WatchHistoryEntry,
+    WatchHistoryPage,
     WatchPatch,
     WatchRequest,
     WatchView,
@@ -36,7 +39,7 @@ from ..runtime import _digest
 from ..sources.catalog import SourceCatalog
 from ..sources.profiling import inspect_source
 from ..store import _json
-from ..watches import create_watch
+from ..watches import create_watch, summarize_watch_change
 from ..worker import Worker
 from .errors import public_event, public_failure
 
@@ -301,6 +304,36 @@ class Observatory:
         self.worker._sync_watches(self.now())
         return tuple(WatchView(**w.model_dump()) for w in self.ledger.list_watches())
 
+    def watch(self, watch_id: str):
+        return WatchView(**self.ledger.get_watch(watch_id).model_dump())
+
+    def watch_history(self, watch_id: str, *, offset: int, limit: int):
+        entries, next_offset = self.ledger.watch_history_page(
+            watch_id, offset=offset, limit=limit
+        )
+        return WatchHistoryPage(
+            entries=tuple(
+                WatchHistoryEntry(
+                    **{
+                        **entry,
+                        "watch": WatchView(**entry["watch"].model_dump()),
+                    }
+                )
+                for entry in entries
+            ),
+            next_offset=next_offset,
+        )
+
+    def watch_change_summary(
+        self, watch_id: str, previous_run_id: str, current_run_id: str
+    ) -> OpaqueDictionary:
+        result = summarize_watch_change(
+            self.ledger.get_watch(watch_id),
+            self.ledger.get_run(previous_run_id),
+            self.ledger.get_run(current_run_id),
+        )
+        return OpaqueDictionary(result)
+
     def create_watch(self, request: WatchRequest):
         request = WatchRequest.model_validate(request.model_dump())
         candidate = self.ledger.get_candidate(request.candidate_id)
@@ -320,17 +353,23 @@ class Observatory:
     def patch_watch(self, watch_id, patch: WatchPatch):
         patch = WatchPatch.model_validate(patch.model_dump(exclude_unset=True))
         self.worker._sync_watches(self.now())
-        for name in patch.model_fields_set:
-            self.ledger.advance_watch(
+        current = self.ledger.get_watch(watch_id)
+        for name in ("muted", "priority"):
+            if name not in patch.model_fields_set:
+                continue
+            value = getattr(patch, name)
+            if getattr(current, name) == value:
+                continue
+            current = self.ledger.advance_watch(
                 watch_id,
                 {
                     "kind": "muted" if name == "muted" else "priority_changed",
-                    name: getattr(patch, name),
+                    name: value,
                 },
                 self.now(),
                 event_id=uuid4().hex,
             )
-        return next(w for w in self.watches() if w.watch_id == watch_id)
+        return WatchView(**current.model_dump())
 
     def submit(self, request):
         configured = None

@@ -131,6 +131,8 @@ def prepare_backtest(
     captured_at: datetime,
     *,
     provider_contracts: dict[str, Capabilities],
+    watch_id: str | None = None,
+    candidate_id: str | None = None,
 ) -> BacktestPlan:
     """Freeze source/configuration/calendar/membership without I/O or inference."""
     source_revision = SourceRevision.model_validate_json(
@@ -191,6 +193,8 @@ def prepare_backtest(
                 )
     plan = BacktestPlan(
         backtest_id=backtest_id,
+        watch_id=watch_id,
+        candidate_id=candidate_id,
         archive=archive,
         selection=selection,
         settings=settings,

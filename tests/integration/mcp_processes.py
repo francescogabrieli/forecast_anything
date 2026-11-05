@@ -33,6 +33,7 @@ TOOLS = {
     "submit_configured_forecast",
     "submit_backtest",
     "get_backtest",
+    "summarize_backtest",
     "list_backtest_origins",
     "get_run",
     "get_graph",
@@ -41,6 +42,12 @@ TOOLS = {
     "get_evaluation",
     "submit_evaluation",
     "get_events",
+    "create_watch",
+    "list_watches",
+    "get_watch",
+    "update_watch",
+    "get_watch_history",
+    "summarize_watch_change",
 }
 
 
@@ -196,6 +203,15 @@ class LocalWorkspace:
         assert self.worker is None
         self.worker = self.launch("worker")
 
+    def wait_for_worker(self):
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            assert self.worker is not None and self.worker.poll() is None
+            if self.get("/health").get("worker") == "running":
+                return
+            time.sleep(0.03)
+        raise AssertionError("worker heartbeat did not start")
+
     @staticmethod
     def stop(process):
         if process.poll() is None:
@@ -208,6 +224,12 @@ class LocalWorkspace:
 
     def stop_worker(self):
         self.stop(self.worker)
+        self.worker = None
+
+    def crash_worker(self):
+        assert self.worker is not None
+        self.worker.kill()
+        self.worker.wait(timeout=4)
         self.worker = None
 
     def __exit__(self, *_):
@@ -269,6 +291,7 @@ class LocalWorkspace:
 
 
 async def baseline_journey(workspace):
+    workspace.wait_for_worker()
     async with workspace.client() as client:
         assert {t.name for t in (await client.list_tools()).tools} == TOOLS
         capabilities = await call(client, "get_capabilities")
@@ -282,6 +305,33 @@ async def baseline_journey(workspace):
             client, "get_candidate", candidate_id=job["result"]["candidate_ids"][0]
         )
         assert candidate["executable"]
+        watch = await call(
+            client,
+            "create_watch",
+            candidate_id=candidate["candidate_id"],
+            next_due_at="2026-10-26T12:00:00Z",
+        )
+        assert watch["lifecycle"] == "candidate" and not watch["operational"]
+        assert (await call(client, "get_watch", watch_id=watch["watch_id"])) == watch
+        page = await call(client, "list_watches", limit=10)
+        assert [item["watch_id"] for item in page["watches"]] == [watch["watch_id"]]
+        watch = await call(
+            client,
+            "update_watch",
+            watch_id=watch["watch_id"],
+            muted=True,
+            priority=5,
+        )
+        assert watch["muted"] and watch["priority"] == 5
+        history = await call(
+            client, "get_watch_history", watch_id=watch["watch_id"], limit=10
+        )
+        assert [item["event"]["kind"] for item in history["entries"]] == [
+            "created",
+            "muted",
+            "priority_changed",
+        ]
+        assert history["next_offset"] is None
         snapshot = await call(
             client, "get_snapshot", snapshot_id=job["result"]["source_snapshot_ids"][0]
         )
@@ -326,6 +376,15 @@ async def baseline_journey(workspace):
         assert replay["job_id"] == accepted["job_id"]
         assert replay["result"]["run_id"] == run["run_id"]
         assert await call(client, "get_run", run_id=run["run_id"]) == run
+        summary = await call(
+            client,
+            "summarize_watch_change",
+            watch_id=watch["watch_id"],
+            previous_run_id=run["run_id"],
+            current_run_id=run["run_id"],
+        )
+        assert summary["question"] == candidate["reason"]
+        assert summary["common_target_count"] >= 1
     return {"run": run, "candidate": candidate, "snapshot": snapshot}
 
 
@@ -378,9 +437,10 @@ def fixture_main():
 
         BacktestStore.put_origin = put_and_pause
         worker = Worker(runtime, JobQueue(ledger))
-        while True:
-            worker.run_due(clock())
-            time.sleep(0.02)
+        with worker.liveness():
+            while True:
+                worker.run_due(clock())
+                time.sleep(0.02)
 
 
 if __name__ == "__main__":

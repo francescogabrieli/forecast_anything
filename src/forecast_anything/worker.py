@@ -70,6 +70,30 @@ class Worker:
             stopped.set()
             thread.join()
 
+    @contextmanager
+    def liveness(self, interval_seconds: float = 2):
+        """Publish process liveness while the worker loop can be idle or busy."""
+        if interval_seconds <= 0:
+            raise DomainError("invalid_heartbeat_interval", {})
+        stopped = Event()
+
+        self.runtime.ledger.update_worker_heartbeat(self.owner, self.runtime.clock())
+
+        def heartbeat_loop():
+            while not stopped.wait(interval_seconds):
+                self.runtime.ledger.update_worker_heartbeat(
+                    self.owner, self.runtime.clock()
+                )
+
+        thread = Thread(target=heartbeat_loop, daemon=True)
+        thread.start()
+        try:
+            yield
+        finally:
+            stopped.set()
+            thread.join()
+            self.runtime.ledger.clear_worker_heartbeat(self.owner)
+
     def _now(self, supplied: datetime) -> datetime:
         return max(supplied, self.runtime.clock(), self.runtime.ledger.clock())
 

@@ -117,6 +117,12 @@ class PlannedOrigin(FrozenContract):
 class BacktestPlan(FrozenContract):
     plan_id: str = ""
     backtest_id: Identifier
+    watch_id: Identifier | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    candidate_id: Identifier | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     archive: ObservationArchive = Field(repr=False)
     selection: ForecastSelection
     settings: BacktestSettings = Field(default_factory=BacktestSettings)
@@ -130,6 +136,8 @@ class BacktestPlan(FrozenContract):
 
     @model_validator(mode="after")
     def validate_plan(self) -> BacktestPlan:
+        if (self.watch_id is None) != (self.candidate_id is None):
+            raise ValueError("watch backtest requires both watch and candidate IDs")
         required = {self.selection.provider, "seasonal_naive"}
         if set(self.provider_contracts) != required or any(
             key != value.provider_id for key, value in self.provider_contracts.items()

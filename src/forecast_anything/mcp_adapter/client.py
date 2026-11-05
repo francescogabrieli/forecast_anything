@@ -20,9 +20,11 @@ _ROUTES = {
         rf"/v1/(?:capabilities|sources|events|"
         rf"(?:jobs|candidates|runs|snapshots|graphs|evaluations)/{_SEGMENT}|"
         rf"backtests/{_SEGMENT}(?:/origins)?|"
+        rf"watches(?:/{_SEGMENT}(?:/(?:history|changes))?)?|"
         rf"sources/{_SEGMENT}/profile|runs/{_SEGMENT}/evaluations)"
     ),
-    "POST": re.compile(rf"/v1/(?:sources|jobs|sources/{_SEGMENT}/refresh)"),
+    "POST": re.compile(rf"/v1/(?:sources|jobs|watches|sources/{_SEGMENT}/refresh)"),
+    "PATCH": re.compile(rf"/v1/watches/{_SEGMENT}"),
 }
 _STATUS_CODES = {
     401: "unauthorized",

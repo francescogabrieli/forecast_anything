@@ -25,11 +25,11 @@ const initialMapping = {
   event_time: "",
   value: "",
   available_at: "",
-  revision: { constant: "1" },
+  revision: { constant: "" },
   series_id: { constant: "" },
   unit: { constant: "" },
-  frequency: { constant: "1d" },
-  timezone: { constant: "UTC" },
+  frequency: { constant: "" },
+  timezone: { constant: "" },
   calendar: { constant: "gregorian" },
   missing_values: { constant: [""] },
 };
@@ -214,7 +214,13 @@ export function ConnectSource({ client, sourceId, onActivated, onDraftChange }: 
           {unresolved.length > 0 ? (
             <div>
               <h4>Chiarimenti necessari</h4>
-              <ul>{unresolved.map((field) => <li key={field}>{clarificationLabels[field] ?? `${field} da chiarire`}</li>)}</ul>
+              <ul>{unresolved.map((field) => {
+                const suggestion = profile.proposed_mapping[field];
+                return <li key={field}>
+                  {clarificationLabels[field] ?? `${field} da chiarire`}
+                  {typeof suggestion === "string" && <span> Possibile colonna: <code>{suggestion}</code>. Controllala nella mappatura e poi analizza di nuovo.</span>}
+                </li>;
+              })}</ul>
             </div>
           ) : <p>Profilo pronto.</p>}
           <h4>Campi trovati</h4>

@@ -901,3 +901,8 @@ def test_migration_upgrades_v3_and_preserves_ledger_records(tmp_path):
             MIGRATIONS
         )
     assert Ledger(path).list_watches() == ()
+
+
+def test_watch_history_offset_beyond_sqlite_range_is_empty(tmp_path):
+    ledger = stored_watch(tmp_path)
+    assert ledger.watch_history_page("w", offset=2**100) == ((), None)

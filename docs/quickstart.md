@@ -2,9 +2,9 @@
 
 Forecast Anything runs locally with a seasonal baseline. The default path needs no LLM key, model weights or hosted account.
 
-The local stdio MCP adapter is implemented. The [MCP guide](implementation/mcp.md) documents installation with `uv sync --locked --extra dev --extra mcp`, three separate API/worker/MCP processes, CSV roots and source-ID permissions, all 19 tools and a complete official-SDK request. The `mcp==2.3.0` SDK is the tested reference client; desktop assistant hosts and a guided setup website remain unvalidated. The CLI and optional console paths below remain available.
+The local stdio MCP adapter is implemented. The [MCP guide](implementation/mcp.md) documents installation with `uv sync --locked --extra dev --extra mcp`, foreground API/worker startup, CSV roots and source-ID permissions, all 26 tools and complete official-SDK requests for forecasts and recurring questions. The `mcp==2.3.0` SDK is the tested reference client. Configured forecasts and watch tools also completed through Codex CLI's MCP client against the local API and worker; Desktop MCP reads/reconnect and the supported CSV-to-watch/report workflow have recorded acceptance evidence. Site publication and guided setup remain separate release tasks. The CLI and optional console paths below remain available.
 
-After an MCP restart, put previously registered IDs in `FORECAST_ANYTHING_MCP_SOURCE_IDS` before profiling, refreshing or backtesting them. Preserve the original forecast body/key after an ambiguous response; the independent worker can finish while the assistant is disconnected. MCP output is bounded at 64 KiB and upstream requests/responses at 1 MiB; listing pagination cannot bypass those bounds. New MCP registration accepts local CSV under configured roots, with no secret reference; HTTP registration remains pending. Configured forecasts and frozen CSV backtests are available through the tools below.
+After an MCP restart, put previously registered IDs in `FORECAST_ANYTHING_MCP_SOURCE_IDS` before profiling, refreshing, backtesting or creating watches for them. Preserve the original forecast body/key after an ambiguous response; the independent worker can finish while the assistant is disconnected. MCP output is bounded at 64 KiB and upstream requests/responses at 1 MiB; listing pagination cannot bypass those bounds. New MCP registration accepts local CSV under configured roots, with no secret reference; HTTP registration remains pending. Configured forecasts, frozen CSV backtests and recurring-question watches are available through the tools below.
 
 ## Configure a forecast or replay historical evidence through MCP
 
@@ -37,11 +37,20 @@ result = await client.call_tool("submit_backtest", {
 })
 ```
 
-Poll `get_job` first. On completion, use its `backtest_id` with `get_backtest`, then `list_backtest_origins(backtest_id=..., offset=0, limit=25)` and follow `next_offset`. Pending reports/pages return `not_found`; failed jobs do not become empty successful reports. Origins reference persisted runs/evaluations; summary metrics use matched cells, with all planned failures/exclusions retained in the reported origin counts. Retry an ambiguous submission with its original body and key. Accepted work can finish without a connected assistant while the worker is running.
+Poll `get_job` first. On completion, use its `backtest_id` with `summarize_backtest` for the three partition scores, final-origin MAE points and assumptions. For a watch-bound backtest, pass the returned `watch_id` to include current state and whether its decision names this report. `relative_mae` is model MAE divided by baseline MAE; below 1 means lower error on these matched cells only. It does not establish future accuracy. Use `get_backtest` for the immutable full report, `list_backtest_origins` for paged origin records, `get_run` for issued point forecasts and `list_run_evaluations` for recorded accuracy metrics. Pending reports/pages return `not_found`; failed jobs do not become empty successful reports. Retry an ambiguous submission with its original body and key. Accepted work can finish without a connected assistant while the worker is running.
+
+Assuming `completed_job` is the `data` member returned by a completed `get_job` call:
+
+```python
+summary = await client.call_tool("summarize_backtest", {
+    "backtest_id": completed_job["result"]["backtest_id"],
+    "watch_id": completed_job["result"].get("watch_id"),
+})
+```
 
 Backtests capture one registered CSV series/unit on a regular UTC hourly/daily grid. They freeze supplied revisions, source vintage, provider contracts, calendar and earliest bounded origins in 50/25/25 partitions before inference. History requires both occurred events and revisions available by issuance; missing cells remain missing. A later edit to the CSV cannot change an already captured report. Upstream-discarded revisions cannot be reconstructed. Horizon is 1–366, comparator period 1–10000, and origins per partition 1–50 (default 10); raw capture and complete calendar are bounded at 100000 rows/instants. Configured forecasts can also reuse supported stored HTTP snapshots; raw HTTP backtesting, scenarios and multi-history scoring are unsupported.
 
-The [reproducible synthetic acceptance](research/forecast-evidence.md) compares a period-2 alternating series with a period-1 comparator. It verifies calculation and persistence, not general predictive quality. Generic backtests do not attach discovery attestations or activate watches. Managed installation, a tested desktop host, recurring-question lifecycle/reporting and public onboarding remain release work.
+The [reproducible synthetic acceptance](research/forecast-evidence.md) compares a period-2 alternating series with a period-1 comparator. It verifies calculation and persistence, not general predictive quality. Generic backtests do not attach discovery attestations or activate watches. Managed installation, direct desktop-host acceptance, assistant acceptance of the summaries and public onboarding remain release work.
 
 ## Run a forecast from the checkout
 
@@ -84,6 +93,18 @@ Open **Workspace** to enter the API address and token, then **Fonti** to connect
 
 To connect a CSV, place it in the workspace directory printed by the bootstrap command and enter its container path as `/data/your-file.csv`. Use the guided column/constant fields to identify observation time, value, availability time, revision, series, unit, frequency, timezone, calendar and missing-value markers. Availability must be declared explicitly, even when it uses the observation-time column. Review the proposed profile and resolve every required field before activating the source. **Mappatura avanzata** retains JSON configuration for extensions; browser file upload is deferred behind the primary assistant/MCP journey.
 
+The first source mapping leaves frequency and timezone blank so the profile cannot treat `1d` or `UTC` as facts about your data. Choose the actual cadence and the IANA timezone used by timestamps without an offset; the profile reports candidate columns for review but does not select them for you. Local times that are ambiguous or do not exist because of daylight-saving changes are rejected.
+
+To allow the assistant to read a registered source after the MCP server restarts, manage its persistent grant from the workspace config:
+
+```sh
+forecast-anything permissions list --config .local/demo/config.json
+forecast-anything permissions grant sales --config .local/demo/config.json
+forecast-anything permissions revoke sales --config .local/demo/config.json
+```
+
+Grant only source IDs you trust. A grant for an HTTP JSON source permits the local worker to fetch its registered URL during refresh or watch updates. Restart the assistant's MCP server after granting or revoking; the source catalog itself remains available in the workspace.
+
 Once discovery has prepared a compatible single-series source, **Calcola la prima previsione** submits its existing one-step seasonal-baseline candidate to the worker. The issued value, unit and UTC target appear in the console with a link to its recorded run. This initial result is provisional and not yet evaluated. **Aggiorna dati** explicitly rereads the registered source into a new snapshot. A target that is no longer in the future according to the snapshot and device clock is not offered as a new forecast; update the data and check the device clock if necessary.
 
 The console shows recorded discoveries, their current quality, event history, graph dependencies and run evidence when available. Forecast charts use only the history source resolved through the recorded graph and snapshot binding; unavailable or ambiguous history stays unavailable. Recorded evaluation metrics are displayed as issued; the multi-origin backtesting workflow remains a core/product milestone, prioritized for access through tools before browser controls. Its deterministic E2E flow runs the production frontend against two local fixtures, mutes a watch, resumes an interrupted event stream from the durable history, navigates the graph by keyboard and compares an assumed scenario with a worker-produced run. It is a functional test fixture, not a forecast-quality benchmark or a completed external usability study.
@@ -109,3 +130,5 @@ npm --prefix apps/console run build
 ```
 
 For the deterministic browser test, install Chromium once with `npx --prefix apps/console playwright install chromium`, then run `npm --prefix apps/console run test:e2e`. It starts a local API and worker using fixed synthetic input and a fixed test-only token.
+
+For the accepted Desktop workflow, source correction, qualification, automatic update, permission revocation and report boundaries, see the [acceptance record](research/desktop-assistant-acceptance.md).

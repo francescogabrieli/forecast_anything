@@ -123,6 +123,11 @@ def test_immutable_storage_reopens_and_paginates_without_private_archive(tmp_pat
     page = store.list_origins("bt", offset=0, limit=1)
     assert page.origins == (outcome,)
     assert page.next_offset is None
+    for offset in (2**63 - 1, 2**63, 10**100):
+        empty = store.list_origins("bt", offset=offset, limit=1)
+        assert empty.offset == offset
+        assert empty.origins == ()
+        assert empty.next_offset is None
     assert store.get_origin("bt", 0) == outcome
     report = report_fixture(plan)
     assert store.put_report(report) == report.report_id
@@ -135,6 +140,8 @@ def test_immutable_storage_reopens_and_paginates_without_private_archive(tmp_pat
             store.list_origins("bt", offset=offset, limit=limit)
     with pytest.raises(DomainError, match="not_found"):
         store.list_origins("absent")
+    with pytest.raises(DomainError, match="not_found"):
+        store.list_origins("absent", offset=10**100)
 
 
 def test_store_rejects_changed_identities_and_missing_or_mismatched_references(
@@ -219,7 +226,7 @@ def test_migration_preserves_existing_ledger_and_blocks_raw_rewrites(tmp_path):
         assert connection.execute(
             "SELECT content FROM snapshots WHERE snapshot_id='old'"
         ).fetchone() == ("{}",)
-        assert connection.execute("PRAGMA user_version").fetchone() == (8,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (9,)
         for table in ("backtest_plans", "backtest_origins", "backtest_reports"):
             for mutation in (
                 f"DELETE FROM {table}",

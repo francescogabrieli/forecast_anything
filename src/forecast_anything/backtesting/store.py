@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 from pydantic import ValidationError
 
-from ..contracts import Contract, DomainError, EvaluationRecord
+from ..contracts import Candidate, Contract, DomainError, EvaluationRecord
 from ..store import Ledger
 from .contracts import (
     BacktestPlan,
@@ -84,6 +84,20 @@ class BacktestStore:
     ) -> str:
         plan = _validated(BacktestPlan, plan)
         with self.ledger._transaction(lease_guard) as connection:
+            content = canonical_json(plan.model_dump(mode="json"))
+            previous = connection.execute(
+                "SELECT content FROM backtest_plans WHERE backtest_id = ?",
+                (plan.backtest_id,),
+            ).fetchone()
+            if previous is not None:
+                if previous[0] != content:
+                    raise DomainError(
+                        "immutable_identity", {"backtest_id": plan.backtest_id}
+                    )
+                return plan.plan_id
+
+            self._validate_watch_plan(connection, plan)
+            self._validate_final_window_reuse(connection, plan)
             self._insert(
                 connection,
                 "backtest_plans",
@@ -96,6 +110,72 @@ class BacktestStore:
                 plan,
             )
         return plan.plan_id
+
+    @staticmethod
+    def _final_windows(plan: BacktestPlan):
+        return tuple(
+            (origin.target_start, origin.target_end)
+            for origin in plan.origins
+            if origin.partition == "final"
+        )
+
+    def _validate_watch_plan(self, connection, plan: BacktestPlan) -> None:
+        if plan.watch_id is None:
+            return
+        from ..discovery.policy import candidate_backtest_selection
+
+        candidate_row = connection.execute(
+            "SELECT content FROM discovery_candidates WHERE candidate_id = ?",
+            (plan.candidate_id,),
+        ).fetchone()
+        watch_row = connection.execute(
+            "SELECT content FROM watches WHERE watch_id = ?", (plan.watch_id,)
+        ).fetchone()
+        if candidate_row is None or watch_row is None:
+            raise DomainError("watch_backtest_lineage_mismatch", {})
+        candidate = _validated(Candidate, candidate_row[0])
+        from ..contracts import Watch
+
+        watch = _validated(Watch, watch_row[0])
+        try:
+            selection = candidate_backtest_selection(candidate)
+        except ValueError as error:
+            raise DomainError("unsupported_watch_backtest", {}) from error
+        profile_revision = (
+            candidate.source_profiles[0].source_revision
+            if len(candidate.source_profiles) == 1
+            else None
+        )
+        if (
+            watch.candidate_id != candidate.candidate_id
+            or watch.candidate_invalidated
+            or candidate.source_ids != (plan.archive.source_id,)
+            or profile_revision != plan.archive.source_revision
+            or selection != plan.selection
+            or plan.settings.max_origins_per_partition < 30
+        ):
+            raise DomainError("watch_backtest_lineage_mismatch", {})
+
+    def _validate_final_window_reuse(self, connection, plan: BacktestPlan) -> None:
+        windows = self._final_windows(plan)
+        if not windows:
+            return
+        rows = connection.execute("SELECT content FROM backtest_plans").fetchall()
+        for (content,) in rows:
+            previous = _validated(BacktestPlan, content)
+            if (
+                previous.archive.source_id != plan.archive.source_id
+                or previous.archive.source_revision != plan.archive.source_revision
+            ):
+                continue
+            if previous.watch_id is None and plan.watch_id is None:
+                continue
+            for start, end in windows:
+                if any(
+                    start <= previous_end and previous_start <= end
+                    for previous_start, previous_end in self._final_windows(previous)
+                ):
+                    raise DomainError("holdout_reuse", {})
 
     def get_plan(self, backtest_id: str) -> BacktestPlan:
         with self.ledger._connection() as connection:
@@ -220,7 +300,9 @@ class BacktestStore:
             )
             rows = connection.execute(
                 "SELECT ordinal, content FROM backtest_origins WHERE backtest_id = ? ORDER BY ordinal LIMIT ? OFFSET ?",
-                (backtest_id, limit + 1, offset),
+                # SQLite accepts only signed 64-bit integers. An offset beyond
+                # that range cannot address a row in a SQLite table.
+                (backtest_id, limit + 1, min(offset, 2**63 - 1)),
             ).fetchall()
             outcomes = []
             for ordinal, content in rows[:limit]:

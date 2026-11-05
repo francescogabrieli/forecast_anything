@@ -44,6 +44,7 @@ export function SourceMappingForm({ mapping, kind, columns = [], onChange }: Pro
     </fieldset>
     <fieldset>
       <legend>Frequenza e significato dei dati</legend>
+      <p>La frequenza descrive il passo tra le osservazioni; il fuso interpreta date e orari privi di offset. Scegli i valori reali della fonte: non vengono dedotti dal campione. Gli orari locali ambigui o inesistenti vengono segnalati.</p>
       <div className="mapping-grid">
         {([["frequency", "Frequenza", "1d"], ["timezone", "Fuso orario", "Europe/Rome"], ["calendar", "Calendario", "gregorian"]] as const).map(([key, label, placeholder]) => <label key={key}>{label}
           <input value={text(constant(mapping[key]))} placeholder={placeholder} onChange={(event) => update(key, { constant: event.target.value })} />

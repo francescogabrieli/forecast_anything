@@ -81,6 +81,19 @@
         "minLength": 1,
         "title": "Source Id",
         "type": "string"
+      },
+      "watch_id": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Watch Id"
       }
     },
     "required": [
@@ -1333,6 +1346,19 @@
         ],
         "title": "Action",
         "type": "string"
+      },
+      "backtest_id": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Backtest Id"
       },
       "candidate_id": {
         "anyOf": [
@@ -4080,6 +4106,19 @@
             "title": "Action",
             "type": "string"
           },
+          "backtest_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Backtest Id"
+          },
           "candidate_id": {
             "anyOf": [
               {
@@ -4524,6 +4563,1304 @@
     "title": "Watch",
     "type": "object"
   },
+  "WatchHistoryEntry": {
+    "$defs": {
+      "Candidate": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate_id": {
+            "minLength": 1,
+            "title": "Candidate Id",
+            "type": "string"
+          },
+          "epoch_id": {
+            "minLength": 1,
+            "title": "Epoch Id",
+            "type": "string"
+          },
+          "estimated_cost": {
+            "$ref": "#/$defs/CandidateCostEstimate"
+          },
+          "executable": {
+            "default": false,
+            "title": "Executable",
+            "type": "boolean"
+          },
+          "graph": {
+            "$ref": "#/$defs/GraphSpec"
+          },
+          "protocol": {
+            "$ref": "#/$defs/VerificationProtocol"
+          },
+          "protocol_id": {
+            "minLength": 1,
+            "title": "Protocol Id",
+            "type": "string"
+          },
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "source_ids": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          },
+          "source_profiles": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/SourceProfile"
+            },
+            "title": "Source Profiles",
+            "type": "array"
+          },
+          "template_id": {
+            "minLength": 1,
+            "title": "Template Id",
+            "type": "string"
+          },
+          "unresolved": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved",
+            "type": "array"
+          }
+        },
+        "required": [
+          "candidate_id",
+          "template_id",
+          "source_ids",
+          "graph",
+          "reason",
+          "protocol_id",
+          "epoch_id"
+        ],
+        "title": "Candidate",
+        "type": "object"
+      },
+      "CandidateCostEstimate": {
+        "additionalProperties": false,
+        "description": "Static execution work, not a latency or monetary quote.\n\nUnknown/unsupported execution has no numeric value; zero is never a stand-in\nfor an unavailable estimate. The compiler owns the estimate and its basis.",
+        "properties": {
+          "basis": {
+            "default": "not_estimated",
+            "minLength": 1,
+            "title": "Basis",
+            "type": "string"
+          },
+          "status": {
+            "default": "unavailable",
+            "enum": [
+              "known",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "unit": {
+            "const": "provider_calls_per_run",
+            "default": "provider_calls_per_run",
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Value"
+          }
+        },
+        "title": "CandidateCostEstimate",
+        "type": "object"
+      },
+      "EligibilityDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "activate",
+              "provisional",
+              "reject"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "backtest_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Backtest Id"
+          },
+          "candidate_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Candidate Id"
+          },
+          "epoch_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Epoch Id"
+          },
+          "evaluation_ids": {
+            "default": [],
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Evaluation Ids",
+            "type": "array"
+          },
+          "policy_version": {
+            "default": "discovery-v1",
+            "minLength": 1,
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "protocol_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Protocol Id"
+          },
+          "reason_codes": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Reason Codes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "action",
+          "reason_codes"
+        ],
+        "title": "EligibilityDecision",
+        "type": "object"
+      },
+      "GraphSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "graph_id": {
+            "minLength": 1,
+            "title": "Graph Id",
+            "type": "string"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/$defs/Node"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "graph_id",
+          "version",
+          "nodes"
+        ],
+        "title": "GraphSpec",
+        "type": "object"
+      },
+      "JsonValue": {},
+      "Node": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "title": "Config",
+            "type": "object"
+          },
+          "inputs": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Inputs",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "source",
+              "forecast",
+              "transform",
+              "event"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "node_id": {
+            "minLength": 1,
+            "title": "Node Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_id",
+          "kind",
+          "inputs",
+          "config"
+        ],
+        "title": "Node",
+        "type": "object"
+      },
+      "SourceField": {
+        "additionalProperties": false,
+        "properties": {
+          "data_type": {
+            "enum": [
+              "string",
+              "integer",
+              "number",
+              "boolean",
+              "datetime",
+              "null",
+              "mixed"
+            ],
+            "title": "Data Type",
+            "type": "string"
+          },
+          "nullable": {
+            "title": "Nullable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "data_type",
+          "nullable"
+        ],
+        "title": "SourceField",
+        "type": "object"
+      },
+      "SourceProfile": {
+        "additionalProperties": false,
+        "description": "Sanitized agent-facing view, bounded independently of source size.",
+        "properties": {
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "fields": {
+            "additionalProperties": {
+              "$ref": "#/$defs/SourceField"
+            },
+            "title": "Fields",
+            "type": "object"
+          },
+          "proposed_mapping": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "title": "Proposed Mapping",
+            "type": "object"
+          },
+          "sample_rows": {
+            "default": [],
+            "items": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "maxItems": 100,
+            "title": "Sample Rows",
+            "type": "array"
+          },
+          "source_id": {
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_revision": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source Revision"
+          },
+          "unresolved": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_id",
+          "fields",
+          "proposed_mapping",
+          "unresolved",
+          "assumptions"
+        ],
+        "title": "SourceProfile",
+        "type": "object"
+      },
+      "VerificationProtocol": {
+        "additionalProperties": false,
+        "description": "Frozen before final evaluation; no post-selection correction is assumed.",
+        "properties": {
+          "criterion": {
+            "default": "mae",
+            "enum": [
+              "mae",
+              "brier"
+            ],
+            "title": "Criterion",
+            "type": "string"
+          },
+          "reference_node_id": {
+            "default": "reference",
+            "minLength": 1,
+            "title": "Reference Node Id",
+            "type": "string"
+          },
+          "selection_method": {
+            "default": "prespecified_holdout",
+            "enum": [
+              "prespecified_holdout",
+              "exploratory",
+              "corrected"
+            ],
+            "title": "Selection Method",
+            "type": "string"
+          },
+          "target_node_id": {
+            "default": "question",
+            "minLength": 1,
+            "title": "Target Node Id",
+            "type": "string"
+          }
+        },
+        "title": "VerificationProtocol",
+        "type": "object"
+      },
+      "WatchView": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Candidate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "candidate_id": {
+            "minLength": 1,
+            "title": "Candidate Id",
+            "type": "string"
+          },
+          "candidate_invalidated": {
+            "default": false,
+            "title": "Candidate Invalidated",
+            "type": "boolean"
+          },
+          "eligibility_decision": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/EligibilityDecision"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "evidence_applicable": {
+            "default": false,
+            "title": "Evidence Applicable",
+            "type": "boolean"
+          },
+          "graph_id": {
+            "minLength": 1,
+            "title": "Graph Id",
+            "type": "string"
+          },
+          "graph_version": {
+            "title": "Graph Version",
+            "type": "integer"
+          },
+          "invalidated_evaluation_ids": {
+            "default": [],
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Invalidated Evaluation Ids",
+            "type": "array"
+          },
+          "lifecycle": {
+            "enum": [
+              "candidate",
+              "evaluating",
+              "active",
+              "paused",
+              "unsupported"
+            ],
+            "title": "Lifecycle",
+            "type": "string"
+          },
+          "muted": {
+            "title": "Muted",
+            "type": "boolean"
+          },
+          "next_due_at": {
+            "format": "date-time",
+            "title": "Next Due At",
+            "type": "string"
+          },
+          "operational": {
+            "readOnly": true,
+            "title": "Operational",
+            "type": "boolean"
+          },
+          "policy_version": {
+            "minLength": 1,
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "priority": {
+            "default": 3,
+            "maximum": 5,
+            "minimum": 0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "quality": {
+            "enum": [
+              "provisional",
+              "usable",
+              "stale",
+              "degraded"
+            ],
+            "title": "Quality",
+            "type": "string"
+          },
+          "reevaluation_required": {
+            "default": true,
+            "title": "Reevaluation Required",
+            "type": "boolean"
+          },
+          "source_snapshot_ids": {
+            "default": [],
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Source Snapshot Ids",
+            "type": "array"
+          },
+          "supersedes_watch_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Supersedes Watch Id"
+          },
+          "watch_id": {
+            "minLength": 1,
+            "title": "Watch Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "watch_id",
+          "candidate_id",
+          "lifecycle",
+          "quality",
+          "graph_id",
+          "graph_version",
+          "policy_version",
+          "next_due_at",
+          "muted",
+          "operational"
+        ],
+        "title": "WatchView",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "event": {
+        "additionalProperties": true,
+        "title": "Event",
+        "type": "object"
+      },
+      "event_id": {
+        "minLength": 1,
+        "title": "Event Id",
+        "type": "string"
+      },
+      "occurred_at": {
+        "format": "date-time",
+        "title": "Occurred At",
+        "type": "string"
+      },
+      "sequence": {
+        "minimum": 1,
+        "title": "Sequence",
+        "type": "integer"
+      },
+      "watch": {
+        "$ref": "#/$defs/WatchView"
+      }
+    },
+    "required": [
+      "sequence",
+      "event_id",
+      "occurred_at",
+      "event",
+      "watch"
+    ],
+    "title": "WatchHistoryEntry",
+    "type": "object"
+  },
+  "WatchHistoryPage": {
+    "$defs": {
+      "Candidate": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate_id": {
+            "minLength": 1,
+            "title": "Candidate Id",
+            "type": "string"
+          },
+          "epoch_id": {
+            "minLength": 1,
+            "title": "Epoch Id",
+            "type": "string"
+          },
+          "estimated_cost": {
+            "$ref": "#/$defs/CandidateCostEstimate"
+          },
+          "executable": {
+            "default": false,
+            "title": "Executable",
+            "type": "boolean"
+          },
+          "graph": {
+            "$ref": "#/$defs/GraphSpec"
+          },
+          "protocol": {
+            "$ref": "#/$defs/VerificationProtocol"
+          },
+          "protocol_id": {
+            "minLength": 1,
+            "title": "Protocol Id",
+            "type": "string"
+          },
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "source_ids": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          },
+          "source_profiles": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/SourceProfile"
+            },
+            "title": "Source Profiles",
+            "type": "array"
+          },
+          "template_id": {
+            "minLength": 1,
+            "title": "Template Id",
+            "type": "string"
+          },
+          "unresolved": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved",
+            "type": "array"
+          }
+        },
+        "required": [
+          "candidate_id",
+          "template_id",
+          "source_ids",
+          "graph",
+          "reason",
+          "protocol_id",
+          "epoch_id"
+        ],
+        "title": "Candidate",
+        "type": "object"
+      },
+      "CandidateCostEstimate": {
+        "additionalProperties": false,
+        "description": "Static execution work, not a latency or monetary quote.\n\nUnknown/unsupported execution has no numeric value; zero is never a stand-in\nfor an unavailable estimate. The compiler owns the estimate and its basis.",
+        "properties": {
+          "basis": {
+            "default": "not_estimated",
+            "minLength": 1,
+            "title": "Basis",
+            "type": "string"
+          },
+          "status": {
+            "default": "unavailable",
+            "enum": [
+              "known",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "unit": {
+            "const": "provider_calls_per_run",
+            "default": "provider_calls_per_run",
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Value"
+          }
+        },
+        "title": "CandidateCostEstimate",
+        "type": "object"
+      },
+      "EligibilityDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "activate",
+              "provisional",
+              "reject"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "backtest_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Backtest Id"
+          },
+          "candidate_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Candidate Id"
+          },
+          "epoch_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Epoch Id"
+          },
+          "evaluation_ids": {
+            "default": [],
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Evaluation Ids",
+            "type": "array"
+          },
+          "policy_version": {
+            "default": "discovery-v1",
+            "minLength": 1,
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "protocol_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Protocol Id"
+          },
+          "reason_codes": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Reason Codes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "action",
+          "reason_codes"
+        ],
+        "title": "EligibilityDecision",
+        "type": "object"
+      },
+      "GraphSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "graph_id": {
+            "minLength": 1,
+            "title": "Graph Id",
+            "type": "string"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/$defs/Node"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "graph_id",
+          "version",
+          "nodes"
+        ],
+        "title": "GraphSpec",
+        "type": "object"
+      },
+      "JsonValue": {},
+      "Node": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "title": "Config",
+            "type": "object"
+          },
+          "inputs": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Inputs",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "source",
+              "forecast",
+              "transform",
+              "event"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "node_id": {
+            "minLength": 1,
+            "title": "Node Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_id",
+          "kind",
+          "inputs",
+          "config"
+        ],
+        "title": "Node",
+        "type": "object"
+      },
+      "SourceField": {
+        "additionalProperties": false,
+        "properties": {
+          "data_type": {
+            "enum": [
+              "string",
+              "integer",
+              "number",
+              "boolean",
+              "datetime",
+              "null",
+              "mixed"
+            ],
+            "title": "Data Type",
+            "type": "string"
+          },
+          "nullable": {
+            "title": "Nullable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "data_type",
+          "nullable"
+        ],
+        "title": "SourceField",
+        "type": "object"
+      },
+      "SourceProfile": {
+        "additionalProperties": false,
+        "description": "Sanitized agent-facing view, bounded independently of source size.",
+        "properties": {
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "fields": {
+            "additionalProperties": {
+              "$ref": "#/$defs/SourceField"
+            },
+            "title": "Fields",
+            "type": "object"
+          },
+          "proposed_mapping": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "title": "Proposed Mapping",
+            "type": "object"
+          },
+          "sample_rows": {
+            "default": [],
+            "items": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "maxItems": 100,
+            "title": "Sample Rows",
+            "type": "array"
+          },
+          "source_id": {
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_revision": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source Revision"
+          },
+          "unresolved": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_id",
+          "fields",
+          "proposed_mapping",
+          "unresolved",
+          "assumptions"
+        ],
+        "title": "SourceProfile",
+        "type": "object"
+      },
+      "VerificationProtocol": {
+        "additionalProperties": false,
+        "description": "Frozen before final evaluation; no post-selection correction is assumed.",
+        "properties": {
+          "criterion": {
+            "default": "mae",
+            "enum": [
+              "mae",
+              "brier"
+            ],
+            "title": "Criterion",
+            "type": "string"
+          },
+          "reference_node_id": {
+            "default": "reference",
+            "minLength": 1,
+            "title": "Reference Node Id",
+            "type": "string"
+          },
+          "selection_method": {
+            "default": "prespecified_holdout",
+            "enum": [
+              "prespecified_holdout",
+              "exploratory",
+              "corrected"
+            ],
+            "title": "Selection Method",
+            "type": "string"
+          },
+          "target_node_id": {
+            "default": "question",
+            "minLength": 1,
+            "title": "Target Node Id",
+            "type": "string"
+          }
+        },
+        "title": "VerificationProtocol",
+        "type": "object"
+      },
+      "WatchHistoryEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "event": {
+            "additionalProperties": true,
+            "title": "Event",
+            "type": "object"
+          },
+          "event_id": {
+            "minLength": 1,
+            "title": "Event Id",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "watch": {
+            "$ref": "#/$defs/WatchView"
+          }
+        },
+        "required": [
+          "sequence",
+          "event_id",
+          "occurred_at",
+          "event",
+          "watch"
+        ],
+        "title": "WatchHistoryEntry",
+        "type": "object"
+      },
+      "WatchView": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Candidate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "candidate_id": {
+            "minLength": 1,
+            "title": "Candidate Id",
+            "type": "string"
+          },
+          "candidate_invalidated": {
+            "default": false,
+            "title": "Candidate Invalidated",
+            "type": "boolean"
+          },
+          "eligibility_decision": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/EligibilityDecision"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "evidence_applicable": {
+            "default": false,
+            "title": "Evidence Applicable",
+            "type": "boolean"
+          },
+          "graph_id": {
+            "minLength": 1,
+            "title": "Graph Id",
+            "type": "string"
+          },
+          "graph_version": {
+            "title": "Graph Version",
+            "type": "integer"
+          },
+          "invalidated_evaluation_ids": {
+            "default": [],
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Invalidated Evaluation Ids",
+            "type": "array"
+          },
+          "lifecycle": {
+            "enum": [
+              "candidate",
+              "evaluating",
+              "active",
+              "paused",
+              "unsupported"
+            ],
+            "title": "Lifecycle",
+            "type": "string"
+          },
+          "muted": {
+            "title": "Muted",
+            "type": "boolean"
+          },
+          "next_due_at": {
+            "format": "date-time",
+            "title": "Next Due At",
+            "type": "string"
+          },
+          "operational": {
+            "readOnly": true,
+            "title": "Operational",
+            "type": "boolean"
+          },
+          "policy_version": {
+            "minLength": 1,
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "priority": {
+            "default": 3,
+            "maximum": 5,
+            "minimum": 0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "quality": {
+            "enum": [
+              "provisional",
+              "usable",
+              "stale",
+              "degraded"
+            ],
+            "title": "Quality",
+            "type": "string"
+          },
+          "reevaluation_required": {
+            "default": true,
+            "title": "Reevaluation Required",
+            "type": "boolean"
+          },
+          "source_snapshot_ids": {
+            "default": [],
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Source Snapshot Ids",
+            "type": "array"
+          },
+          "supersedes_watch_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Supersedes Watch Id"
+          },
+          "watch_id": {
+            "minLength": 1,
+            "title": "Watch Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "watch_id",
+          "candidate_id",
+          "lifecycle",
+          "quality",
+          "graph_id",
+          "graph_version",
+          "policy_version",
+          "next_due_at",
+          "muted",
+          "operational"
+        ],
+        "title": "WatchView",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "entries": {
+        "items": {
+          "$ref": "#/$defs/WatchHistoryEntry"
+        },
+        "title": "Entries",
+        "type": "array"
+      },
+      "next_offset": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Next Offset"
+      }
+    },
+    "required": [
+      "entries",
+      "next_offset"
+    ],
+    "title": "WatchHistoryPage",
+    "type": "object"
+  },
   "WatchPatch": {
     "additionalProperties": false,
     "properties": {
@@ -4712,6 +6049,19 @@
             ],
             "title": "Action",
             "type": "string"
+          },
+          "backtest_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Backtest Id"
           },
           "candidate_id": {
             "anyOf": [

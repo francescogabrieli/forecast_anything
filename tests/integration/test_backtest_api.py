@@ -98,6 +98,16 @@ def test_backtest_job_publishes_manual_scores_and_bounded_immutable_reads(tmp_pa
     last = client.get(f"/v1/backtests/{job_id}/origins?offset=6&limit=2").json()
     assert [o["ordinal"] for o in last["origins"]] == [6]
     assert last["next_offset"] is None
+    huge_offset = 2**63
+    huge = client.get(f"/v1/backtests/{job_id}/origins?offset={huge_offset}&limit=2")
+    assert huge.status_code == 200
+    assert huge.json() == {
+        "backtest_id": job_id,
+        "origins": [],
+        "offset": huge_offset,
+        "limit": 2,
+        "next_offset": None,
+    }
     for query in ("offset=-1", "limit=0", "limit=51"):
         assert client.get(f"/v1/backtests/{job_id}/origins?{query}").status_code == 422
     before = ledger.events_after(0, 1000)

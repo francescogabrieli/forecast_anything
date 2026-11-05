@@ -234,3 +234,48 @@ def test_source_read_error_never_exposes_path(tmp_path):
         "details": {"reason": "csv_read_failed"},
     }
     assert "private.csv" not in client.get(f"/v1/jobs/{job_id}").text
+
+
+def test_watch_qualification_replay_after_deadline_keeps_original_event(tmp_path):
+    from test_worker import T as watch_time
+    from test_worker import registered_watch
+    from test_worker import setup as watch_setup
+
+    from forecast_anything.backtesting.service import backtest_payload, execute_job
+    from forecast_anything.contracts import BacktestJobRequest
+    from forecast_anything.discovery.policy import candidate_backtest_selection
+    from forecast_anything.sources.catalog import SourceCatalog
+
+    ledger, _, runtime = watch_setup(tmp_path)
+    registered_watch(tmp_path, ledger, due=watch_time + timedelta(seconds=10))
+    watch = ledger.get_watch("watch")
+    catalog = SourceCatalog(ledger.path)
+    request = BacktestJobRequest(
+        kind="backtest",
+        key="watch-retry",
+        source_id="sales",
+        watch_id="watch",
+        selection=candidate_backtest_selection(watch.candidate),
+        settings={"max_origins_per_partition": 30},
+    )
+    queue = JobQueue(ledger)
+    queue.enqueue(request.key, backtest_payload(runtime, catalog, request))
+    original = queue.claim("first", watch_time, 5)
+    result = execute_job(runtime, catalog, original, watch_time)
+    event_id = f"backtest/{result['report_id']}"
+    first_event = next(
+        h for h in ledger.watch_history("watch") if h["event_id"] == event_id
+    )
+    later = watch_time + timedelta(seconds=20)
+    ledger.advance_watch(
+        "watch", {"kind": "refresh_expired"}, later, event_id="expired"
+    )
+    # No queue acknowledgment before simulated process death; reclaim expired lease.
+    reclaimed = queue.claim("second", later, 60)
+    assert reclaimed.job_id == original.job_id
+    replay = execute_job(runtime, catalog, reclaimed, later)
+    assert replay["report_id"] == result["report_id"]
+    assert ledger.get_watch("watch").quality == "stale"
+    assert not ledger.get_watch("watch").operational
+    events = [h for h in ledger.watch_history("watch") if h["event_id"] == event_id]
+    assert events == [first_event]

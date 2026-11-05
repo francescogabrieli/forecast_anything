@@ -603,6 +603,48 @@ def test_backtest_client_permits_only_fixed_public_read_shapes(path):
 @pytest.mark.parametrize(
     ("method", "path"),
     [
+        ("GET", "/v1/watches"),
+        ("GET", "/v1/watches/w%2F1"),
+        ("GET", "/v1/watches/w%2F1/history"),
+        ("GET", "/v1/watches/w%2F1/changes"),
+        ("POST", "/v1/watches"),
+        ("PATCH", "/v1/watches/w%2F1"),
+    ],
+)
+def test_client_permits_only_explicit_watch_routes(method, path):
+    seen = []
+
+    def respond(req):
+        seen.append(req)
+        return httpx.Response(200, json={})
+
+    assert request(httpx.MockTransport(respond), method, path) == {}
+    assert seen[0].method == method
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/v1/watches/w/history/private"),
+        ("POST", "/v1/watches/w"),
+        ("PATCH", "/v1/watches"),
+        ("DELETE", "/v1/watches/w"),
+    ],
+)
+def test_client_rejects_unexposed_watch_routes(method, path):
+    with pytest.raises(client_module().CoreRequestError, match="^invalid_request$"):
+        request(
+            httpx.MockTransport(
+                lambda req: pytest.fail("unexposed watch route reached HTTP")
+            ),
+            method,
+            path,
+        )
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
         ("GET", "/v1/backtests"),
         ("GET", "/v1/backtests/b/archive"),
         ("GET", "/v1/backtests/b/plan"),

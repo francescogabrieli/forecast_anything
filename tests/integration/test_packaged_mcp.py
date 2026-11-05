@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
 from runpy import run_path
 from zipfile import ZipFile
@@ -15,7 +16,7 @@ import pytest
 pytest.importorskip("mcp", reason="install the optional mcp extra")
 
 from mcp_evidence_journey import evidence_journey
-from mcp_processes import ROOT, LocalWorkspace, baseline_journey
+from mcp_processes import ISSUED, ROOT, LocalWorkspace, baseline_journey
 
 
 def run(command, cwd, env):
@@ -115,3 +116,15 @@ def test_installed_wheel_mcp_baseline_outside_checkout(tmp_path):
                 asyncio.wait_for(evidence_journey(workspace), timeout=60)
             )
             assert report["partitions"][2]["matched_count"] == 4
+
+        with LocalWorkspace(
+            outside / "liveness-workspace", python=python, executable=executable
+        ) as workspace:
+            workspace.wait_for_worker()
+            workspace.crash_worker()
+            stale_time = datetime.fromisoformat(ISSUED) + timedelta(seconds=11)
+            workspace.set_clock(stale_time.isoformat())
+            assert workspace.get("/health")["worker"] == "stale"
+            workspace.start_worker()
+            workspace.wait_for_worker()
+            assert workspace.get("/health")["worker"] == "running"

@@ -18,6 +18,7 @@ from ..contracts import (
     GraphSpec,
     JobRequest,
     JobView,
+    OpaqueDictionary,
     RunRecord,
     ScenarioRequest,
     ScenarioView,
@@ -27,6 +28,7 @@ from ..contracts import (
     SourceRegistration,
     SourceSpec,
     SourceView,
+    WatchHistoryPage,
     WatchPatch,
     WatchRequest,
     WatchView,
@@ -79,6 +81,26 @@ def router(service):
     @api.get("/watches", response_model=list[WatchView])
     def watches():
         return service.watches()
+
+    @api.get("/watches/{watch_id}", response_model=WatchView)
+    def get_watch(watch_id: str):
+        return service.watch(watch_id)
+
+    @api.get("/watches/{watch_id}/history", response_model=WatchHistoryPage)
+    def watch_history(
+        watch_id: str,
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    ):
+        return service.watch_history(watch_id, offset=offset, limit=limit)
+
+    @api.get("/watches/{watch_id}/changes", response_model=OpaqueDictionary)
+    def watch_change_summary(
+        watch_id: str,
+        previous_run_id: Annotated[str, Query(min_length=1)],
+        current_run_id: Annotated[str, Query(min_length=1)],
+    ):
+        return service.watch_change_summary(watch_id, previous_run_id, current_run_id)
 
     @api.patch("/watches/{watch_id}", response_model=WatchView)
     def patch(watch_id: str, request: WatchPatch):
