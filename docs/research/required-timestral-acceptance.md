@@ -56,3 +56,11 @@ Real parity and installed-model checks were executed with explicit local weights
 - Historical backtest `8a2f888fe105f38a43c5e80389ba262bfa697d47df13f4c62da4b3d0becdd6c1` remains completed. Sampled legacy watch is paused/stale with `required_provider_migration`.
 - The already running desktop MCP process retains its old response schema; capabilities/watch reads require a Codex restart to load the updated configured adapter. Historical backtest reads already work through the current desktop process.
 - launchd remains session-managed; installation for future login/reboot is outside this change. Docker builds were not executed because no Docker daemon was available. Site data/copy was updated locally in the original checkout, separately from this feature PR, without publishing.
+
+## CI follow-up, 6 November
+
+The first remote run exposed two legacy subprocess tests that implicitly relied on the developer's weight cache. These ledger/queue behavior tests now use an explicit generic-library CLI fixture; production entrypoints retain mandatory Timestral enforcement. A separate subprocess regression requires `model_not_prepared`, with no output/fallback, when the cache is empty. Full cache-empty verification: **902 passed, 2 explicitly guarded real-model checks skipped**, 57.88 seconds.
+
+The Postgres/Eve recovery seed was still constructing a legacy baseline candidate and a job without provider context. It now records the same pinned Timestral context as product discovery. A regression verifies the actual worker reaches the gateway with an empty weight cache; it fails against the previous seed. This recovery test exercises orchestration, not numerical accuracy.
+
+After the desktop restart, the session-managed launch agent was absent and was bootstrapped again. The current desktop MCP adapter now successfully reads mandatory Timestral capabilities, the migrated watch reason and the previously issued real Timestral run. The service remains scoped to the current login session.

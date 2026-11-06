@@ -148,20 +148,33 @@ def test_csv_rejects_invalid_values(tmp_path, replacement):
 
 
 def test_cli_errors_and_failed_run(tmp_path):
+    def library_cli(*arguments):
+        import sys
+
+        return subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "tests/fixtures/library_cli.py"),
+                *map(str, arguments),
+            ],
+            capture_output=True,
+            text=True,
+        )
+
     graph = tmp_path / "timestral.json"
     specification = json.loads((ROOT / "examples/minimal/graph.json").read_text())
-    specification["nodes"][1]["config"]["provider"] = "timestral"
-    specification["nodes"][1]["config"]["options"] = {}
+    specification["nodes"][1]["config"]["provider"] = "seasonal_naive"
+    specification["nodes"][1]["config"]["options"] = {"period": 1}
     graph.write_text(json.dumps(specification))
     data = tmp_path / "data.csv"
     data.write_text(
         ",".join(FIELDS) + "\ndemand,2026-10-23T00:00:00Z,2026-10-23T00:00:00Z,1,,kWh\n"
     )
     args = ("run", graph, "--data", data, "--db", tmp_path / "runs.db")
-    invalid = cli(*args, "--as-of", "2026-10-24")
+    invalid = library_cli(*args, "--as-of", "2026-10-24")
     assert invalid.returncode != 0
     assert json.loads(invalid.stderr)["code"] == "naive_timestamp"
-    failed = cli(*args, "--as-of", "2026-10-24T00:00:00Z")
+    failed = library_cli(*args, "--as-of", "2026-10-24T00:00:00Z")
     assert failed.returncode == 1
     assert json.loads(failed.stdout)["state"] == "failed"
     missing = cli("show", "absent", "--db", tmp_path / "runs.db")
@@ -186,3 +199,20 @@ def test_cli_malformed_csv_header_is_structured_error(tmp_path):
     assert result.stdout == ""
     assert "Traceback" not in result.stderr
     assert json.loads(result.stderr)["code"] == "invalid_csv"
+
+
+def test_cli_requires_prepared_model_without_fallback(tmp_path, monkeypatch):
+    monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path / "empty-cache"))
+    result = cli(
+        "run",
+        ROOT / "examples/minimal/graph.json",
+        "--data",
+        ROOT / "examples/minimal/observations.csv",
+        "--as-of",
+        "2026-10-26T00:00:00Z",
+        "--db",
+        tmp_path / "missing-model.db",
+    )
+    assert result.returncode == 2
+    assert json.loads(result.stderr)["code"] == "model_not_prepared"
+    assert not result.stdout
