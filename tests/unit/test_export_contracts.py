@@ -30,6 +30,17 @@ def test_exports_public_backtest_contracts_without_private_raw_archive(tmp_path)
         "OriginOutcome",
         "OriginPage",
         "PartitionScore",
+        "QuestionView",
+        "QuestionRevision",
+        "QuestionReference",
+        "OperationView",
+        "OperationSubmitRequest",
+        "SnapshotSummary",
+        "SnapshotSeriesSummary",
+        "ForecastPresentation",
+        "BacktestPresentation",
+        "BacktestSummary",
+        "QuestionPresentation",
     } <= schemas.keys()
     assert "ObservationArchive" not in schemas
     assert "BacktestPlan" not in schemas

@@ -17,8 +17,23 @@ from ..contracts import (
     EvaluationJobRequest,
     JobView,
     OpaqueDictionary,
+    OperationCreateRequest,
+    OperationPage,
+    OperationSubmitRequest,
+    OperationUpdateRequest,
+    OperationView,
+    QuestionCreateRequest,
+    QuestionPage,
+    QuestionReferencePage,
+    QuestionReferenceRequest,
+    QuestionRevisionPage,
+    QuestionRevisionRequest,
+    QuestionTitlePatch,
+    QuestionView,
     ResumeJobRequest,
     RunJobRequest,
+    SnapshotSeriesPage,
+    SnapshotSummary,
     SourceProfile,
     SourceRefreshRequest,
     SourceRegistration,
@@ -326,6 +341,220 @@ class Observatory:
         self.worker._sync_watches(self.now())
         return tuple(WatchView(**w.model_dump()) for w in self.ledger.list_watches())
 
+    def create_question(self, request: QuestionCreateRequest) -> QuestionView:
+        return self.ledger.create_question(request)
+
+    def questions(self, *, offset: int, limit: int) -> QuestionPage:
+        return self.ledger.list_questions(offset=offset, limit=limit)
+
+    def question(self, question_id: str) -> QuestionView:
+        return self.ledger.get_question(question_id)
+
+    def patch_question(
+        self, question_id: str, patch: QuestionTitlePatch
+    ) -> QuestionView:
+        return self.ledger.patch_question(question_id, patch)
+
+    def revise_question(
+        self, question_id: str, request: QuestionRevisionRequest
+    ) -> QuestionView:
+        return self.ledger.revise_question(question_id, request)
+
+    def question_revisions(
+        self, question_id: str, *, offset: int, limit: int
+    ) -> QuestionRevisionPage:
+        return self.ledger.list_question_revisions(
+            question_id, offset=offset, limit=limit
+        )
+
+    def question_revision(self, question_id: str, revision: int):
+        return self.ledger.get_question_revision(question_id, revision)
+
+    def link_question_reference(
+        self, question_id: str, request: QuestionReferenceRequest
+    ):
+        self.ledger.get_question_revision(question_id, request.revision)
+        if request.target_type == "candidate":
+            self.ledger.get_candidate(request.target_id)
+        elif request.target_type == "run":
+            self.ledger.get_run(request.target_id)
+        elif request.target_type == "watch":
+            self.ledger.get_watch(request.target_id)
+        elif request.target_type == "evaluation":
+            self.ledger.get_evaluation(request.target_id)
+        elif request.target_type == "backtest":
+            self.backtest(request.target_id)
+        elif request.target_type == "operation":
+            self.ledger.get_operation(request.target_id)
+        return self.ledger.link_question_reference(question_id, request)
+
+    def question_references(
+        self, question_id: str, *, revision: int | None, offset: int, limit: int
+    ) -> QuestionReferencePage:
+        return self.ledger.list_question_references(
+            question_id, revision=revision, offset=offset, limit=limit
+        )
+
+    def snapshot_summary(self, snapshot_id: str) -> SnapshotSummary:
+        from ..presentations import summarize_snapshot
+
+        return summarize_snapshot(self.ledger.get_snapshot(snapshot_id))
+
+    def snapshot_series(
+        self, snapshot_id: str, *, offset: int, limit: int
+    ) -> SnapshotSeriesPage:
+        from ..presentations import snapshot_series_page
+
+        return snapshot_series_page(
+            self.ledger.get_snapshot(snapshot_id), offset=offset, limit=limit
+        )
+
+    def forecast_presentation(self, run_id: str):
+        from ..presentations import present_run
+
+        return present_run(self.ledger.get_run(run_id))
+
+    def backtest_presentation(self, backtest_id: str, *, watch_id: str | None):
+        from ..presentations import present_backtest, summarize_backtest_records
+
+        report = self.backtest(backtest_id)
+        origins = []
+        offset = 0
+        while True:
+            page = self.backtest_origins(backtest_id, offset=offset, limit=50)
+            origins.extend(page.origins)
+            if len(origins) > 150:
+                raise DomainError("invalid_backtest_record", {})
+            if page.next_offset is None:
+                break
+            if page.next_offset <= offset or page.next_offset > 150:
+                raise DomainError("invalid_backtest_record", {})
+            offset = page.next_offset
+        watch = self.watch(watch_id) if watch_id is not None else None
+        return present_backtest(
+            summarize_backtest_records(report, tuple(origins), watch)
+        )
+
+    def question_presentation(self, question_id: str, *, offset: int, limit: int):
+        from ..presentations import present_question
+
+        question = self.ledger.get_question(question_id)
+        page = self.ledger.list_question_references(
+            question_id, offset=offset, limit=limit
+        )
+        return present_question(question, page.references, next_offset=page.next_offset)
+
+    def create_operation(self, request: OperationCreateRequest) -> OperationView:
+        return self.ledger.create_operation(request)
+
+    def operation(self, operation_id: str) -> OperationView:
+        return self._operation_view(self.ledger.get_operation(operation_id))
+
+    def operations(
+        self, *, question_id: str | None, offset: int, limit: int
+    ) -> OperationPage:
+        page = self.ledger.list_operations(
+            question_id=question_id, offset=offset, limit=limit
+        )
+        return page.model_copy(
+            update={
+                "operations": tuple(
+                    self._operation_view(item) for item in page.operations
+                )
+            }
+        )
+
+    def update_operation(
+        self, operation_id: str, request: OperationUpdateRequest
+    ) -> OperationView:
+        return self._operation_view(self.ledger.update_operation(operation_id, request))
+
+    def _operation_view(self, view: OperationView) -> OperationView:
+        if view.job_id is None:
+            return view
+        try:
+            job = self.job(view.job_id)
+        except DomainError as error:
+            if error.code == "not_found":
+                return view
+            raise
+        state = {
+            "pending": "submitted",
+            "running": "submitted",
+            "completed": "completed",
+            "failed": "failed",
+        }.get(job.state, view.state)
+        return view.model_copy(
+            update={"state": state, "job_state": job.state, "job_error": job.error}
+        )
+
+    def _operation_source_ids(self, request: OperationSubmitRequest) -> tuple[str, ...]:
+        job = request.request
+        if job.kind == "run":
+            candidate = self.ledger.get_candidate(request.candidate_id)
+            if (
+                not candidate.executable
+                or candidate.unresolved
+                or candidate.graph != job.graph
+            ):
+                raise DomainError("candidate_not_executable", {})
+            declared = {
+                config.source_id
+                for node in job.graph.nodes
+                if node.kind == "source"
+                and isinstance((config := parse_node_config(node)), SourceConfig)
+            }
+            if set(job.snapshot_ids) != declared:
+                raise DomainError("invalid_snapshot_bindings", {})
+            return ()
+        if job.kind == "backtest":
+            return (job.source_id,)
+        if job.kind == "configured_run":
+            return ()
+        if job.kind == "evaluation":
+            self.ledger.run_bindings(job.run_id)
+            return ()
+        raise DomainError("invalid_operation_job", {})
+
+    def submit_operation(
+        self, operation_id: str, request: OperationSubmitRequest
+    ) -> OperationView:
+        request = OperationSubmitRequest.model_validate(request.model_dump())
+        source_ids = self._operation_source_ids(request)
+        self.ledger.reserve_operation_submission(
+            operation_id, request, source_ids=source_ids
+        )
+        stored_view, stored_request = self.ledger.operation_submission(operation_id)
+        logical_key = f"operation/{operation_id}"
+        if stored_view.job_id is None:
+            raise DomainError("operation_job_reservation_missing", {})
+        try:
+            job = self.queue.get(stored_view.job_id)
+            if job.key != logical_key:
+                raise DomainError("operation_job_mismatch", {})
+        except DomainError as error:
+            if error.code != "not_found":
+                raise
+            accepted = self.submit(stored_request.request, logical_key=logical_key)
+            if accepted.job_id != stored_view.job_id:
+                raise DomainError("operation_job_mismatch", {})
+        self.ledger.mark_operation_enqueued(operation_id, stored_view.job_id)
+        return self.operation(operation_id)
+
+    def resume_operation(self, operation_id: str) -> OperationView:
+        view, request = self.ledger.operation_submission(operation_id)
+        logical_key = f"operation/{operation_id}"
+        try:
+            job = self.queue.get(view.job_id)
+        except DomainError as error:
+            if error.code != "not_found":
+                raise
+            return self.submit_operation(operation_id, request)
+        if job.key != logical_key:
+            raise DomainError("operation_job_mismatch", {})
+        self.ledger.mark_operation_enqueued(operation_id, view.job_id)
+        return self.operation(operation_id)
+
     def watch(self, watch_id: str):
         return WatchView(**self.ledger.get_watch(watch_id).model_dump())
 
@@ -431,27 +660,51 @@ class Observatory:
             raise DomainError("idempotency_conflict", {"key": request.key})
         return self.queue.get(job_id)
 
-    def submit(self, request):
+    def _enqueue_submission(self, key: str, payload: dict, *, replay_reserved: bool):
+        try:
+            return self.queue.enqueue(key, payload)
+        except DomainError as error:
+            if not replay_reserved or error.code != "idempotency_conflict":
+                raise
+            # The operation ledger has already bound this logical key to one
+            # canonical confirmed request. If enqueue won before a crash, its
+            # original payload is authoritative even if mutable source metadata
+            # changed before the reconnect.
+            job = self.queue.get(sha256(key.encode()).hexdigest())
+            if job.key != key:
+                raise DomainError("operation_job_mismatch", {}) from None
+            return job
+
+    def submit(self, request, *, logical_key: str | None = None):
         configured = None
         if isinstance(request, (ConfiguredRunJobRequest, BacktestJobRequest)):
             request = type(request).model_validate_json(request.model_dump_json())
-            prior = backtesting.replay_job(self.queue, request)
+            prior = (
+                backtesting.replay_job(self.queue, request)
+                if logical_key is None
+                else None
+            )
             if prior is not None:
                 return self.job(prior.job_id)
             if isinstance(request, BacktestJobRequest):
                 payload = backtesting.backtest_payload(
                     self.runtime, self.catalog, request
                 )
-                try:
-                    job = self.queue.enqueue(f"api/{request.key}", payload)
-                except DomainError as error:
-                    if error.code != "idempotency_conflict":
-                        raise
-                    # A competing insert may bind a different current revision.
-                    # Its original public intent, not derived metadata, wins.
-                    job = backtesting.replay_job(self.queue, request)
-                    if job is None:
-                        raise
+                if logical_key is None:
+                    try:
+                        job = self.queue.enqueue(f"api/{request.key}", payload)
+                    except DomainError as error:
+                        if error.code != "idempotency_conflict":
+                            raise
+                        # A competing insert may bind a different current revision.
+                        # Its original public intent, not derived metadata, wins.
+                        job = backtesting.replay_job(self.queue, request)
+                        if job is None:
+                            raise
+                else:
+                    job = self._enqueue_submission(
+                        logical_key, payload, replay_reserved=True
+                    )
                 return self.job(job.job_id)
             from ..forecast_policy import validate_selection
 
@@ -460,7 +713,11 @@ class Observatory:
             request = backtesting.configured_run(self.ledger, self.catalog, configured)
         if isinstance(request, RunJobRequest):
             request = RunJobRequest.model_validate(request.model_dump())
-            prior = self._replay_run(request) if configured is None else None
+            prior = (
+                self._replay_run(request)
+                if configured is None and logical_key is None
+                else None
+            )
             if prior is not None:
                 return self.job(prior.job_id)
             snapshots = {
@@ -567,7 +824,11 @@ class Observatory:
                 "kind": "configured_run",
                 "request": backtesting.original_request(configured),
             }
-        job = self.queue.enqueue(f"api/{request.key}", payload)
+        job = self._enqueue_submission(
+            logical_key or f"api/{request.key}",
+            payload,
+            replay_reserved=logical_key is not None,
+        )
         return self.job(job.job_id)
 
     def backtest(self, backtest_id):

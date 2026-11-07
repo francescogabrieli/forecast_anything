@@ -18,13 +18,20 @@ _SEGMENT = r"(?!\.{1,2}(?:/|$))(?:[A-Za-z0-9_.~-]|%[0-9A-Fa-f]{2})+"
 _ROUTES = {
     "GET": re.compile(
         rf"/v1/(?:capabilities|sources|events|"
-        rf"(?:jobs|candidates|runs|snapshots|graphs|evaluations)/{_SEGMENT}|"
-        rf"backtests/{_SEGMENT}(?:/origins)?|"
+        rf"(?:jobs|candidates|runs|graphs|evaluations)/{_SEGMENT}|"
+        rf"snapshots/{_SEGMENT}(?:/(?:summary|series))?|"
+        rf"questions(?:/{_SEGMENT}(?:/(?:references|presentation|revisions(?:/{_SEGMENT})?))?)?|"
+        rf"operations(?:/{_SEGMENT})?|"
+        rf"backtests/{_SEGMENT}(?:/(?:origins|presentation))?|"
         rf"watches(?:/{_SEGMENT}(?:/(?:history|changes))?)?|"
-        rf"sources/{_SEGMENT}/profile|runs/{_SEGMENT}/evaluations)"
+        rf"sources/{_SEGMENT}/profile|runs/{_SEGMENT}/(?:evaluations|presentation))"
     ),
-    "POST": re.compile(rf"/v1/(?:sources|jobs|watches|sources/{_SEGMENT}/refresh)"),
-    "PATCH": re.compile(rf"/v1/watches/{_SEGMENT}"),
+    "POST": re.compile(
+        rf"/v1/(?:sources|jobs|watches|questions|sources/{_SEGMENT}/refresh|"
+        rf"questions/{_SEGMENT}/(?:revisions|references)|"
+        rf"operations|operations/{_SEGMENT}/(?:submit|resume))"
+    ),
+    "PATCH": re.compile(rf"/v1/(?:watches|questions|operations)/{_SEGMENT}"),
 }
 _STATUS_CODES = {
     401: "unauthorized",

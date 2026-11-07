@@ -1165,3 +1165,1912 @@ export namespace JobViewGenerated {
   }
 }
 export type JobView = JobViewGenerated.JobView;
+
+export namespace QuestionForecastSelectionGenerated {
+  export type BaselinePeriod = number;
+  export type Horizon = number;
+  export type JsonValue = unknown;
+  export type Provider = string;
+
+  export interface QuestionForecastSelection {
+    baseline_period?: BaselinePeriod;
+    horizon: Horizon;
+    options?: Options;
+    provider: Provider;
+  }
+  export interface Options {
+    [k: string]: JsonValue;
+  }
+}
+export type QuestionForecastSelection = QuestionForecastSelectionGenerated.QuestionForecastSelection;
+
+export namespace QuestionCreateRequestGenerated {
+  export type Key = string;
+  export type Meaning = string;
+  export type BaselinePeriod = number;
+  export type Horizon = number;
+  export type JsonValue = unknown;
+  export type Provider = string;
+  /**
+   * @maxItems 16
+   */
+  export type SourceIds =
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ];
+  export type Title = string;
+
+  export interface QuestionCreateRequest {
+    key: Key;
+    meaning: Meaning;
+    selection: QuestionForecastSelection;
+    source_ids?: SourceIds;
+    title: Title;
+  }
+  export interface QuestionForecastSelection {
+    baseline_period?: BaselinePeriod;
+    horizon: Horizon;
+    options?: Options;
+    provider: Provider;
+  }
+  export interface Options {
+    [k: string]: JsonValue;
+  }
+}
+export type QuestionCreateRequest = QuestionCreateRequestGenerated.QuestionCreateRequest;
+
+export namespace QuestionRevisionRequestGenerated {
+  export type ExpectedRevision = number;
+  export type Key = string;
+  export type Meaning = string;
+  export type BaselinePeriod = number;
+  export type Horizon = number;
+  export type JsonValue = unknown;
+  export type Provider = string;
+  /**
+   * @maxItems 16
+   */
+  export type SourceIds =
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ];
+
+  export interface QuestionRevisionRequest {
+    expected_revision: ExpectedRevision;
+    key: Key;
+    meaning: Meaning;
+    selection: QuestionForecastSelection;
+    source_ids?: SourceIds;
+  }
+  export interface QuestionForecastSelection {
+    baseline_period?: BaselinePeriod;
+    horizon: Horizon;
+    options?: Options;
+    provider: Provider;
+  }
+  export interface Options {
+    [k: string]: JsonValue;
+  }
+}
+export type QuestionRevisionRequest = QuestionRevisionRequestGenerated.QuestionRevisionRequest;
+
+export namespace QuestionTitlePatchGenerated {
+  export type Status = ("open" | "paused" | "resolved") | null;
+  export type Title = string | null;
+
+  export interface QuestionTitlePatch {
+    status?: Status;
+    title?: Title;
+  }
+}
+export type QuestionTitlePatch = QuestionTitlePatchGenerated.QuestionTitlePatch;
+
+export namespace QuestionRevisionGenerated {
+  export type CreatedAt = string;
+  export type Meaning = string;
+  export type QuestionId = string;
+  export type Revision = number;
+  export type BaselinePeriod = number;
+  export type Horizon = number;
+  export type JsonValue = unknown;
+  export type Provider = string;
+  /**
+   * @maxItems 16
+   */
+  export type SourceIds =
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ];
+
+  export interface QuestionRevision {
+    created_at: CreatedAt;
+    meaning: Meaning;
+    question_id: QuestionId;
+    revision: Revision;
+    selection: QuestionForecastSelection;
+    source_ids: SourceIds;
+  }
+  export interface QuestionForecastSelection {
+    baseline_period?: BaselinePeriod;
+    horizon: Horizon;
+    options?: Options;
+    provider: Provider;
+  }
+  export interface Options {
+    [k: string]: JsonValue;
+  }
+}
+export type QuestionRevision = QuestionRevisionGenerated.QuestionRevision;
+
+export namespace QuestionViewGenerated {
+  export type CreatedAt = string;
+  export type CurrentRevision = number;
+  export type QuestionId = string;
+  export type ReferenceCount = number;
+  export type CreatedAt1 = string;
+  export type Meaning = string;
+  export type QuestionId1 = string;
+  export type Revision = number;
+  export type BaselinePeriod = number;
+  export type Horizon = number;
+  export type JsonValue = unknown;
+  export type Provider = string;
+  /**
+   * @maxItems 16
+   */
+  export type SourceIds =
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ];
+  export type RevisionCount = number;
+  export type Status = "open" | "paused" | "resolved";
+  export type Title = string;
+  export type UpdatedAt = string;
+
+  export interface QuestionView {
+    created_at: CreatedAt;
+    current_revision: CurrentRevision;
+    question_id: QuestionId;
+    reference_count: ReferenceCount;
+    revision: QuestionRevision;
+    revision_count: RevisionCount;
+    status: Status;
+    title: Title;
+    updated_at: UpdatedAt;
+  }
+  export interface QuestionRevision {
+    created_at: CreatedAt1;
+    meaning: Meaning;
+    question_id: QuestionId1;
+    revision: Revision;
+    selection: QuestionForecastSelection;
+    source_ids: SourceIds;
+  }
+  export interface QuestionForecastSelection {
+    baseline_period?: BaselinePeriod;
+    horizon: Horizon;
+    options?: Options;
+    provider: Provider;
+  }
+  export interface Options {
+    [k: string]: JsonValue;
+  }
+}
+export type QuestionView = QuestionViewGenerated.QuestionView;
+
+export namespace QuestionReferenceRequestGenerated {
+  export type Key = string;
+  export type Note = string;
+  export type Revision = number;
+  export type TargetId = string;
+  export type TargetType = "candidate" | "run" | "backtest" | "watch" | "evaluation" | "operation";
+
+  export interface QuestionReferenceRequest {
+    key: Key;
+    note?: Note;
+    revision: Revision;
+    target_id: TargetId;
+    target_type: TargetType;
+  }
+}
+export type QuestionReferenceRequest = QuestionReferenceRequestGenerated.QuestionReferenceRequest;
+
+export namespace QuestionReferenceGenerated {
+  export type CreatedAt = string;
+  export type Note = string;
+  export type QuestionId = string;
+  export type ReferenceId = string;
+  export type Revision = number;
+  export type TargetId = string;
+  export type TargetType = "candidate" | "run" | "backtest" | "watch" | "evaluation" | "operation";
+
+  export interface QuestionReference {
+    created_at: CreatedAt;
+    note: Note;
+    question_id: QuestionId;
+    reference_id: ReferenceId;
+    revision: Revision;
+    target_id: TargetId;
+    target_type: TargetType;
+  }
+}
+export type QuestionReference = QuestionReferenceGenerated.QuestionReference;
+
+export namespace QuestionPageGenerated {
+  export type NextOffset = number | null;
+  export type CreatedAt = string;
+  export type CurrentRevision = number;
+  export type QuestionId = string;
+  export type ReferenceCount = number;
+  export type CreatedAt1 = string;
+  export type Meaning = string;
+  export type QuestionId1 = string;
+  export type Revision = number;
+  export type BaselinePeriod = number;
+  export type Horizon = number;
+  export type JsonValue = unknown;
+  export type Provider = string;
+  /**
+   * @maxItems 16
+   */
+  export type SourceIds =
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ];
+  export type RevisionCount = number;
+  export type Status = "open" | "paused" | "resolved";
+  export type Title = string;
+  export type UpdatedAt = string;
+  export type Questions = QuestionView[];
+
+  export interface QuestionPage {
+    next_offset: NextOffset;
+    questions: Questions;
+  }
+  export interface QuestionView {
+    created_at: CreatedAt;
+    current_revision: CurrentRevision;
+    question_id: QuestionId;
+    reference_count: ReferenceCount;
+    revision: QuestionRevision;
+    revision_count: RevisionCount;
+    status: Status;
+    title: Title;
+    updated_at: UpdatedAt;
+  }
+  export interface QuestionRevision {
+    created_at: CreatedAt1;
+    meaning: Meaning;
+    question_id: QuestionId1;
+    revision: Revision;
+    selection: QuestionForecastSelection;
+    source_ids: SourceIds;
+  }
+  export interface QuestionForecastSelection {
+    baseline_period?: BaselinePeriod;
+    horizon: Horizon;
+    options?: Options;
+    provider: Provider;
+  }
+  export interface Options {
+    [k: string]: JsonValue;
+  }
+}
+export type QuestionPage = QuestionPageGenerated.QuestionPage;
+
+export namespace QuestionRevisionPageGenerated {
+  export type NextOffset = number | null;
+  export type CreatedAt = string;
+  export type Meaning = string;
+  export type QuestionId = string;
+  export type Revision = number;
+  export type BaselinePeriod = number;
+  export type Horizon = number;
+  export type JsonValue = unknown;
+  export type Provider = string;
+  /**
+   * @maxItems 16
+   */
+  export type SourceIds =
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ];
+  export type Revisions = QuestionRevision[];
+
+  export interface QuestionRevisionPage {
+    next_offset: NextOffset;
+    revisions: Revisions;
+  }
+  export interface QuestionRevision {
+    created_at: CreatedAt;
+    meaning: Meaning;
+    question_id: QuestionId;
+    revision: Revision;
+    selection: QuestionForecastSelection;
+    source_ids: SourceIds;
+  }
+  export interface QuestionForecastSelection {
+    baseline_period?: BaselinePeriod;
+    horizon: Horizon;
+    options?: Options;
+    provider: Provider;
+  }
+  export interface Options {
+    [k: string]: JsonValue;
+  }
+}
+export type QuestionRevisionPage = QuestionRevisionPageGenerated.QuestionRevisionPage;
+
+export namespace QuestionReferencePageGenerated {
+  export type NextOffset = number | null;
+  export type CreatedAt = string;
+  export type Note = string;
+  export type QuestionId = string;
+  export type ReferenceId = string;
+  export type Revision = number;
+  export type TargetId = string;
+  export type TargetType = "candidate" | "run" | "backtest" | "watch" | "evaluation" | "operation";
+  export type References = QuestionReference[];
+
+  export interface QuestionReferencePage {
+    next_offset: NextOffset;
+    references: References;
+  }
+  export interface QuestionReference {
+    created_at: CreatedAt;
+    note: Note;
+    question_id: QuestionId;
+    reference_id: ReferenceId;
+    revision: Revision;
+    target_id: TargetId;
+    target_type: TargetType;
+  }
+}
+export type QuestionReferencePage = QuestionReferencePageGenerated.QuestionReferencePage;
+
+export namespace OperationCreateRequestGenerated {
+  export type Key = string;
+  /**
+   * @maxItems 32
+   */
+  export type MissingData = string[];
+  export type Phase = "collecting" | "ready";
+  export type QuestionId = string | null;
+  export type QuestionRevision = number | null;
+
+  export interface OperationCreateRequest {
+    key: Key;
+    missing_data?: MissingData;
+    phase?: Phase;
+    question_id?: QuestionId;
+    question_revision?: QuestionRevision;
+  }
+}
+export type OperationCreateRequest = OperationCreateRequestGenerated.OperationCreateRequest;
+
+export namespace OperationUpdateRequestGenerated {
+  export type ExpectedVersion = number;
+  export type Key = string;
+  /**
+   * @maxItems 32
+   */
+  export type MissingData = string[];
+  export type Phase = "collecting" | "ready";
+
+  export interface OperationUpdateRequest {
+    expected_version: ExpectedVersion;
+    key: Key;
+    missing_data?: MissingData;
+    phase: Phase;
+  }
+}
+export type OperationUpdateRequest = OperationUpdateRequestGenerated.OperationUpdateRequest;
+
+export namespace OperationSubmitRequestGenerated {
+  export type CandidateId = string | null;
+  export type ExpectedVersion = number;
+  export type Request =
+    RunJobRequest | ConfiguredRunJobRequest | BacktestJobRequest | EvaluationJobRequest | ResumeJobRequest;
+  export type AsOf = string;
+  export type GraphId = string;
+  export type Inputs = string[];
+  export type Kind = "source" | "forecast" | "transform" | "event";
+  export type NodeId = string;
+  export type Nodes = Node[];
+  export type Version = number;
+  export type Key = string;
+  export type Kind1 = "run";
+  export type PreviousRunId = string | null;
+  export type PrimaryNodeId = string | null;
+  export type Key1 = string;
+  export type Kind2 = "configured_run";
+  export type BaselinePeriod = number;
+  export type Horizon = number;
+  export type JsonValue = unknown;
+  export type Provider = string;
+  export type SnapshotId = string;
+  export type SourceId = string;
+  export type Key2 = string;
+  export type Kind3 = "backtest";
+  export type MaxOriginsPerPartition = number;
+  export type OriginOffsetSeconds = number;
+  export type SourceId1 = string;
+  export type WatchId = string | null;
+  export type ActualsSnapshotId = string;
+  export type Key3 = string;
+  export type Kind4 = "evaluation";
+  export type RunId = string;
+  export type Key4 = string;
+  export type Kind5 = "watch_resume";
+  export type WatchId1 = string;
+
+  export interface OperationSubmitRequest {
+    candidate_id?: CandidateId;
+    expected_version: ExpectedVersion;
+    request: Request;
+  }
+  export interface RunJobRequest {
+    as_of: AsOf;
+    graph: GraphSpec;
+    key: Key;
+    kind: Kind1;
+    previous_run_id?: PreviousRunId;
+    primary_node_id?: PrimaryNodeId;
+    snapshot_ids: SnapshotIds;
+  }
+  export interface GraphSpec {
+    graph_id: GraphId;
+    nodes: Nodes;
+    version: Version;
+  }
+  export interface Node {
+    config: Config;
+    inputs: Inputs;
+    kind: Kind;
+    node_id: NodeId;
+  }
+  export interface Config {
+    [k: string]: unknown;
+  }
+  export interface SnapshotIds {
+    [k: string]: string;
+  }
+  export interface ConfiguredRunJobRequest {
+    key: Key1;
+    kind: Kind2;
+    selection: ForecastSelection;
+    snapshot_id: SnapshotId;
+    source_id: SourceId;
+  }
+  export interface ForecastSelection {
+    baseline_period?: BaselinePeriod;
+    horizon: Horizon;
+    options?: Options;
+    provider: Provider;
+  }
+  export interface Options {
+    [k: string]: JsonValue;
+  }
+  export interface BacktestJobRequest {
+    key: Key2;
+    kind: Kind3;
+    selection: ForecastSelection;
+    settings?: BacktestSettings;
+    source_id: SourceId1;
+    watch_id?: WatchId;
+  }
+  export interface BacktestSettings {
+    max_origins_per_partition?: MaxOriginsPerPartition;
+    origin_offset_seconds?: OriginOffsetSeconds;
+  }
+  export interface EvaluationJobRequest {
+    actuals_snapshot_id: ActualsSnapshotId;
+    key: Key3;
+    kind: Kind4;
+    run_id: RunId;
+  }
+  export interface ResumeJobRequest {
+    key: Key4;
+    kind: Kind5;
+    watch_id: WatchId1;
+  }
+}
+export type OperationSubmitRequest = OperationSubmitRequestGenerated.OperationSubmitRequest;
+
+export namespace OperationViewGenerated {
+  export type CreatedAt = string;
+  export type JobError = {
+    [k: string]: unknown;
+  } | null;
+  export type JobId = string | null;
+  export type JobState = string | null;
+  export type MissingData = string[];
+  export type OperationId = string;
+  export type Phase = "collecting" | "ready";
+  export type QuestionId = string | null;
+  export type QuestionRevision = number | null;
+  export type RequestDigest = string | null;
+  export type RequestKind = string | null;
+  /**
+   * @maxItems 16
+   */
+  export type SourceIds =
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ];
+  export type State = "open" | "reserved" | "submitted" | "completed" | "failed";
+  export type UpdatedAt = string;
+  export type Version = number;
+
+  export interface OperationView {
+    created_at: CreatedAt;
+    job_error: JobError;
+    job_id: JobId;
+    job_state: JobState;
+    missing_data: MissingData;
+    operation_id: OperationId;
+    phase: Phase;
+    question_id: QuestionId;
+    question_revision: QuestionRevision;
+    request_digest: RequestDigest;
+    request_kind: RequestKind;
+    source_ids: SourceIds;
+    state: State;
+    updated_at: UpdatedAt;
+    version: Version;
+  }
+}
+export type OperationView = OperationViewGenerated.OperationView;
+
+export namespace OperationPageGenerated {
+  export type NextOffset = number | null;
+  export type CreatedAt = string;
+  export type JobError = {
+    [k: string]: unknown;
+  } | null;
+  export type JobId = string | null;
+  export type JobState = string | null;
+  export type MissingData = string[];
+  export type OperationId = string;
+  export type Phase = "collecting" | "ready";
+  export type QuestionId = string | null;
+  export type QuestionRevision = number | null;
+  export type RequestDigest = string | null;
+  export type RequestKind = string | null;
+  /**
+   * @maxItems 16
+   */
+  export type SourceIds =
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ];
+  export type State = "open" | "reserved" | "submitted" | "completed" | "failed";
+  export type UpdatedAt = string;
+  export type Version = number;
+  export type Operations = OperationView[];
+
+  export interface OperationPage {
+    next_offset: NextOffset;
+    operations: Operations;
+  }
+  export interface OperationView {
+    created_at: CreatedAt;
+    job_error: JobError;
+    job_id: JobId;
+    job_state: JobState;
+    missing_data: MissingData;
+    operation_id: OperationId;
+    phase: Phase;
+    question_id: QuestionId;
+    question_revision: QuestionRevision;
+    request_digest: RequestDigest;
+    request_kind: RequestKind;
+    source_ids: SourceIds;
+    state: State;
+    updated_at: UpdatedAt;
+    version: Version;
+  }
+}
+export type OperationPage = OperationPageGenerated.OperationPage;
+
+export namespace SnapshotSummaryGenerated {
+  export type AsOf = string;
+  export type AssumptionCount = number;
+  /**
+   * @maxItems 16
+   */
+  export type Assumptions =
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ];
+  export type AssumptionsTruncated = boolean;
+  export type AvailableAtEnd = string | null;
+  export type AvailableAtStart = string | null;
+  export type EventTimeEnd = string | null;
+  export type EventTimeStart = string | null;
+  export type MissingCount = number;
+  export type ObservationCount = number;
+  export type RevisionCount = number;
+  export type SeriesCount = number;
+  export type SnapshotId = string;
+
+  export interface SnapshotSummary {
+    as_of: AsOf;
+    assumption_count: AssumptionCount;
+    assumptions: Assumptions;
+    assumptions_truncated: AssumptionsTruncated;
+    available_at_end: AvailableAtEnd;
+    available_at_start: AvailableAtStart;
+    event_time_end: EventTimeEnd;
+    event_time_start: EventTimeStart;
+    missing_count: MissingCount;
+    observation_count: ObservationCount;
+    revision_count: RevisionCount;
+    series_count: SeriesCount;
+    snapshot_id: SnapshotId;
+  }
+}
+export type SnapshotSummary = SnapshotSummaryGenerated.SnapshotSummary;
+
+export namespace SnapshotSeriesSummaryGenerated {
+  export type AvailableAtEnd = string | null;
+  export type AvailableAtStart = string | null;
+  export type EventTimeEnd = string | null;
+  export type EventTimeStart = string | null;
+  export type MissingCount = number;
+  export type ObservationCount = number;
+  export type RevisionCount = number;
+  export type SeriesId = string;
+  export type SnapshotId = string;
+  export type UnitCount = number;
+  /**
+   * @maxItems 8
+   */
+  export type Units =
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string];
+  export type UnitsTruncated = boolean;
+
+  export interface SnapshotSeriesSummary {
+    available_at_end: AvailableAtEnd;
+    available_at_start: AvailableAtStart;
+    event_time_end: EventTimeEnd;
+    event_time_start: EventTimeStart;
+    missing_count: MissingCount;
+    observation_count: ObservationCount;
+    revision_count: RevisionCount;
+    series_id: SeriesId;
+    snapshot_id: SnapshotId;
+    unit_count: UnitCount;
+    units: Units;
+    units_truncated: UnitsTruncated;
+  }
+}
+export type SnapshotSeriesSummary = SnapshotSeriesSummaryGenerated.SnapshotSeriesSummary;
+
+export namespace SnapshotSeriesPageGenerated {
+  export type NextOffset = number | null;
+  export type AvailableAtEnd = string | null;
+  export type AvailableAtStart = string | null;
+  export type EventTimeEnd = string | null;
+  export type EventTimeStart = string | null;
+  export type MissingCount = number;
+  export type ObservationCount = number;
+  export type RevisionCount = number;
+  export type SeriesId = string;
+  export type SnapshotId = string;
+  export type UnitCount = number;
+  /**
+   * @maxItems 8
+   */
+  export type Units =
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string];
+  export type UnitsTruncated = boolean;
+  export type Series = SnapshotSeriesSummary[];
+  export type SnapshotId1 = string;
+
+  export interface SnapshotSeriesPage {
+    next_offset: NextOffset;
+    series: Series;
+    snapshot_id: SnapshotId1;
+  }
+  export interface SnapshotSeriesSummary {
+    available_at_end: AvailableAtEnd;
+    available_at_start: AvailableAtStart;
+    event_time_end: EventTimeEnd;
+    event_time_start: EventTimeStart;
+    missing_count: MissingCount;
+    observation_count: ObservationCount;
+    revision_count: RevisionCount;
+    series_id: SeriesId;
+    snapshot_id: SnapshotId;
+    unit_count: UnitCount;
+    units: Units;
+    units_truncated: UnitsTruncated;
+  }
+}
+export type SnapshotSeriesPage = SnapshotSeriesPageGenerated.SnapshotSeriesPage;
+
+export namespace ForecastPresentationGenerated {
+  export type AsOf = string;
+  export type GraphId = string;
+  export type GraphVersion = number;
+  export type NodeId = string;
+  export type Point = number | null;
+  export type QuantilesTruncated = boolean;
+  export type Representation = "point" | "marginal_quantiles" | "joint_paths";
+  export type SampleCount = number;
+  export type SeriesId = string;
+  export type Timestamp = string;
+  export type Unit = string;
+  /**
+   * @maxItems 64
+   */
+  export type Points = ForecastPresentationPoint[];
+  export type PrimaryNodeId = string | null;
+  /**
+   * @maxItems 16
+   */
+  export type Providers =
+    | []
+    | [ForecastProviderUse]
+    | [ForecastProviderUse, ForecastProviderUse]
+    | [ForecastProviderUse, ForecastProviderUse, ForecastProviderUse]
+    | [ForecastProviderUse, ForecastProviderUse, ForecastProviderUse, ForecastProviderUse]
+    | [ForecastProviderUse, ForecastProviderUse, ForecastProviderUse, ForecastProviderUse, ForecastProviderUse]
+    | [
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse
+      ]
+    | [
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse
+      ]
+    | [
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse
+      ]
+    | [
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse
+      ]
+    | [
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse
+      ]
+    | [
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse
+      ]
+    | [
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse
+      ]
+    | [
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse
+      ]
+    | [
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse
+      ]
+    | [
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse
+      ]
+    | [
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse,
+        ForecastProviderUse
+      ];
+  export type ActualProvider = string | null;
+  export type NodeId1 = string;
+  export type RequestedProvider = string | null;
+  export type ProvidersTruncated = boolean;
+  export type RunId = string;
+  export type SchemaVersion = "forecast-presentation-v1";
+  /**
+   * @maxItems 16
+   */
+  export type SnapshotIds =
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ];
+  export type SnapshotIdsTruncated = boolean;
+  export type State = string;
+  export type TotalPointCount = number;
+  export type Truncated = boolean;
+  export type VisualDestination = "time_series";
+
+  export interface ForecastPresentation {
+    as_of: AsOf;
+    graph_id: GraphId;
+    graph_version: GraphVersion;
+    points: Points;
+    primary_node_id?: PrimaryNodeId;
+    providers: Providers;
+    providers_truncated: ProvidersTruncated;
+    run_id: RunId;
+    schema_version?: SchemaVersion;
+    snapshot_ids: SnapshotIds;
+    snapshot_ids_truncated: SnapshotIdsTruncated;
+    state: State;
+    total_point_count: TotalPointCount;
+    truncated: Truncated;
+    visual_destination?: VisualDestination;
+  }
+  export interface ForecastPresentationPoint {
+    node_id: NodeId;
+    point: Point;
+    quantiles: Quantiles;
+    quantiles_truncated: QuantilesTruncated;
+    representation: Representation;
+    sample_count: SampleCount;
+    series_id: SeriesId;
+    timestamp: Timestamp;
+    unit: Unit;
+  }
+  export interface Quantiles {
+    [k: string]: number;
+  }
+  export interface ForecastProviderUse {
+    actual_provider: ActualProvider;
+    node_id: NodeId1;
+    requested_provider: RequestedProvider;
+  }
+}
+export type ForecastPresentation = ForecastPresentationGenerated.ForecastPresentation;
+
+export namespace ForecastPresentationPointGenerated {
+  export type NodeId = string;
+  export type Point = number | null;
+  export type QuantilesTruncated = boolean;
+  export type Representation = "point" | "marginal_quantiles" | "joint_paths";
+  export type SampleCount = number;
+  export type SeriesId = string;
+  export type Timestamp = string;
+  export type Unit = string;
+
+  export interface ForecastPresentationPoint {
+    node_id: NodeId;
+    point: Point;
+    quantiles: Quantiles;
+    quantiles_truncated: QuantilesTruncated;
+    representation: Representation;
+    sample_count: SampleCount;
+    series_id: SeriesId;
+    timestamp: Timestamp;
+    unit: Unit;
+  }
+  export interface Quantiles {
+    [k: string]: number;
+  }
+}
+export type ForecastPresentationPoint = ForecastPresentationPointGenerated.ForecastPresentationPoint;
+
+export namespace ForecastProviderUseGenerated {
+  export type ActualProvider = string | null;
+  export type NodeId = string;
+  export type RequestedProvider = string | null;
+
+  export interface ForecastProviderUse {
+    actual_provider: ActualProvider;
+    node_id: NodeId;
+    requested_provider: RequestedProvider;
+  }
+}
+export type ForecastProviderUse = ForecastProviderUseGenerated.ForecastProviderUse;
+
+export namespace BacktestPresentationGenerated {
+  export type SchemaVersion = "backtest-presentation-v1";
+  export type Assumptions = string[];
+  export type BacktestId = string;
+  export type CapturedAt = string;
+  export type FinalComparison = "model_lower_mae" | "model_higher_mae" | "equal_mae" | "unavailable";
+  export type BaselineMae = number | null;
+  export type EvaluationId = string | null;
+  export type ModelMae = number | null;
+  export type Ordinal = number;
+  export type ReasonCode = string | null;
+  export type Status = "evaluated" | "excluded" | "failed" | "insufficient_evidence";
+  export type TargetEnd = string;
+  export type TargetStart = string;
+  /**
+   * @maxItems 50
+   */
+  export type FinalOriginPoints = FinalOriginPoint[];
+  export type Frequency = string;
+  export type InterpretationLimit = string;
+  export type MetricDefinition = string;
+  export type BaselineMae1 = number | null;
+  export type Evaluated = number;
+  export type Excluded = number;
+  export type Failed = number;
+  export type Insufficient = number;
+  export type MatchedCount = number;
+  export type ModelMae1 = number | null;
+  export type Partition = "exploration" | "selection" | "final";
+  export type Planned = number;
+  export type RelativeMae = number | null;
+  export type RelativeMaeReason = ("no_matched_cells" | "zero_baseline_mae" | "ratio_unrepresentable") | null;
+  export type Partitions = PartitionScore[];
+  export type RelativeMae1 = number | null;
+  export type RelativeMaeReason1 = ("no_matched_cells" | "zero_baseline_mae" | "ratio_unrepresentable") | null;
+  export type ReportId = string;
+  export type BaselinePeriod = number;
+  export type Horizon = number;
+  export type JsonValue = unknown;
+  export type Provider = string;
+  export type SourceId = string;
+  export type SourceRevision = string;
+  export type Status1 = "completed" | "insufficient_evidence";
+  export type CandidateInvalidated = boolean;
+  export type DecisionAction = ("activate" | "provisional" | "reject") | null;
+  export type DecisionBacktestId = string | null;
+  export type EvidenceApplicable = boolean;
+  export type FinalEvaluationCount = number | null;
+  export type Lifecycle = "candidate" | "evaluating" | "active" | "paused" | "unsupported";
+  export type LinkedToBacktest = boolean;
+  export type MigrationReason = string | null;
+  export type Operational = boolean;
+  export type Quality = "provisional" | "usable" | "stale" | "degraded";
+  export type ReasonCodes = string[];
+  export type ReevaluationRequired = boolean;
+  export type WatchId = string;
+  export type VisualDestination = "comparison";
+
+  export interface BacktestPresentation {
+    schema_version?: SchemaVersion;
+    summary: BacktestSummary;
+    visual_destination?: VisualDestination;
+  }
+  export interface BacktestSummary {
+    assumptions: Assumptions;
+    backtest_id: BacktestId;
+    captured_at: CapturedAt;
+    final_comparison: FinalComparison;
+    final_origin_points: FinalOriginPoints;
+    frequency: Frequency;
+    interpretation_limit: InterpretationLimit;
+    metric_definition: MetricDefinition;
+    partitions: Partitions;
+    relative_mae: RelativeMae1;
+    relative_mae_reason: RelativeMaeReason1;
+    report_id: ReportId;
+    selection: ForecastSelection;
+    source_id: SourceId;
+    source_revision: SourceRevision;
+    status: Status1;
+    watch?: WatchBacktestSummary | null;
+  }
+  /**
+   * Chart-ready per-origin scores, never forecast or source values.
+   */
+  export interface FinalOriginPoint {
+    baseline_mae?: BaselineMae;
+    evaluation_id?: EvaluationId;
+    model_mae?: ModelMae;
+    ordinal: Ordinal;
+    reason_code?: ReasonCode;
+    status: Status;
+    target_end: TargetEnd;
+    target_start: TargetStart;
+  }
+  export interface PartitionScore {
+    baseline_mae?: BaselineMae1;
+    evaluated?: Evaluated;
+    excluded?: Excluded;
+    failed?: Failed;
+    insufficient?: Insufficient;
+    matched_count?: MatchedCount;
+    model_mae?: ModelMae1;
+    partition: Partition;
+    planned: Planned;
+    relative_mae?: RelativeMae;
+    relative_mae_reason?: RelativeMaeReason;
+  }
+  export interface ForecastSelection {
+    baseline_period?: BaselinePeriod;
+    horizon: Horizon;
+    options?: Options;
+    provider: Provider;
+  }
+  export interface Options {
+    [k: string]: JsonValue;
+  }
+  export interface WatchBacktestSummary {
+    candidate_invalidated: CandidateInvalidated;
+    decision_action?: DecisionAction;
+    decision_backtest_id?: DecisionBacktestId;
+    evidence_applicable: EvidenceApplicable;
+    final_evaluation_count?: FinalEvaluationCount;
+    lifecycle: Lifecycle;
+    linked_to_backtest: LinkedToBacktest;
+    migration_reason?: MigrationReason;
+    operational: Operational;
+    quality: Quality;
+    reason_codes?: ReasonCodes;
+    reevaluation_required: ReevaluationRequired;
+    watch_id: WatchId;
+  }
+}
+export type BacktestPresentation = BacktestPresentationGenerated.BacktestPresentation;
+
+export namespace BacktestSummaryGenerated {
+  export type Assumptions = string[];
+  export type BacktestId = string;
+  export type CapturedAt = string;
+  export type FinalComparison = "model_lower_mae" | "model_higher_mae" | "equal_mae" | "unavailable";
+  export type BaselineMae = number | null;
+  export type EvaluationId = string | null;
+  export type ModelMae = number | null;
+  export type Ordinal = number;
+  export type ReasonCode = string | null;
+  export type Status = "evaluated" | "excluded" | "failed" | "insufficient_evidence";
+  export type TargetEnd = string;
+  export type TargetStart = string;
+  /**
+   * @maxItems 50
+   */
+  export type FinalOriginPoints = FinalOriginPoint[];
+  export type Frequency = string;
+  export type InterpretationLimit = string;
+  export type MetricDefinition = string;
+  export type BaselineMae1 = number | null;
+  export type Evaluated = number;
+  export type Excluded = number;
+  export type Failed = number;
+  export type Insufficient = number;
+  export type MatchedCount = number;
+  export type ModelMae1 = number | null;
+  export type Partition = "exploration" | "selection" | "final";
+  export type Planned = number;
+  export type RelativeMae = number | null;
+  export type RelativeMaeReason = ("no_matched_cells" | "zero_baseline_mae" | "ratio_unrepresentable") | null;
+  export type Partitions = PartitionScore[];
+  export type RelativeMae1 = number | null;
+  export type RelativeMaeReason1 = ("no_matched_cells" | "zero_baseline_mae" | "ratio_unrepresentable") | null;
+  export type ReportId = string;
+  export type BaselinePeriod = number;
+  export type Horizon = number;
+  export type JsonValue = unknown;
+  export type Provider = string;
+  export type SourceId = string;
+  export type SourceRevision = string;
+  export type Status1 = "completed" | "insufficient_evidence";
+  export type CandidateInvalidated = boolean;
+  export type DecisionAction = ("activate" | "provisional" | "reject") | null;
+  export type DecisionBacktestId = string | null;
+  export type EvidenceApplicable = boolean;
+  export type FinalEvaluationCount = number | null;
+  export type Lifecycle = "candidate" | "evaluating" | "active" | "paused" | "unsupported";
+  export type LinkedToBacktest = boolean;
+  export type MigrationReason = string | null;
+  export type Operational = boolean;
+  export type Quality = "provisional" | "usable" | "stale" | "degraded";
+  export type ReasonCodes = string[];
+  export type ReevaluationRequired = boolean;
+  export type WatchId = string;
+
+  export interface BacktestSummary {
+    assumptions: Assumptions;
+    backtest_id: BacktestId;
+    captured_at: CapturedAt;
+    final_comparison: FinalComparison;
+    final_origin_points: FinalOriginPoints;
+    frequency: Frequency;
+    interpretation_limit: InterpretationLimit;
+    metric_definition: MetricDefinition;
+    partitions: Partitions;
+    relative_mae: RelativeMae1;
+    relative_mae_reason: RelativeMaeReason1;
+    report_id: ReportId;
+    selection: ForecastSelection;
+    source_id: SourceId;
+    source_revision: SourceRevision;
+    status: Status1;
+    watch?: WatchBacktestSummary | null;
+  }
+  /**
+   * Chart-ready per-origin scores, never forecast or source values.
+   */
+  export interface FinalOriginPoint {
+    baseline_mae?: BaselineMae;
+    evaluation_id?: EvaluationId;
+    model_mae?: ModelMae;
+    ordinal: Ordinal;
+    reason_code?: ReasonCode;
+    status: Status;
+    target_end: TargetEnd;
+    target_start: TargetStart;
+  }
+  export interface PartitionScore {
+    baseline_mae?: BaselineMae1;
+    evaluated?: Evaluated;
+    excluded?: Excluded;
+    failed?: Failed;
+    insufficient?: Insufficient;
+    matched_count?: MatchedCount;
+    model_mae?: ModelMae1;
+    partition: Partition;
+    planned: Planned;
+    relative_mae?: RelativeMae;
+    relative_mae_reason?: RelativeMaeReason;
+  }
+  export interface ForecastSelection {
+    baseline_period?: BaselinePeriod;
+    horizon: Horizon;
+    options?: Options;
+    provider: Provider;
+  }
+  export interface Options {
+    [k: string]: JsonValue;
+  }
+  export interface WatchBacktestSummary {
+    candidate_invalidated: CandidateInvalidated;
+    decision_action?: DecisionAction;
+    decision_backtest_id?: DecisionBacktestId;
+    evidence_applicable: EvidenceApplicable;
+    final_evaluation_count?: FinalEvaluationCount;
+    lifecycle: Lifecycle;
+    linked_to_backtest: LinkedToBacktest;
+    migration_reason?: MigrationReason;
+    operational: Operational;
+    quality: Quality;
+    reason_codes?: ReasonCodes;
+    reevaluation_required: ReevaluationRequired;
+    watch_id: WatchId;
+  }
+}
+export type BacktestSummary = BacktestSummaryGenerated.BacktestSummary;
+
+export namespace QuestionPresentationGenerated {
+  export type NextOffset = number | null;
+  export type CreatedAt = string;
+  export type CurrentRevision = number;
+  export type QuestionId = string;
+  export type ReferenceCount = number;
+  export type CreatedAt1 = string;
+  export type Meaning = string;
+  export type QuestionId1 = string;
+  export type Revision = number;
+  export type BaselinePeriod = number;
+  export type Horizon = number;
+  export type JsonValue = unknown;
+  export type Provider = string;
+  /**
+   * @maxItems 16
+   */
+  export type SourceIds =
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ];
+  export type RevisionCount = number;
+  export type Status = "open" | "paused" | "resolved";
+  export type Title = string;
+  export type UpdatedAt = string;
+  /**
+   * @maxItems 3
+   */
+  export type References =
+    | []
+    | [QuestionPresentationReference]
+    | [QuestionPresentationReference, QuestionPresentationReference]
+    | [QuestionPresentationReference, QuestionPresentationReference, QuestionPresentationReference];
+  export type AppliesToCurrentRevision = boolean;
+  export type CreatedAt2 = string;
+  export type Note = string;
+  export type QuestionId2 = string;
+  export type ReferenceId = string;
+  export type Revision1 = number;
+  export type TargetId = string;
+  export type TargetType = "candidate" | "run" | "backtest" | "watch" | "evaluation" | "operation";
+  export type SchemaVersion = "question-presentation-v1";
+  export type VisualDestination = "question_timeline";
+
+  export interface QuestionPresentation {
+    next_offset: NextOffset;
+    question: QuestionView;
+    references: References;
+    schema_version?: SchemaVersion;
+    visual_destination?: VisualDestination;
+  }
+  export interface QuestionView {
+    created_at: CreatedAt;
+    current_revision: CurrentRevision;
+    question_id: QuestionId;
+    reference_count: ReferenceCount;
+    revision: QuestionRevision;
+    revision_count: RevisionCount;
+    status: Status;
+    title: Title;
+    updated_at: UpdatedAt;
+  }
+  export interface QuestionRevision {
+    created_at: CreatedAt1;
+    meaning: Meaning;
+    question_id: QuestionId1;
+    revision: Revision;
+    selection: QuestionForecastSelection;
+    source_ids: SourceIds;
+  }
+  export interface QuestionForecastSelection {
+    baseline_period?: BaselinePeriod;
+    horizon: Horizon;
+    options?: Options;
+    provider: Provider;
+  }
+  export interface Options {
+    [k: string]: JsonValue;
+  }
+  export interface QuestionPresentationReference {
+    applies_to_current_revision: AppliesToCurrentRevision;
+    reference: QuestionReference;
+  }
+  export interface QuestionReference {
+    created_at: CreatedAt2;
+    note: Note;
+    question_id: QuestionId2;
+    reference_id: ReferenceId;
+    revision: Revision1;
+    target_id: TargetId;
+    target_type: TargetType;
+  }
+}
+export type QuestionPresentation = QuestionPresentationGenerated.QuestionPresentation;
+
+export namespace QuestionPresentationReferenceGenerated {
+  export type AppliesToCurrentRevision = boolean;
+  export type CreatedAt = string;
+  export type Note = string;
+  export type QuestionId = string;
+  export type ReferenceId = string;
+  export type Revision = number;
+  export type TargetId = string;
+  export type TargetType = "candidate" | "run" | "backtest" | "watch" | "evaluation" | "operation";
+
+  export interface QuestionPresentationReference {
+    applies_to_current_revision: AppliesToCurrentRevision;
+    reference: QuestionReference;
+  }
+  export interface QuestionReference {
+    created_at: CreatedAt;
+    note: Note;
+    question_id: QuestionId;
+    reference_id: ReferenceId;
+    revision: Revision;
+    target_id: TargetId;
+    target_type: TargetType;
+  }
+}
+export type QuestionPresentationReference = QuestionPresentationReferenceGenerated.QuestionPresentationReference;

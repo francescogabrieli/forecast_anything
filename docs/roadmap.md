@@ -176,6 +176,8 @@ La consegna MCP del 30 ottobre usa CSV locali con root approvate e allowlist deg
 
 Il 4 novembre 2026 è stata aggiunta la sorgente locale del sito statico con esempi sintetici emessi dal runtime, istruzioni da checkout, limiti del prodotto e link a setup/MCP/contributi. TasteSkill non segnala errori di layout o funzionalità; restano non verificati pubblicazione, destinazione web e setup dentro Codex Desktop.
 
+Il 7 novembre 2026 la fase 2 aggiunge domande persistenti con revisioni semantiche e riferimenti, operazioni recuperabili dopo riconnessione sul job queue esistente, riepiloghi compatti degli snapshot e presentazioni condivise fra API e MCP. Migrazione 011 e schemi TypeScript sono generati; i test verificano retry concorrenti e un CSV sintetico da 320 righe entro il limite MCP senza leggere SQLite. La candidata è in revisione; vedi [rapporto e procedura riproducibile](research/phase-2-persistent-questions.md).
+
 ## Fonti tecniche per le scelte del piano
 
 - [Timestral](https://github.com/mistralai/timestral): capacità e dipendenze del provider.

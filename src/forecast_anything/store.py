@@ -29,6 +29,7 @@ from .contracts import (
     Watch,
 )
 from .discovery.agent_storage import AgentStorageMixin
+from .question_storage import QuestionStorageMixin
 
 if TYPE_CHECKING:
     from .jobs import LeaseGuard
@@ -44,6 +45,7 @@ MIGRATIONS = (
     "008_backtests.sql",
     "009_worker_liveness.sql",
     "010_worker_runtime.sql",
+    "011_persistent_questions.sql",
 )
 
 
@@ -51,7 +53,7 @@ def _json(value: object) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
-class Ledger(AgentStorageMixin):
+class Ledger(QuestionStorageMixin, AgentStorageMixin):
     def __init__(self, path: Path, *, clock: Callable[[], datetime] | None = None):
         self.path = Path(path)
         self.clock = clock or (lambda: datetime.now(timezone.utc))
