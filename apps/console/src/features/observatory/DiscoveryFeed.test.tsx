@@ -40,3 +40,8 @@ describe("DiscoveryFeed", () => {
     expect(screen.getByText("Motivo: Registered expected_deviation question for study-sales.")).toBeVisible();
   });
 });
+
+it("explains why a legacy watch needs a new Timestral candidate", () => {
+  render(<DiscoveryFeed watches={[makeWatch({ lifecycle: "paused", quality: "stale", migration_reason: "required_provider_migration" })]} events={[]} />);
+  expect(screen.getByText(/crea una nuova domanda Timestral/i)).toBeVisible();
+});

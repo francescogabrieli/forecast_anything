@@ -453,3 +453,54 @@ def test_refreshed_epoch_schedules_optional_agent_session(tmp_path):
         "epoch_id": epoch_id,
         "source_ids": ["sales"],
     }
+
+
+def test_postgres_restart_fixture_reaches_gateway_under_product_policy(
+    tmp_path, monkeypatch
+):
+    import runpy
+    from pathlib import Path
+
+    from forecast_anything.providers.configuration import configured_providers
+
+    monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path / "empty-cache"))
+    helper = runpy.run_path(
+        str(
+            Path(__file__).resolve().parents[2]
+            / "apps/agent/scripts/restart-test-core.py"
+        )
+    )
+    db = tmp_path / "restart.db"
+    seeded = helper["seed"](db, tmp_path / "source.csv")
+    ledger = Ledger(db)
+    runtime = Runtime(
+        ledger,
+        configured_providers(),
+        {},
+        lambda: datetime.now(timezone.utc),
+        required_provider="timestral",
+    )
+
+    class Gateway:
+        started = False
+
+        def start(self, *args, **kwargs):
+            self.started = True
+            return "restart-session"
+
+        def poll(self, session_id):
+            assert session_id == "restart-session"
+            return None
+
+    gateway = Gateway()
+    queue = JobQueue(ledger)
+    Worker(runtime, queue, discovery_gateway=gateway).run_due(runtime.clock(), limit=1)
+    assert gateway.started
+    assert queue.get(seeded["job_id"]).state == "pending"
+    candidate = ledger.get_candidate(seeded["candidate_id"])
+    assert (
+        next(n for n in candidate.graph.nodes if n.node_id == "forecast").config[
+            "provider"
+        ]
+        == "timestral"
+    )

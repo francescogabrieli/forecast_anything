@@ -54,22 +54,22 @@ export function Home({ client, onRunReady, reloadKey = 0, active = true }: Props
   }
   return <div className="home-content">
     <section className="forecast-start" aria-labelledby="start-title">
-      <div className="section-heading"><h2 id="start-title">Da quale fonte vuoi partire?</h2><span className="quiet-label">Una serie · un intervallo futuro</span></div>
-      <p className="muted">Dati osservati, una stima esplicita e le evidenze per verificarla.</p>
+      <div className="section-heading"><h2 id="start-title">Nuova previsione</h2></div>
+
       {!client ? <div className="start-empty"><p>Collega il tuo core per iniziare a prevedere con i tuoi dati.</p><a className="button button-dark" href="#workspace">Configura il workspace <span aria-hidden="true">↗</span></a></div> : <>
         {sourceError ? <div><p role="alert">Fonti non disponibili: {sourceError}</p><button className="text-button" onClick={() => setRetry((value) => value + 1)}>Riprova caricamento</button></div> : sources === undefined ? <p role="status">Caricamento delle fonti…</p> : sources.length === 0 ? <div className="start-empty"><p>Nessuna fonte collegata.</p><a className="button button-dark" href="#sources">Collega una fonte <span aria-hidden="true">↗</span></a></div> : <div className="forecast-source-control">
           <label>Fonte registrata<select value={selected} disabled={busy} onChange={(event) => { setSelected(event.target.value); setRegistration(undefined); setRefreshError(undefined); refreshKey.current = undefined; }}>{sources.map((source) => <option key={source.source_id} value={source.source_id}>{source.source_id}</option>)}</select></label>
           <button className="button button-dark" disabled={busy || !selected} onClick={() => void prepare()}>{busy ? "Aggiornamento fonte…" : "Prepara previsione"}</button>
         </div>}
         {refreshError && <p role="alert">{refreshError}</p>}
-        {!registration && sources && sources.length > 0 && <p className="muted">Aggiorna la fonte, poi rivedi la proposta prima del calcolo.</p>}
+        {!registration && sources && sources.length > 0 && <p className="muted">Potrai rivedere la proposta prima del calcolo.</p>}
       </>}
     </section>
     {client && registration && <FirstForecast key={registration.job_id} client={client} registration={registration} onRunReady={onRunReady} />}
     <div className="home-secondary">
       <section className="recent-forecasts" aria-labelledby="recent-title"><div className="section-heading"><h2 id="recent-title">Previsioni recenti</h2><a href="#observatory">Osservatorio <span aria-hidden="true">↗</span></a></div>
         {!client ? <p className="empty-copy">Le previsioni registrate nel workspace compariranno qui.</p> : historyError ? <div><p role="alert">Cronologia non disponibile: {historyError}</p><button className="text-button" onClick={() => setRetry((value) => value + 1)}>Riprova cronologia</button></div> : runs === undefined ? <p role="status">Caricamento della cronologia…</p> : runs.length === 0 ? <p className="empty-copy">Nessuna previsione registrata.</p> : <ul className="recent-run-list">{runs.map((run) => {
-          const forecast = run.results.forecast ?? Object.values(run.results)[0];
+          const forecast = run.results.forecast ?? run.results.model ?? Object.values(run.results)[0];
           return <li key={run.run_id}><button className="run-row" data-run-id={run.run_id} onClick={() => onRunReady(run.run_id)}><span><strong>{forecast?.series_ids.join(", ") || run.run_id}</strong><span className="muted">{formatUtc(run.as_of)} · {run.scenario_id ? "Scenario" : "Valutazioni nel dettaglio"}</span></span><span className="run-row-value">{forecast?.point?.[0]?.[0] ?? "—"} <small>{forecast?.units[0]}</small><span aria-hidden="true"> ↗</span></span></button></li>;
         })}</ul>}
       </section>

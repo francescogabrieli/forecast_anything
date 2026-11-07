@@ -1,3 +1,22 @@
+# Synthetic retail example with required local Timestral
+
+Prepare the pinned local model, then run the product example:
+
+```sh
+uv sync --locked --extra dev
+uv run --locked forecast-anything model prepare
+mkdir -p .local
+uv run --locked python scripts/run_example.py retail --db .local/retail.db
+```
+
+The public runner creates a distinct `_timestral` graph: Timestral is the primary forecast and the recorded seasonal graph is a separate reference. It retains the declared historical origin and availability assumptions, records actual model revisions and marginal quantiles, and replays the same immutable run for the same request. No remote Mistral key is needed; prepared local weights and their separate license are required.
+
+The source observations are synthetic. Marginal quantiles are not calibrated joint-event probabilities and these small examples establish no general predictive quality. The checked-in `graph.json` and the former exact seasonal values are historical comparator fixtures, not the default product forecast.
+
+## Historical baseline fixture notes
+
+The following notes describe the earlier baseline example and its domain assumptions; its exact baseline values do not describe Timestral output.
+
 # Synthetic retail example
 
 From the repository root after installing the regular Python environment:

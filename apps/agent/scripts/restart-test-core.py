@@ -5,11 +5,15 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 from forecast_anything.contracts import DiscoveryBudget, DiscoveryEpoch, SourceSpec
 from forecast_anything.discovery.candidates import CandidateProposal, compile_proposal
+from forecast_anything.forecast_policy import provider_epoch_context
 from forecast_anything.jobs import JobQueue
+from forecast_anything.providers.configuration import configured_providers
+from forecast_anything.runtime import Runtime
 from forecast_anything.sources.catalog import SourceCatalog
 from forecast_anything.sources.profiling import inspect_source
 from forecast_anything.store import Ledger
@@ -58,6 +62,7 @@ def seed(database: Path, csv_path: Path) -> dict[str, str]:
         ),
         (inspect_source(spec),),
         epoch_id=EPOCH_ID,
+        forecast_provider="timestral",
     )
     ledger.put_discovery_epoch(
         DiscoveryEpoch(
@@ -71,7 +76,20 @@ def seed(database: Path, csv_path: Path) -> dict[str, str]:
     ledger.register_candidate(candidate)
     job = JobQueue(ledger).enqueue(
         JOB_KEY,
-        {"kind": "discovery", "epoch_id": EPOCH_ID, "source_ids": [SOURCE_ID]},
+        {
+            "kind": "discovery",
+            "epoch_id": EPOCH_ID,
+            "source_ids": [SOURCE_ID],
+            "provider_context": provider_epoch_context(
+                Runtime(
+                    ledger,
+                    configured_providers(),
+                    {},
+                    lambda: datetime.now(timezone.utc),
+                    required_provider="timestral",
+                )
+            ),
+        },
     )
     return {"candidate_id": candidate.candidate_id, "job_id": job.job_id}
 

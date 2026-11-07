@@ -1,5 +1,7 @@
 # Observatory Experience and Release Implementation Plan
 
+> Product direction update, 2026-10-29: this plan records the console/release work already undertaken. New work follows the [MCP-first direction](../specs/2026-10-29-mcp-first-product-design.md) and the [current roadmap](../../roadmap.md). The console is optional; browser upload and proprietary chat are not prerequisites for the first assistant-based release. A dedicated MCP implementation plan is still required.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (- [ ]) syntax for tracking.
 
 **Goal:** rendere l’osservatorio provabile e comprensibile, poi preparare una release OSS riproducibile.

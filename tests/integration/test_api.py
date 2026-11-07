@@ -1,6 +1,7 @@
 """HTTP trust boundaries, replay and hypothetical lineage."""
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -81,6 +82,16 @@ def base_run(tmp_path):
         "run_id"
     ]
     return ledger, runtime, client, client.get("/v1/runs/" + run_id).json()
+
+
+def discovered_candidate(tmp_path):
+    ledger, runtime, client = setup(tmp_path)
+    registration = client.post("/v1/sources", json=source(tmp_path))
+    assert registration.status_code == 201, registration.text
+    Worker(runtime, JobQueue(ledger)).run_due(T)
+    job = client.get("/v1/jobs/" + registration.json()["job_id"]).json()
+    candidate = client.get("/v1/candidates/" + job["result"]["candidate_ids"][0]).json()
+    return ledger, runtime, client, registration.json(), candidate
 
 
 def test_workspace_token_is_required(tmp_path):
@@ -524,7 +535,13 @@ def test_serve_and_worker_recover_killed_job_via_http(tmp_path):
 
     def launch(*args):
         process = subprocess.Popen(
-            [sys.executable, "-m", "forecast_anything.cli", *args, "--db", str(db)],
+            [
+                sys.executable,
+                str(Path(__file__).resolve().parents[1] / "fixtures/library_cli.py"),
+                *args,
+                "--db",
+                str(db),
+            ],
             env=env,
             stdout=log,
             stderr=log,
@@ -1076,3 +1093,91 @@ def test_run_evaluations_are_authenticated_scoped_ordered_and_non_mutating(tmp_p
     assert all(item["run_id"] == base["run_id"] for item in response.json())
     assert client.get("/v1/runs/missing/evaluations").status_code == 404
     assert client.get(f"/v1/runs/{base['run_id']}").json() == base
+
+
+def test_watch_reads_history_pages_and_current_state(tmp_path):
+    ledger, runtime, client, _, candidate = discovered_candidate(tmp_path)
+    created = client.post(
+        "/v1/watches",
+        json={
+            "candidate_id": candidate["candidate_id"],
+            "next_due_at": (T + timedelta(days=2)).isoformat(),
+        },
+    )
+    assert created.status_code == 201, created.text
+    watch_id = created.json()["watch_id"]
+    assert (
+        client.patch(f"/v1/watches/{watch_id}", json={"muted": True}).status_code == 200
+    )
+    assert (
+        client.patch(f"/v1/watches/{watch_id}", json={"muted": True}).status_code == 200
+    )
+    assert (
+        client.patch(f"/v1/watches/{watch_id}", json={"priority": 5}).status_code == 200
+    )
+
+    first = client.get(f"/v1/watches/{watch_id}/history?offset=0&limit=2")
+    assert first.status_code == 200, first.text
+    assert [entry["sequence"] for entry in first.json()["entries"]] == [1, 2]
+    assert [entry["event"]["kind"] for entry in first.json()["entries"]] == [
+        "created",
+        "muted",
+    ]
+    assert first.json()["next_offset"] == 2
+    last = client.get(f"/v1/watches/{watch_id}/history?offset=2&limit=2")
+    assert last.status_code == 200, last.text
+    assert [entry["event"]["kind"] for entry in last.json()["entries"]] == [
+        "priority_changed"
+    ]
+    assert last.json()["next_offset"] is None
+    current = client.get(f"/v1/watches/{watch_id}")
+    assert current.status_code == 200, current.text
+    assert current.json()["priority"] == 5
+
+
+def test_watch_change_summary_uses_recorded_runs_and_preserves_question_lineage(
+    tmp_path,
+):
+    ledger, runtime, client, _, candidate = discovered_candidate(tmp_path)
+    epoch = ledger.get_discovery_epoch(candidate["epoch_id"])
+    submission = {
+        "kind": "run",
+        "graph": candidate["graph"],
+        "snapshot_ids": {"sales": epoch.source_snapshot_ids[0]},
+        "as_of": T.isoformat(),
+    }
+    run_ids = []
+    for key in ("watch-change-before", "watch-change-after"):
+        accepted = client.post("/v1/jobs", json={**submission, "key": key})
+        assert accepted.status_code == 202, accepted.text
+        Worker(runtime, JobQueue(ledger)).run_due(T)
+        job = client.get("/v1/jobs/" + accepted.json()["job_id"]).json()
+        assert job["state"] == "completed"
+        run_ids.append(job["result"]["run_id"])
+    created = client.post(
+        "/v1/watches",
+        json={
+            "candidate_id": candidate["candidate_id"],
+            "next_due_at": (T + timedelta(days=2)).isoformat(),
+        },
+    )
+    watch_id = created.json()["watch_id"]
+
+    response = client.get(
+        f"/v1/watches/{watch_id}/changes",
+        params={"previous_run_id": run_ids[0], "current_run_id": run_ids[1]},
+    )
+    assert response.status_code == 200, response.text
+    summary = response.json()
+    assert summary["watch_id"] == watch_id
+    assert summary["question"] == candidate["reason"]
+    assert summary["dependencies"] == ["sales"]
+    assert summary["common_target_count"] > 0
+    assert "do not establish causal" in summary["explanation"]
+    assert (
+        client.get(
+            f"/v1/watches/{watch_id}/changes",
+            params={"previous_run_id": run_ids[0], "current_run_id": "missing-run"},
+        ).status_code
+        == 404
+    )

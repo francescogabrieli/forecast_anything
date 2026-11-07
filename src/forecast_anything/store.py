@@ -41,6 +41,8 @@ MIGRATIONS = (
     "005_jobs.sql",
     "006_scenarios.sql",
     "007_agent_operations.sql",
+    "008_backtests.sql",
+    "009_worker_liveness.sql",
 )
 
 
@@ -72,6 +74,48 @@ class Ledger(AgentStorageMixin):
             yield connection
         finally:
             connection.close()
+
+    def update_worker_heartbeat(self, worker_id: str, now: datetime) -> None:
+        if not isinstance(worker_id, str) or not worker_id.strip():
+            raise DomainError("invalid_worker_identity", {})
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise DomainError("naive_timestamp", {})
+        with self._transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO worker_liveness (singleton, worker_id, heartbeat_at)
+                VALUES (1, ?, ?)
+                ON CONFLICT(singleton) DO UPDATE SET
+                    worker_id = excluded.worker_id,
+                    heartbeat_at = excluded.heartbeat_at
+                """,
+                (worker_id, now.timestamp()),
+            )
+
+    def clear_worker_heartbeat(self, worker_id: str) -> None:
+        if not isinstance(worker_id, str) or not worker_id.strip():
+            raise DomainError("invalid_worker_identity", {})
+        with self._transaction() as connection:
+            connection.execute(
+                "DELETE FROM worker_liveness WHERE singleton = 1 AND worker_id = ?",
+                (worker_id,),
+            )
+
+    def worker_status(self, now: datetime, stale_after_seconds: int = 10) -> str:
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise DomainError("naive_timestamp", {})
+        if type(stale_after_seconds) is not int or stale_after_seconds <= 0:
+            raise DomainError("invalid_stale_after", {})
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT heartbeat_at FROM worker_liveness WHERE singleton = 1"
+            ).fetchone()
+        if row is None:
+            return "not_running"
+        age = now.timestamp() - row[0]
+        return (
+            "running" if -stale_after_seconds <= age <= stale_after_seconds else "stale"
+        )
 
     @contextmanager
     def _transaction(
@@ -106,11 +150,14 @@ class Ledger(AgentStorageMixin):
             self._get("snapshots", {"snapshot_id": snapshot_id})
         )
 
-    def put_graph(self, spec: GraphSpec) -> tuple[str, int]:
+    def put_graph(
+        self, spec: GraphSpec, *, lease_guard: LeaseGuard | None = None
+    ) -> tuple[str, int]:
         self._put(
             "graphs",
             {"graph_id": spec.graph_id, "version": spec.version},
             _json(spec.model_dump(mode="json")),
+            lease_guard=lease_guard,
         )
         return spec.graph_id, spec.version
 
@@ -235,6 +282,19 @@ class Ledger(AgentStorageMixin):
 
     def get_run(self, run_id: str) -> RunRecord:
         return RunRecord.model_validate_json(self._get("runs", {"run_id": run_id}))
+
+    def run_events(self, run_id: str) -> tuple[EventRecord, ...]:
+        """Read the atomic event batch of one published run (without global scans)."""
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT events_content FROM runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+        if row is None:
+            raise DomainError("not_found", {"run_id": run_id})
+        return tuple(
+            EventRecord.model_validate({**value, "cursor": 0})
+            for value in json.loads(row[0])
+        )
 
     def append_evaluation(
         self, record: EvaluationRecord, *, lease_guard: LeaseGuard | None = None
@@ -572,15 +632,39 @@ class Ledger(AgentStorageMixin):
             candidate.epoch_id,
         ):
             raise DomainError("decision_lineage_mismatch", {})
-        from .discovery.policy import assess_candidate
+        if decision.backtest_id is not None:
+            from .backtesting.store import BacktestStore
+            from .discovery.policy import assess_candidate_backtest
 
-        expected = assess_candidate(
-            candidate,
-            tuple(
-                self.get_evaluation(identity) for identity in decision.evaluation_ids
-            ),
-            self.get_discovery_epoch(candidate.epoch_id),
-        )
+            backtests = BacktestStore(self)
+            report = backtests.get_report(decision.backtest_id)
+            plan = backtests.get_plan(decision.backtest_id)
+            if plan.watch_id is None or plan.candidate_id != candidate_id:
+                raise DomainError("watch_backtest_lineage_mismatch", {})
+            outcomes = []
+            offset = 0
+            while True:
+                page = backtests.list_origins(
+                    decision.backtest_id, offset=offset, limit=50
+                )
+                outcomes.extend(page.origins)
+                if page.next_offset is None:
+                    break
+                offset = page.next_offset
+            expected = assess_candidate_backtest(
+                candidate, report, plan, tuple(outcomes)
+            )
+        else:
+            from .discovery.policy import assess_candidate
+
+            expected = assess_candidate(
+                candidate,
+                tuple(
+                    self.get_evaluation(identity)
+                    for identity in decision.evaluation_ids
+                ),
+                self.get_discovery_epoch(candidate.epoch_id),
+            )
         if decision != expected:
             raise DomainError("invalid_eligibility_decision", {})
         with self._transaction() as connection:
@@ -777,6 +861,34 @@ class Ledger(AgentStorageMixin):
             }
             for sequence, event_id, occurred_at, event, content in rows
         )
+
+    def watch_history_page(
+        self, watch_id: str, *, offset: int = 0, limit: int = 25
+    ) -> tuple[tuple[dict, ...], int | None]:
+        if type(offset) is not int or offset < 0:
+            raise DomainError("invalid_watch_history_offset", {})
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise DomainError("invalid_watch_history_limit", {})
+        self.get_watch(watch_id)
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT sequence, event_id, occurred_at, event_content, content "
+                "FROM watch_history WHERE watch_id = ? ORDER BY sequence LIMIT ? OFFSET ?",
+                (watch_id, limit + 1, min(offset, 2**63 - 1)),
+            ).fetchall()
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        entries = tuple(
+            {
+                "sequence": sequence,
+                "event_id": event_id,
+                "occurred_at": datetime.fromisoformat(occurred_at),
+                "event": json.loads(event),
+                "watch": Watch.model_validate_json(content),
+            }
+            for sequence, event_id, occurred_at, event, content in rows
+        )
+        return entries, offset + len(entries) if has_more else None
 
     def latest_run(self, graph_id: str, version: int) -> RunRecord:
         with self._connection() as connection:

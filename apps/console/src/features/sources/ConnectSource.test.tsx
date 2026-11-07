@@ -51,11 +51,14 @@ describe("ConnectSource", () => {
     await user.type(screen.getByLabelText("Percorso o URL"), "/data/sales.csv");
     fireEvent.change(screen.getByLabelText("Data osservazione — campo"), { target: { value: "time" } });
     fireEvent.change(screen.getByLabelText("Valore — campo"), { target: { value: "value" } });
+    fireEvent.change(screen.getByLabelText("Revisione — campo"), { target: { value: "1" } });
     expect(screen.getByLabelText("Disponibile dal — campo")).toHaveValue("");
     fireEvent.change(screen.getByLabelText("Disponibile dal — origine"), { target: { value: "constant" } });
     fireEvent.change(screen.getByLabelText("Disponibile dal — campo"), { target: { value: "2026-10-23" } });
     fireEvent.change(screen.getByLabelText("Serie — campo"), { target: { value: "sales" } });
     fireEvent.change(screen.getByLabelText("Unità — campo"), { target: { value: "count" } });
+    fireEvent.change(screen.getByLabelText("Frequenza"), { target: { value: "1d" } });
+    fireEvent.change(screen.getByLabelText("Fuso orario"), { target: { value: "UTC" } });
     await user.click(screen.getByRole("button", { name: "Analizza fonte" }));
     expect(await screen.findByRole("status")).toHaveTextContent(/profilo pronto/i);
     expect(client.previewSource).toHaveBeenCalledWith(expect.objectContaining({ mapping: completeMapping }));

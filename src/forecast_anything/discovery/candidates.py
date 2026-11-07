@@ -1,8 +1,8 @@
 """Deterministic registered questions; agents supply proposals, never executable DAGs.
 
-The default provider is deliberately the point seasonal baseline. A declared
-limit is retained as a proposal but cannot run an event operator until a provider
-with joint paths is explicitly supported. No Timestral acceptance is implied.
+Product callers explicitly select their required forecast provider; the library
+default preserves legacy baseline fixtures. A declared limit is retained as a
+proposal but cannot run an event operator without supported joint paths.
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ from ..contracts import (
 from ..graph import compile_graph
 from ..operators import register_builtin_operators
 from ..providers.baseline import SeasonalNaiveProvider
+from ..providers.configuration import pinned_timestral_provider
 
 # Questions use existing numerical operators, with no inferred causal relation.
 TEMPLATES = {
@@ -36,6 +37,7 @@ TEMPLATES = {
     "forecast_change": "sum_aligned",
     "declared_limit": "any_exceed",
 }
+FORECAST_PROVIDERS = ("seasonal_naive", "timestral")
 
 
 class CandidateProposal(Contract):
@@ -106,7 +108,10 @@ def graph_support(graph: GraphSpec) -> tuple[str, ...]:
     try:
         compile_graph(
             graph,
-            {"seasonal_naive": SeasonalNaiveProvider(1).capabilities()},
+            {
+                "seasonal_naive": SeasonalNaiveProvider(1).capabilities(),
+                "timestral": pinned_timestral_provider().capabilities(),
+            },
             {name: op.contract() for name, op in register_builtin_operators().items()},
         )
     except DomainError as error:
@@ -114,7 +119,7 @@ def graph_support(graph: GraphSpec) -> tuple[str, ...]:
     return ()
 
 
-def _graph(template, profile):
+def _graph(template, profile, forecast_provider):
     series, unit, frequency = _resolved(profile)
     nodes = [
         Node(
@@ -129,20 +134,27 @@ def _graph(template, profile):
             },
         )
     ]
-    # Period 1 is the frozen reference. Period 2 is a declared baseline candidate,
-    # not a claim that seasonal repetition outperforms another model.
-    for name, period in (("forecast", 2), ("reference", 1)):
+    # Period 1 is the frozen reference. Period 2 preserves legacy library
+    # candidates; Timestral uses pinned runtime provenance and official defaults.
+    for name, provider, options in (
+        (
+            "forecast",
+            forecast_provider,
+            {"period": 2} if forecast_provider == "seasonal_naive" else {},
+        ),
+        ("reference", "seasonal_naive", {"period": 1}),
+    ):
         nodes.append(
             Node(
                 node_id=name,
                 kind="forecast",
                 inputs=("source",),
                 config={
-                    "provider": "seasonal_naive",
+                    "provider": provider,
                     "history": "source",
                     "horizon": 1,
                     "frequency": frequency,
-                    "options": {"period": period},
+                    "options": options,
                     "relation_type": {"source": "statistical"},
                 },
             )
@@ -183,13 +195,19 @@ def _graph(template, profile):
 
 
 def compile_proposal(
-    proposal: CandidateProposal, profiles: tuple[SourceProfile, ...], *, epoch_id: str
+    proposal: CandidateProposal,
+    profiles: tuple[SourceProfile, ...],
+    *,
+    epoch_id: str,
+    forecast_provider: str = "seasonal_naive",
 ) -> Candidate:
     """Trusted compilation boundary. ``profiles`` must come from the source catalog.
 
     Unknown/free-form templates and unresolved mappings are retained with an empty
     non-executable graph. Agents cannot supply their own graph or evidence here.
     """
+    if forecast_provider not in FORECAST_PROVIDERS:
+        raise DomainError("unknown_provider", {"provider": forecast_provider})
     proposal = CandidateProposal.model_validate(proposal.model_dump())
     profiles = tuple(SourceProfile.model_validate(p.model_dump()) for p in profiles)
     by_id = {p.source_id: p for p in profiles}
@@ -205,7 +223,7 @@ def compile_proposal(
         unresolved.append("unknown_source")
     else:
         try:
-            graph = _graph(proposal.template_id, selected[0])
+            graph = _graph(proposal.template_id, selected[0], forecast_provider)
         except (ValueError, TypeError, ZoneInfoNotFoundError) as error:
             code = (
                 str(error)
@@ -263,6 +281,16 @@ def compile_proposal(
 
 def validate_candidate(candidate: Candidate) -> tuple[str, ...]:
     candidate = Candidate.model_validate(candidate.model_dump())
+    forecast = next(
+        (node for node in candidate.graph.nodes if node.node_id == "forecast"), None
+    )
+    # Empty unresolved proposals have no executable provider identity. Otherwise
+    # reconstruct the recorded trusted provider, never the current product default.
+    forecast_provider = (
+        forecast.config.get("provider") if forecast is not None else "seasonal_naive"
+    )
+    if forecast_provider not in FORECAST_PROVIDERS:
+        return ("candidate_identity_mismatch",)
     expected = compile_proposal(
         CandidateProposal(
             template_id=candidate.template_id,
@@ -272,6 +300,7 @@ def validate_candidate(candidate: Candidate) -> tuple[str, ...]:
         ),
         candidate.source_profiles,
         epoch_id=candidate.epoch_id,
+        forecast_provider=forecast_provider,
     )
     if (
         candidate.candidate_id,
@@ -295,7 +324,10 @@ def validate_candidate(candidate: Candidate) -> tuple[str, ...]:
 
 
 def propose_candidates(
-    profiles: tuple[SourceProfile, ...], budget: DiscoveryBudget
+    profiles: tuple[SourceProfile, ...],
+    budget: DiscoveryBudget,
+    *,
+    forecast_provider: str = "seasonal_naive",
 ) -> tuple[Candidate, ...]:
     budget = DiscoveryBudget.model_validate(budget.model_dump())
     profiles = tuple(
@@ -306,16 +338,21 @@ def propose_candidates(
     )
     if len({p.source_id for p in profiles}) != len(profiles):
         raise DomainError("duplicate_source_profile", {})
+    epoch_sources = [
+        {
+            "source_id": p.source_id,
+            "revision": p.source_revision,
+            "mapping": p.proposed_mapping,
+            "unresolved": p.unresolved,
+        }
+        for p in profiles
+    ]
+    # Preserve historical baseline epochs while separating a model replacement
+    # into its own search and qualification lineage.
     epoch_id = _digest(
-        [
-            {
-                "source_id": p.source_id,
-                "revision": p.source_revision,
-                "mapping": p.proposed_mapping,
-                "unresolved": p.unresolved,
-            }
-            for p in profiles
-        ]
+        epoch_sources
+        if forecast_provider == "seasonal_naive"
+        else {"sources": epoch_sources, "forecast_provider": forecast_provider}
     )
     result = []
     for p in profiles:
@@ -336,6 +373,7 @@ def propose_candidates(
                     ),
                     profiles,
                     epoch_id=epoch_id,
+                    forecast_provider=forecast_provider,
                 )
             )
     return tuple(result)

@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "../../api/client";
 import { Home } from "./Home";
+import { makeRun } from "../../test/fixtures";
 vi.mock("../sources/FirstForecast", () => ({ FirstForecast: ({ registration }: { registration: { source_id: string } }) => <p>Pronta: {registration.source_id}</p> }));
 const source = { source_id: "sales", kind: "csv", revision: "r1", refresh_seconds: 60 };
 const api = (extra = {}) => ({ getSources: vi.fn().mockResolvedValue([source]), getRecentRuns: vi.fn().mockResolvedValue([]), refreshSource: vi.fn().mockResolvedValue({ source_id: "sales", job_id: "job1" }), ...extra }) as unknown as ApiClient;
@@ -62,4 +63,15 @@ describe("Home", () => {
     expect(screen.queryByText("Pronta: sales")).not.toBeInTheDocument();
   });
 
+});
+
+it.each(["forecast", "model", "fallback"])("shows the primary %s result in recent forecasts", async (kind) => {
+  const run = makeRun();
+  const result = run.results.forecast;
+  run.results = { baseline: { ...result, point: [[91]], series_ids: ["comparator"] }, model: { ...result, point: [[7]], series_ids: ["selected"] } };
+  if (kind === "forecast") run.results.forecast = { ...result, point: [[5]], series_ids: ["legacy"] };
+  if (kind === "fallback") delete run.results.model;
+  render(<Home client={api({ getRecentRuns: vi.fn().mockResolvedValue([run]) })} onRunReady={vi.fn()} />);
+  const expected = kind === "forecast" ? /legacy.*5/ : kind === "model" ? /selected.*7/ : /comparator.*91/;
+  expect(await screen.findByRole("button", { name: expected })).toBeVisible();
 });

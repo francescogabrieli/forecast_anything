@@ -6,6 +6,12 @@ const schemaFile = new URL("schemas.json", apiDirectory);
 const target = new URL("schema.generated.ts", apiDirectory);
 const schemas = JSON.parse(await readFile(schemaFile, "utf8"));
 const names = [
+  "ForecastSelection",
+  "BacktestSettings",
+  "BacktestReport",
+  "OriginOutcome",
+  "OriginPage",
+  "PartitionScore",
   "SourceField",
   "SourceProfile",
   "SourceSpec",

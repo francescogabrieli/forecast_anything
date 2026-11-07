@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from threading import Event, Thread
 from uuid import uuid4
 
+from .backtesting.service import execute_job as execute_backtest_job
 from .connectors.http_json import SecretResolver
 from .contracts import (
     Candidate,
@@ -21,6 +22,7 @@ from .contracts import (
 )
 from .discovery.candidates import TEMPLATES, CandidateProposal, compile_proposal
 from .evaluation.records import evaluate_run
+from .forecast_policy import provider_epoch_context
 from .jobs import Job, JobQueue
 from .runtime import Runtime, _digest
 from .sources.catalog import SourceCatalog, source_revision
@@ -69,6 +71,30 @@ class Worker:
             stopped.set()
             thread.join()
 
+    @contextmanager
+    def liveness(self, interval_seconds: float = 2):
+        """Publish process liveness while the worker loop can be idle or busy."""
+        if interval_seconds <= 0:
+            raise DomainError("invalid_heartbeat_interval", {})
+        stopped = Event()
+
+        self.runtime.ledger.update_worker_heartbeat(self.owner, self.runtime.clock())
+
+        def heartbeat_loop():
+            while not stopped.wait(interval_seconds):
+                self.runtime.ledger.update_worker_heartbeat(
+                    self.owner, self.runtime.clock()
+                )
+
+        thread = Thread(target=heartbeat_loop, daemon=True)
+        thread.start()
+        try:
+            yield
+        finally:
+            stopped.set()
+            thread.join()
+            self.runtime.ledger.clear_worker_heartbeat(self.owner)
+
     def _now(self, supplied: datetime) -> datetime:
         return max(supplied, self.runtime.clock(), self.runtime.ledger.clock())
 
@@ -95,7 +121,30 @@ class Worker:
                         }
                     )
                     try:
-                        self.queue.fail(job, self._now(now), details)
+                        migration = details["code"] in {
+                            "required_forecast_provider",
+                            "ambiguous_primary_output",
+                            "invalid_primary_output",
+                        }
+                        if migration:
+                            details = {
+                                "code": "required_provider_migration",
+                                "details": {"provider": self.runtime.required_provider},
+                            }
+                        self.queue.fail(
+                            job,
+                            self._now(now),
+                            details,
+                            max_attempts=1
+                            if migration
+                            or details["code"]
+                            in {
+                                "model_not_prepared",
+                                "required_model_unavailable",
+                                "required_provider_migration",
+                            }
+                            else 3,
+                        )
                     except DomainError as lost:
                         if lost.code != "lease_lost":
                             raise
@@ -109,7 +158,25 @@ class Worker:
 
     def _execute(self, job: Job, now: datetime) -> dict | None:
         payload = job.payload
-        if payload.get("kind") == "run":
+        context = provider_epoch_context(self.runtime)
+        if (
+            context
+            and payload.get("kind") in {"discovery_templates", "discovery"}
+            and payload.get("provider_context") != context
+        ):
+            raise DomainError(
+                "required_forecast_provider",
+                {"provider": self.runtime.required_provider},
+            )
+        if payload.get("kind") == "backtest":
+            return execute_backtest_job(
+                self.runtime,
+                self.catalog,
+                job,
+                now,
+                secret_resolver=self.secret_resolver,
+            )
+        if payload.get("kind") in {"run", "configured_run"}:
             run = self.runtime.run(
                 GraphSpec.model_validate(payload["graph"]),
                 {
@@ -121,6 +188,7 @@ class Worker:
                 lease_guard=job.guard,
                 previous_run_id=payload.get("previous_run_id"),
                 scenario_id=payload.get("scenario_id"),
+                primary_node_id=payload.get("primary_node_id"),
             )
             if run.state == "failed":
                 raise DomainError("run_failed", {"run_id": run.run_id})
@@ -167,6 +235,28 @@ class Worker:
         now = self._now(now)
         ledger = self.runtime.ledger
         for watch in ledger.list_watches():
+            if self.runtime.required_provider is not None:
+                from .forecast_policy import validate_primary_provider
+
+                try:
+                    if watch.candidate is None:
+                        raise DomainError("missing_candidate_lineage", {})
+                    validate_primary_provider(
+                        watch.candidate.graph, self.runtime.required_provider
+                    )
+                except DomainError:
+                    if watch.migration_reason is None:
+                        ledger.advance_watch(
+                            watch.watch_id,
+                            {
+                                "kind": "provider_migration_required",
+                                "provider": self.runtime.required_provider,
+                            },
+                            now,
+                            event_id=f"provider-migration/{self.runtime.required_provider}",
+                            lease_guard=lease_guard,
+                        )
+                    continue
             if watch.next_due_at <= now:
                 ledger.advance_watch(
                     watch.watch_id,
@@ -217,6 +307,7 @@ class Worker:
             if (
                 watch.watch_id in superseded
                 or watch.lifecycle == "unsupported"
+                or watch.migration_reason is not None
                 or watch.next_due_at > now
             ):
                 continue
@@ -372,6 +463,7 @@ class Worker:
         epoch_id = _digest(
             {
                 "predecessor": old.candidate_id,
+                **provider_epoch_context(self.runtime),
                 "snapshot": snap.snapshot_id,
                 "profile": profile.model_dump(mode="json"),
             }
@@ -385,6 +477,7 @@ class Worker:
             ),
             (profile,),
             epoch_id=epoch_id,
+            forecast_provider=self.runtime.required_provider or "seasonal_naive",
         )
         # Changed inputs receive new reservations/evidence; old final origins are never reused.
         ledger.put_discovery_epoch(
@@ -403,6 +496,11 @@ class Worker:
                 f"discovery/agent/{epoch_id}",
                 {
                     "kind": "discovery",
+                    **(
+                        {"provider_context": provider_epoch_context(self.runtime)}
+                        if self.runtime.required_provider
+                        else {}
+                    ),
                     "epoch_id": epoch_id,
                     "source_ids": list(candidate.source_ids),
                 },
@@ -428,6 +526,7 @@ class Worker:
             )
         if (
             old.lifecycle == "paused"
+            and old.migration_reason is None
             and ledger.get_watch(watch_id).lifecycle == "candidate"
         ):
             ledger.advance_watch(
@@ -516,6 +615,7 @@ class Worker:
                 ),
                 (profile,),
                 epoch_id=payload["epoch_id"],
+                forecast_provider=self.runtime.required_provider or "seasonal_naive",
             )
             for template in TEMPLATES
             if template != "declared_limit"
@@ -543,6 +643,11 @@ class Worker:
                 f"discovery/agent/{payload['epoch_id']}",
                 {
                     "kind": "discovery",
+                    **(
+                        {"provider_context": provider_epoch_context(self.runtime)}
+                        if self.runtime.required_provider
+                        else {}
+                    ),
                     "epoch_id": payload["epoch_id"],
                     "source_ids": [profile.source_id],
                 },

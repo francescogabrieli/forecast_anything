@@ -1,18 +1,33 @@
 """Numerical scores for already aligned complete observed target matrices."""
 
+from fractions import Fraction
 from math import isfinite
 
 from ..contracts import DomainError, ForecastResult, Matrix
+
+
+def _mean(values, exact_values, count):
+    # Preserve established float scores/record identities on the ordinary path.
+    # Exact arithmetic is only needed when an intermediate sum/difference fails.
+    score = sum(values) / count
+    if isfinite(score):
+        return score
+    try:
+        return float(sum(exact_values(), Fraction()) / count)
+    except OverflowError:
+        raise DomainError("numerical_score_unrepresentable", {}) from None
 
 
 def forecast_metrics(forecast: ForecastResult, observed: Matrix) -> dict:
     actual = [x for row in observed for x in row]
     scores = {"count": len(actual), "mae": None, "pinball": {}, "intervals": {}}
     if forecast.point is not None:
-        scores["mae"] = sum(
-            abs(y - p)
-            for y, p in zip(actual, (x for row in forecast.point for x in row))
-        ) / len(actual)
+        points = [x for row in forecast.point for x in row]
+        scores["mae"] = _mean(
+            (abs(y - p) for y, p in zip(actual, points)),
+            lambda: (abs(Fraction(y) - Fraction(p)) for y, p in zip(actual, points)),
+            len(actual),
+        )
     levels = []
     for label, matrix in (forecast.quantiles or {}).items():
         try:
@@ -26,9 +41,20 @@ def forecast_metrics(forecast: ForecastResult, observed: Matrix) -> dict:
         ):
             raise DomainError("invalid_quantiles", {"level": label})
         values = [x for row in matrix for x in row]
-        scores["pinball"][label] = sum(
-            max(level * (y - p), (level - 1) * (y - p)) for y, p in zip(actual, values)
-        ) / len(actual)
+        scores["pinball"][label] = _mean(
+            (
+                max(level * (y - p), (level - 1) * (y - p))
+                for y, p in zip(actual, values)
+            ),
+            lambda: (
+                max(
+                    Fraction(level) * (Fraction(y) - Fraction(p)),
+                    Fraction(level - 1) * (Fraction(y) - Fraction(p)),
+                )
+                for y, p in zip(actual, values)
+            ),
+            len(actual),
+        )
         levels.append((level, label, values))
     levels.sort()
     for low, high in zip(levels, levels[1:]):
@@ -50,7 +76,11 @@ def forecast_metrics(forecast: ForecastResult, observed: Matrix) -> dict:
             scores["intervals"][f"{label}:{name}"] = {
                 "coverage": sum(a <= y <= b for y, a, b in zip(actual, lower, values))
                 / len(actual),
-                "width": sum(b - a for a, b in zip(lower, values)) / len(actual),
+                "width": _mean(
+                    (b - a for a, b in zip(lower, values)),
+                    lambda: (Fraction(b) - Fraction(a) for a, b in zip(lower, values)),
+                    len(actual),
+                ),
                 "level": high - low,
             }
     return scores
@@ -65,7 +95,8 @@ def relative_mae(
         return None, "unmatched_baseline"
     if baseline == 0:
         return None, "zero_baseline_mae"
-    return model / baseline, None
+    ratio = model / baseline
+    return (ratio, None) if isfinite(ratio) else (None, "ratio_unrepresentable")
 
 
 def event_metrics(probability: float, observed: float) -> dict:

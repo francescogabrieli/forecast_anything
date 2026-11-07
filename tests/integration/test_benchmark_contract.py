@@ -113,7 +113,8 @@ def test_residuals_exclude_final_and_incomplete_windows(tmp_path):
         ) <= datetime.fromisoformat(panel["available_at"])
 
 
-def test_model_gate_does_not_require_or_load_timestral(tmp_path):
+def test_model_gate_does_not_require_or_load_timestral(tmp_path, monkeypatch):
+    monkeypatch.delenv("FORECAST_ANYTHING_TIMESTRAL_WEIGHTS_APPROVED", raising=False)
     report = json.loads(
         run_suite(MANIFEST, tmp_path, ("baseline", "timestral")).read_text()
     )

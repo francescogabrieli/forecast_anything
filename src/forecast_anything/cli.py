@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import signal
 import sqlite3
 import sys
 import time
@@ -15,34 +16,14 @@ from pydantic import ValidationError
 from .connectors.csv import load_csv
 from .contracts import DomainError, GraphSpec
 from .graph import SourceConfig, parse_node_config
-from .providers.baseline import SeasonalNaiveProvider
+from .providers.configuration import configured_providers
 from .runtime import Runtime
 from .store import Ledger
 from .temporal import freeze
 
 
-def configured_providers():
-    """Register the baseline and only opt-in, pinned providers from the environment."""
-    providers = {"seasonal_naive": SeasonalNaiveProvider(1)}
-    enabled = os.environ.get("FORECAST_ANYTHING_TIMESTRAL_ENABLED", "").strip()
-    if enabled not in {"", "0", "1"}:
-        raise DomainError("invalid_provider_configuration", {})
-    if enabled == "1":
-        values = {
-            "checkpoint": os.environ.get("FORECAST_ANYTHING_TIMESTRAL_CHECKPOINT"),
-            "revision": os.environ.get("FORECAST_ANYTHING_TIMESTRAL_REVISION"),
-            "code_revision": os.environ.get(
-                "FORECAST_ANYTHING_TIMESTRAL_CODE_REVISION"
-            ),
-        }
-        if not all(
-            isinstance(value, str) and value.strip() for value in values.values()
-        ):
-            raise DomainError("incomplete_timestral_configuration", {})
-        from .providers.timestral import TimestralProvider
-
-        providers["timestral"] = TimestralProvider(**values)
-    return providers
+def _stop_continuous_worker(signum, frame):
+    raise KeyboardInterrupt
 
 
 def _run(args):
@@ -68,6 +49,8 @@ def _run(args):
             name: value.model_dump(mode="json") for name, value in snapshots.items()
         },
     }
+    if args.primary_node_id is not None:
+        content["primary_node_id"] = args.primary_node_id
     key = sha256(
         json.dumps(
             content, sort_keys=True, separators=(",", ":"), allow_nan=False
@@ -78,7 +61,8 @@ def _run(args):
         configured_providers(),
         {},
         lambda: datetime.now(timezone.utc),
-    ).run(spec, snapshots, origin, key)
+        required_provider="timestral",
+    ).run(spec, snapshots, origin, key, primary_node_id=args.primary_node_id)
 
 
 def main() -> int:
@@ -89,6 +73,20 @@ def main() -> int:
     run.add_argument("--data", type=Path, required=True)
     run.add_argument("--as-of", required=True, help="ISO 8601 origin with timezone")
     run.add_argument("--db", type=Path, required=True)
+    run.add_argument(
+        "--primary-node-id", help="Primary terminal output for a raw graph"
+    )
+    model = commands.add_parser(
+        "model", help="Check or explicitly prepare pinned local Timestral"
+    )
+    model_actions = model.add_subparsers(dest="model_action", required=True)
+    model_actions.add_parser(
+        "status", help="Inspect dependency provenance and local cache without loading"
+    )
+    model_actions.add_parser(
+        "prepare",
+        help="Download pinned weights if needed and load on CPU; review the Modified MIT weights license",
+    )
     show = commands.add_parser("show", help="Read a stored immutable emission")
     show.add_argument("run_id")
     show.add_argument("--db", type=Path, required=True)
@@ -102,8 +100,123 @@ def main() -> int:
     worker.add_argument("--limit", type=int, default=10)
     worker.add_argument("--poll-seconds", type=float, default=1)
     worker.add_argument("--lease-seconds", type=int, default=60)
+    init = commands.add_parser("init", help="Create a private local workspace")
+    init.add_argument("--workspace", type=Path, required=True)
+    init.add_argument("--csv-root", type=Path, required=True)
+    init.add_argument("--port", type=int, default=8000)
+    up = commands.add_parser("up", help="Run the local API and worker together")
+    target = up.add_mutually_exclusive_group(required=True)
+    target.add_argument("--db", type=Path)
+    target.add_argument("--config", type=Path)
+    up.add_argument("--port", type=int)
+    status = commands.add_parser(
+        "status", help="Check the configured local API and worker"
+    )
+    status.add_argument("--config", type=Path, required=True)
+    mcp = commands.add_parser("mcp", help="Serve optional MCP tools over stdio")
+    mcp.add_argument("--config", type=Path)
+    permissions = commands.add_parser(
+        "permissions", help="Manage persistent MCP source permissions"
+    )
+    permission_actions = permissions.add_subparsers(
+        dest="permission_action", required=True
+    )
+    permission_list = permission_actions.add_parser("list", help="List source grants")
+    permission_list.add_argument("--config", type=Path, required=True)
+    permission_grant = permission_actions.add_parser("grant", help="Grant a source ID")
+    permission_grant.add_argument("source_id")
+    permission_grant.add_argument("--config", type=Path, required=True)
+    permission_revoke = permission_actions.add_parser(
+        "revoke", help="Revoke a source ID"
+    )
+    permission_revoke.add_argument("source_id")
+    permission_revoke.add_argument("--config", type=Path, required=True)
     args = parser.parse_args()
+    if args.command == "permissions":
+        from .workspace_config import manage_source_permissions
+
+        try:
+            result = manage_source_permissions(
+                args.config, args.permission_action, getattr(args, "source_id", None)
+            )
+        except (OSError, ValueError) as error:
+            print(
+                json.dumps(
+                    {"code": "permission_error", "details": {"message": str(error)}}
+                ),
+                file=sys.stderr,
+            )
+            return 2
+        print(json.dumps(result))
+        return 0
+    if args.command in {"init", "status", "up", "mcp"}:
+        from .workspace_config import apply_workspace, create_workspace, load_workspace
+
+        try:
+            if args.command == "init":
+                path = create_workspace(args.workspace, args.csv_root, args.port)
+                print(json.dumps({"config": str(path)}))
+                return 0
+            if getattr(args, "config", None):
+                config = load_workspace(args.config)
+                apply_workspace(config)
+            if args.command == "status":
+                from .workspace_config import check_api
+
+                result = check_api(config)
+                print(json.dumps(result))
+                return (
+                    0
+                    if result["api"] == "available" and result["worker"] == "running"
+                    else 1
+                )
+            if args.command == "up" and args.config:
+                if args.port is not None:
+                    raise ValueError("--port cannot be used with --config")
+                args.db, args.port = Path(config["db"]), config["port"]
+        except FileExistsError:
+            print(
+                "Workspace config already exists; it was not changed.", file=sys.stderr
+            )
+            return 2
+        except (OSError, ValueError) as error:
+            print(f"Workspace configuration error: {error}", file=sys.stderr)
+            return 2
+    if args.command == "up":
+        from .local_services import run_services
+
+        try:
+            # Initialize the shared database before starting concurrent processes.
+            Ledger(args.db)
+            return run_services(
+                args.db, "127.0.0.1", args.port if args.port is not None else 8000
+            )
+        except (OSError, sqlite3.Error) as error:
+            print(
+                json.dumps({"code": "input_error", "details": {"message": str(error)}}),
+                file=sys.stderr,
+            )
+            return 2
+    if args.command == "mcp":
+        try:
+            from .mcp_adapter.server import run_stdio
+        except ImportError:
+            print(
+                "Install forecast-anything[mcp] to use the MCP stdio server.",
+                file=sys.stderr,
+            )
+            return 2
+        return run_stdio()
     try:
+        if args.command == "model":
+            provider = configured_providers()["timestral"]
+            result = (
+                provider.prepare_model()
+                if args.model_action == "prepare"
+                else provider.check_model()
+            )
+            print(json.dumps(result))
+            return 0 if result["status"] in {"cached", "loaded"} else 1
         if args.command in {"serve", "worker"}:
             from .operators import register_builtin_operators
 
@@ -113,6 +226,7 @@ def main() -> int:
                 configured_providers(),
                 register_builtin_operators(),
                 lambda: datetime.now(timezone.utc),
+                required_provider="timestral",
             )
             if args.command == "serve":
                 import uvicorn
@@ -155,12 +269,18 @@ def main() -> int:
                 discovery_gateway=gateway,
                 lease_seconds=args.lease_seconds,
             )
-            while True:
+            if args.once:
                 completed = worker.run_due(runtime.clock(), limit=args.limit)
-                if args.once:
-                    print(json.dumps({"job_ids": completed}))
-                    return 0
-                time.sleep(args.poll_seconds)
+                print(json.dumps({"job_ids": completed}))
+                return 0
+            previous_sigterm = signal.signal(signal.SIGTERM, _stop_continuous_worker)
+            try:
+                with worker.liveness():
+                    while True:
+                        worker.run_due(runtime.clock(), limit=args.limit)
+                        time.sleep(args.poll_seconds)
+            finally:
+                signal.signal(signal.SIGTERM, previous_sigterm)
         record = (
             _run(args)
             if args.command == "run"
