@@ -6,6 +6,10 @@ Forecast Anything is an open-source forecasting infrastructure under development
 
 The current implementation is a local forecasting observatory. The Python runtime validates typed graphs, freezes point-in-time inputs, records immutable forecasts in SQLite, and evaluates them against later observations. A React console uses the same authenticated API. The working name, public owner, package registry and domain remain provisional; this checkout prepares a release candidate and does not identify a published package or hosted service.
 
+## Connect Codex on macOS
+
+Install the local wheel and its locked MCP dependencies, then run `forecast-anything setup --prepare-model`. The setup command starts the workspace service and registers the stdio adapter with Codex. See the [installation guide](docs/installation.md) for the artifact, lifecycle and recovery steps.
+
 ## Try a local Timestral forecast
 
 From this checkout, with Python 3.12+ and [uv](https://docs.astral.sh/uv/) installed:
@@ -33,7 +37,7 @@ For the assistant/MCP path, see the [MCP guide](docs/implementation/mcp.md). For
 | Path | Implemented behavior | Evidence and limits |
 | --- | --- | --- |
 | Local model demo | Real pinned Timestral computation, deterministic discovery templates and immutable ledger | Prepared weights required; no remote inference key. Seasonal-naive is the comparison baseline, never a silent substitute. |
-| MCP stdio | 26 typed tools for CSV registration/refresh, candidate and configured forecasts, frozen multi-origin CSV backtests, recurring-question watches, report/change summaries, immutable evidence reads and single-run evaluation | The official Python SDK exercised real Timestral forecasts, backtests, reconnect and replay through the product API and worker. Earlier Desktop acceptance covered source correction, qualification, automatic refresh and textual reports using the historical baseline runtime. The connected Desktop MCP tools have also read the current Timestral capabilities and a stored real Timestral run. |
+| MCP stdio | 27 typed tools for CSV registration/refresh, candidate and configured forecasts, frozen multi-origin CSV backtests, recurring-question watches, report/change summaries, immutable evidence reads and single-run evaluation | The official Python SDK exercised real Timestral forecasts, backtests, reconnect and replay through the product API and worker. Earlier Desktop acceptance covered source correction, qualification, automatic refresh and textual reports using the historical baseline runtime. The connected Desktop MCP tools have also read the current Timestral capabilities and a stored real Timestral run. |
 | Console and API | Source inspection, explicit first forecast and refresh, discoveries, graph/run details, durable events and isolated scenario comparison | Component/API tests and two Playwright journeys against a real local API/worker: first forecast and two-source evaluation/update/scenario. External usability testing is on hold by owner decision. |
 | Composition | Aligned sum, cumulative balance and empirical window events | Representation, unit and sample-identity checks; marginal quantiles cannot be converted into joint paths. |
 | Timestral | Required pinned local forecasting adapter for point forecasts and marginal quantiles | CPU fp32 parity and an owner-authorized local comparison across three domains passed. The measured benchmark includes a retail result worse than the baseline; it does not show general superiority. Weight terms apply separately to each user/deployment. |

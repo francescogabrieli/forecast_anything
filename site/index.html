@@ -344,12 +344,12 @@
         <div>
           <h2>Run it locally.</h2>
           <p>
-            Start from the source checkout with Python 3.12+ and uv. Local Timestral is required: prepare its pinned weights before forecasting. No Mistral API key is needed.
+            Install the local artifact on macOS, prepare the pinned Timestral model, and connect Codex. The guided setup runs the workspace service independently of the chat.
           </p>
           <a
             class="control primary"
-            href="https://github.com/francescogabrieli/forecast_anything/blob/main/docs/quickstart.md"
-            >Open the quickstart
+            href="https://github.com/francescogabrieli/forecast_anything/blob/main/docs/installation.md"
+            >Open the installation guide
             <svg class="icon" aria-hidden="true"><use href="#i-external" /></svg
           ></a>
         </div>
@@ -361,13 +361,8 @@
               </svg>
               Terminal <span>Local workspace</span>
             </div>
-            <pre><code>git clone https://github.com/francescogabrieli/forecast_anything.git
-cd forecast_anything
-uv sync --locked --extra mcp
-uv run --locked --extra mcp forecast-anything model prepare
-mkdir -p .local/mcp/sources
-uv run --locked --extra mcp forecast-anything init --workspace .local/mcp --csv-root .local/mcp/sources
-uv run --locked --extra mcp forecast-anything up --config .local/mcp/config.json</code></pre>
+            <pre><code># After setting forecast_cli in the installation guide
+"$forecast_cli" setup --prepare-model</code></pre>
           </div>
           <p class="caption">
             Real Timestral forecasts were verified with the official MCP SDK.

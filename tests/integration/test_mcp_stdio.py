@@ -376,3 +376,33 @@ def test_stdio_missing_targets_and_unavailable_revision_keep_planned_origins(tmp
 
     with LocalWorkspace(tmp_path) as workspace:
         asyncio.run(asyncio.wait_for(journey(workspace), timeout=30))
+
+
+def test_stdio_diagnostics_stays_available_with_api_down(tmp_path):
+    import socket
+    import sys
+
+    from mcp import Client
+    from mcp.client.stdio import StdioServerParameters, stdio_client
+
+    from forecast_anything.workspace_config import create_workspace
+
+    with socket.socket() as reserved:
+        reserved.bind(("127.0.0.1", 0))
+        port = reserved.getsockname()[1]
+        config = create_workspace(tmp_path / "workspace", tmp_path, port)
+
+        async def journey():
+            params = StdioServerParameters(
+                command=sys.executable,
+                args=["-m", "forecast_anything.cli", "mcp", "--config", str(config)],
+            )
+            async with Client(stdio_client(params), mode="legacy") as client:
+                report = await call(client, "get_diagnostics")
+                assert report["api"] == "unreachable"
+                assert report["authentication"] == "unknown"
+                assert report["permissions"]["readable_csv_roots"] == 1
+                assert not report["ready"]
+                assert str(tmp_path) not in json.dumps(report)
+
+        asyncio.run(asyncio.wait_for(journey(), timeout=10))

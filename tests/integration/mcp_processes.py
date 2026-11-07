@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ISSUED = "2026-10-23T12:00:00+00:00"
 TOOLS = {
     "get_capabilities",
+    "get_diagnostics",
     "list_sources",
     "register_csv_source",
     "get_source_profile",

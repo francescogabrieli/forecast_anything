@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from importlib.metadata import version
 from pathlib import Path
 from runpy import run_path
 from shutil import copy2, copytree
@@ -28,6 +29,10 @@ def test_source_distribution_excludes_local_work_materials(tmp_path: Path):
         ".codex/session.md",
         "work/private.txt",
         "outputs/run.json",
+        "apps/console/node_modules/dependency/index.js",
+        "apps/console/test-results/trace.zip",
+        "apps/console/playwright-report/index.html",
+        "apps/agent/dist/bundle.js",
     )
     for name in private_files:
         path = project / name
@@ -77,7 +82,7 @@ def test_installed_release_has_passed_smoke(tmp_path: Path):
         "mistralai/Timestral-28M@49b26409ac87b5935539a5d8ffe7f397b720db47;"
         "code=a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff"
     ), report
-    assert report["version"] == "0.1.0", report
+    assert report["version"] == version("forecast-anything"), report
     assert report["schema_version"] == "1.0.0", report
     assert report["missing_files"] == [], report
     assert report["embedded_credentials"] == [], report

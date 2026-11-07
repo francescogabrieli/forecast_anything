@@ -2,12 +2,14 @@
 
 import hmac
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from ..contracts import DomainError, ErrorResponse
+from ..diagnostics import runtime_version, sign_diagnostics, validated_nonce
+from ..forecast_policy import model_readiness
 from ..runtime import Runtime
 from ..store import Ledger
 from .errors import public_error_details
@@ -21,6 +23,8 @@ def create_app(
     workspace_token: str,
     agent_token: str | None = None,
     console_origins: tuple[str, ...] = (),
+    expected_worker_id: str | None = None,
+    supervisor_pid: int | None = None,
 ) -> FastAPI:
     if not isinstance(workspace_token, str) or not workspace_token.strip():
         raise DomainError("workspace_token_required", {})
@@ -97,11 +101,23 @@ def create_app(
         )
 
     @app.get("/health")
-    def health():
-        return {
+    def health(request: Request):
+        worker, model = ledger.worker_diagnostics(
+            ledger.clock(), expected_worker_id=expected_worker_id
+        )
+        payload = {
             "status": "ok",
-            "worker": ledger.worker_status(ledger.clock()),
+            "worker": worker,
+            "worker_model": model,
+            "runtime_version": runtime_version(),
+            "diagnostics_version": 1,
+            "supervisor_pid": supervisor_pid,
         }
+        if nonce := validated_nonce(request.headers, workspace_token):
+            payload["required_provider"] = runtime.required_provider
+            payload["model_cache"] = model_readiness(runtime)["status"]
+            return sign_diagnostics(payload, nonce, workspace_token)
+        return payload
 
     app.include_router(router(app.state.observatory))
     return app
