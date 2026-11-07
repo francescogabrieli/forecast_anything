@@ -20,6 +20,11 @@ jobs:
         python-version: ["3.12", "3.14"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Free disk space on the GitHub-hosted runner
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          df -h /
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           version: "0.12.3"
@@ -40,6 +45,9 @@ jobs:
         run: uv build
       - name: Verify installed artifact outside checkout (model execution separate)
         run: uv run --locked --extra dev --extra mcp python scripts/check_release.py --dist dist --artifact-only
+      - name: Report remaining disk space
+        if: always()
+        run: df -h / "$RUNNER_TEMP"
 
   agent:
     name: Agent package (Node 24)
