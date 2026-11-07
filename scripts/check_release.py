@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import subprocess
@@ -17,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = (
     "forecast_anything/cli.py",
     "forecast_anything/contracts.py",
+    "forecast_anything/providers/configuration.py",
     "forecast_anything/examples/minimal/graph.json",
     "forecast_anything/examples/minimal/observations.csv",
     "forecast_anything/contracts/v1/openapi.json",
@@ -48,14 +50,21 @@ def _outside(path: Path) -> bool:
     return not path.resolve().is_relative_to(ROOT.resolve())
 
 
-def check_release(dist_dir: Path) -> dict:
+def check_release(dist_dir: Path, *, artifact_only: bool = False) -> dict:
     """Return a machine-readable report; never publish or mutate the checkout."""
     report = {
+        "model_validation": "not_executed_artifact_only"
+        if artifact_only
+        else "required",
         "wheel": None,
         "version": None,
         "schema_version": None,
         "installed_outside_checkout": False,
         "minimal_example_passed": False,
+        "model_status": None,
+        "model_prepared": False,
+        "timestral_smoke_passed": False,
+        "timestral_provider_revision": None,
         "included_files": [],
         "missing_files": [],
         "embedded_credentials": [],
@@ -184,6 +193,67 @@ def check_release(dist_dir: Path) -> dict:
             )
             return report
 
+        if artifact_only:
+            report["passed"] = (
+                report["installed_outside_checkout"]
+                and report["schema_version"] == "1.0.0"
+                and not report["missing_files"]
+                and not report["embedded_credentials"]
+                and not report["model_weights"]
+                and not report["errors"]
+            )
+            return report
+
+        # Inspect first: this release check never silently downloads missing weights.
+        # The operator prepares the licensed cache explicitly before running acceptance.
+        model_status = _run(
+            [str(python), "-I", "-m", "forecast_anything.cli", "model", "status"],
+            workspace,
+            env,
+        )
+        try:
+            report["model_status"] = json.loads(model_status.stdout)
+        except (ValueError, TypeError):
+            report["errors"].append(
+                f"model status failed: {model_status.stderr.strip()}"
+            )
+            return report
+        if model_status.returncode or report["model_status"].get("status") not in {
+            "cached",
+            "loaded",
+        }:
+            report["errors"].append(
+                "Required local Timestral is not prepared; install pinned dependencies and run "
+                "forecast-anything model prepare, then repeat this installed release check"
+            )
+            return report
+        prepared = _run(
+            [str(python), "-I", "-m", "forecast_anything.cli", "model", "prepare"],
+            workspace,
+            env,
+        )
+        try:
+            preparation = json.loads(prepared.stdout)
+            report["model_prepared"] = (
+                prepared.returncode == 0
+                and preparation["status"] == "loaded"
+                and preparation["ready"] is True
+            )
+        except (ValueError, KeyError, TypeError):
+            report["model_prepared"] = False
+        if not report["model_prepared"]:
+            report["errors"].append(
+                f"explicit Timestral preparation failed: {prepared.stderr.strip()}"
+            )
+            return report
+        model_lock = json.loads((ROOT / "integrations/models.lock.json").read_text())[
+            "timestral"
+        ]
+        expected_revision = (
+            f"{model_lock['weights']['repo']}@{model_lock['weights']['revision']};"
+            f"code={model_lock['code']['revision']}"
+        )
+
         required_example = (
             "forecast_anything/examples/minimal/graph.json",
             "forecast_anything/examples/minimal/observations.csv",
@@ -218,13 +288,25 @@ def check_release(dist_dir: Path) -> dict:
                 try:
                     result = json.loads(run.stdout)
                     forecast = result["results"]["forecast"]
-                    report["minimal_example_passed"] = (
+                    report["timestral_provider_revision"] = forecast[
+                        "provider_revision"
+                    ]
+                    report["timestral_smoke_passed"] = (
                         result["state"] == "completed"
-                        and forecast["provider_id"] == "seasonal_naive"
-                        and forecast["point"] == [[20.0, 30.0, 20.0]]
-                        and forecast["quantiles"] is None
+                        and result["actual_provider"]["forecast"] == "timestral"
+                        and forecast["provider_id"] == "timestral"
+                        and forecast["provider_revision"] == expected_revision
+                        and len(forecast["point"]) == 1
+                        and len(forecast["point"][0]) == 3
+                        and all(math.isfinite(value) for value in forecast["point"][0])
+                        and "0.5" in forecast["quantiles"]
                         and forecast["paths"] is None
                     )
+                    report["minimal_example_passed"] = report["timestral_smoke_passed"]
+                    if not report["timestral_smoke_passed"]:
+                        report["errors"].append(
+                            "installed minimal forecast did not satisfy pinned Timestral provenance and output checks"
+                        )
                 except (KeyError, TypeError, ValueError):
                     report["errors"].append(
                         "minimal example emitted invalid JSON record"
@@ -232,6 +314,8 @@ def check_release(dist_dir: Path) -> dict:
         report["passed"] = (
             report["installed_outside_checkout"]
             and report["minimal_example_passed"]
+            and report["model_prepared"]
+            and report["timestral_smoke_passed"]
             and report["schema_version"] == "1.0.0"
             and not report["missing_files"]
             and not report["embedded_credentials"]
@@ -244,8 +328,13 @@ def check_release(dist_dir: Path) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dist", type=Path, default=Path("dist"))
+    parser.add_argument(
+        "--artifact-only",
+        action="store_true",
+        help="Inspect/install artifacts only; does not validate model execution",
+    )
     args = parser.parse_args()
-    report = check_release(args.dist)
+    report = check_release(args.dist, artifact_only=args.artifact_only)
     print(json.dumps(report, indent=2))
     return 0 if report["passed"] else 1
 

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer
 
+from ..backtesting.contracts import BacktestReport, OriginPage
 from ..contracts import (
     Candidate,
     CandidateRequest,
@@ -17,6 +18,7 @@ from ..contracts import (
     GraphSpec,
     JobRequest,
     JobView,
+    OpaqueDictionary,
     RunRecord,
     ScenarioRequest,
     ScenarioView,
@@ -26,6 +28,7 @@ from ..contracts import (
     SourceRegistration,
     SourceSpec,
     SourceView,
+    WatchHistoryPage,
     WatchPatch,
     WatchRequest,
     WatchView,
@@ -79,6 +82,26 @@ def router(service):
     def watches():
         return service.watches()
 
+    @api.get("/watches/{watch_id}", response_model=WatchView)
+    def get_watch(watch_id: str):
+        return service.watch(watch_id)
+
+    @api.get("/watches/{watch_id}/history", response_model=WatchHistoryPage)
+    def watch_history(
+        watch_id: str,
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    ):
+        return service.watch_history(watch_id, offset=offset, limit=limit)
+
+    @api.get("/watches/{watch_id}/changes", response_model=OpaqueDictionary)
+    def watch_change_summary(
+        watch_id: str,
+        previous_run_id: Annotated[str, Query(min_length=1)],
+        current_run_id: Annotated[str, Query(min_length=1)],
+    ):
+        return service.watch_change_summary(watch_id, previous_run_id, current_run_id)
+
     @api.patch("/watches/{watch_id}", response_model=WatchView)
     def patch(watch_id: str, request: WatchPatch):
         return service.patch_watch(watch_id, request)
@@ -107,6 +130,18 @@ def router(service):
     def evaluation(evaluation_id: str):
         return service.ledger.get_evaluation(evaluation_id)
 
+    @api.get("/backtests/{backtest_id}", response_model=BacktestReport)
+    def backtest(backtest_id: str):
+        return service.backtest(backtest_id)
+
+    @api.get("/backtests/{backtest_id}/origins", response_model=OriginPage)
+    def backtest_origins(
+        backtest_id: str,
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=50)] = 25,
+    ):
+        return service.backtest_origins(backtest_id, offset=offset, limit=limit)
+
     @api.get("/snapshots/{snapshot_id}", response_model=Snapshot)
     def snapshot(snapshot_id: str):
         return service.ledger.get_snapshot(snapshot_id)
@@ -132,7 +167,7 @@ def router(service):
         limit: Annotated[int, Query(ge=1, le=1000)] = 100,
         last_event_id: Annotated[str | None, Header()] = None,
     ):
-        return service.ledger.events_after(cursor(after, last_event_id), limit)
+        return service.events(cursor(after, last_event_id), limit)
 
     @api.get(
         "/events/stream",
@@ -150,7 +185,7 @@ def router(service):
         async def replay():
             nonlocal position
             while True:
-                batch = await asyncio.to_thread(service.ledger.events_after, position)
+                batch = await asyncio.to_thread(service.events, position)
                 for event in batch:
                     yield f"id: {event.cursor}\nevent: {event.kind}\ndata: {event.model_dump_json()}\n\n"
                     position = event.cursor
@@ -176,7 +211,13 @@ def router(service):
 
     @api.get("/capabilities", response_model=CapabilitiesView)
     def capabilities():
+        from ..forecast_policy import model_readiness
+
         return CapabilitiesView(
+            required_provider=service.runtime.required_provider,
+            model_status=model_readiness(service.runtime)
+            if service.runtime.required_provider
+            else None,
             providers={
                 k: p.capabilities() for k, p in service.runtime.providers.items()
             },

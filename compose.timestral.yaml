@@ -1,4 +1,5 @@
-# This changes the existing worker; it never adds a second queue consumer.
+# Compatibility overlay: the default images already require pinned local Timestral.
+# Prepare the shared cache explicitly with: docker compose run --rm worker model prepare
 services:
   core:
     build:

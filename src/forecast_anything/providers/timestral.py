@@ -1,12 +1,14 @@
-"""Optional CPU Timestral adapter; importing this module never imports Torch.
+"""Pinned local CPU Timestral adapter; importing this module never imports Torch.
 
 Weights have a Modified MIT license with a restriction above USD 20 million
 in global consolidated monthly revenue. Review applicability before loading.
 """
 
 import json
+import os
 from datetime import timezone
 from importlib.metadata import PackageNotFoundError, distribution
+from pathlib import Path
 from threading import Lock
 
 import numpy as np
@@ -50,29 +52,150 @@ class TimestralProvider:
             supports_known_future=True,
         )
 
+    def _dependency_status(self) -> str | None:
+        try:
+            package = distribution("timestral")
+            distribution("torch")
+            provenance = json.loads(package.read_text("direct_url.json") or "{}")
+        except PackageNotFoundError:
+            return "missing_dependency"
+        except (OSError, ValueError, TypeError):
+            return "code_revision_mismatch"
+        if not isinstance(provenance, dict):
+            return "code_revision_mismatch"
+        vcs = provenance.get("vcs_info")
+        if not isinstance(vcs, dict) or vcs.get("commit_id") != self.code_revision:
+            return "code_revision_mismatch"
+        return None
+
+    def _snapshot_path(self) -> Path:
+        # Mirror the Hub's cache environment without importing its networking client.
+        home = Path(
+            os.environ.get(
+                "HF_HOME",
+                str(
+                    Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache")))
+                    / "huggingface"
+                ),
+            )
+        )
+        cache = Path(
+            os.environ.get(
+                "HF_HUB_CACHE",
+                os.environ.get("HUGGINGFACE_HUB_CACHE", str(home / "hub")),
+            )
+        ).expanduser()
+        return (
+            cache
+            / ("models--" + self.checkpoint.replace("/", "--"))
+            / "snapshots"
+            / self.revision
+        )
+
+    def check_model(self) -> dict:
+        """Inspect installed provenance and exact cache revision, without imports/I/O to network.
+
+        ``cached`` is artifact availability, not a successful in-process model load.
+        Only explicit preparation or actual inference can establish ``ready``.
+        """
+        dependency_error = self._dependency_status()
+        path = self._snapshot_path()
+        try:
+            cached = all(
+                (path / name).is_file() and (path / name).stat().st_size > 0
+                for name in ("config.json", "model.safetensors")
+            )
+        except OSError:
+            cached = False
+        status = dependency_error or (
+            "loaded"
+            if self._forecaster is not None
+            else "cached"
+            if cached
+            else "weights_missing"
+        )
+        return {
+            "provider_id": "timestral",
+            "checkpoint": self.checkpoint,
+            "revision": self.revision,
+            "code_revision": self.code_revision,
+            "device": "cpu",
+            "dtype": "float32",
+            "status": status,
+            "cached": cached if dependency_error is None else False,
+            "ready": self._forecaster is not None and dependency_error is None,
+            "prepare_command": "forecast-anything model prepare",
+            "install_command": "uv sync --locked --extra dev --extra mcp",
+            "weights_license": "Modified MIT; global consolidated monthly revenue above USD 20 million requires a separate license",
+            "weights_license_url": f"https://huggingface.co/{self.checkpoint}/blob/{self.revision}/LICENSE",
+        }
+
+    def _require_dependency(self):
+        status = self._dependency_status()
+        if status:
+            raise DomainError(
+                "missing_model_dependency"
+                if status == "missing_dependency"
+                else "model_code_revision_mismatch",
+                {
+                    "expected": self.code_revision,
+                    "setup": "Install the pinned forecast-anything dependencies, then run forecast-anything model prepare",
+                },
+            )
+
+    def prepare_model(self) -> dict:
+        """Explicitly fetch pinned artifacts if absent and verify they load on CPU."""
+        self._require_dependency()
+        if not self.check_model()["cached"]:
+            try:
+                from huggingface_hub import snapshot_download
+
+                snapshot_download(
+                    self.checkpoint,
+                    revision=self.revision,
+                    allow_patterns=["config.json", "model.safetensors"],
+                )
+            except Exception as error:
+                raise DomainError(
+                    "model_preparation_failed",
+                    {
+                        "prepare_command": "forecast-anything model prepare",
+                        "error_type": type(error).__name__,
+                    },
+                ) from error
+        self._load()
+        return self.check_model()
+
     def _load(self):
         with self._load_lock:
             if self._forecaster is None:
+                self._require_dependency()
+                if not self.check_model()["cached"]:
+                    raise DomainError(
+                        "model_not_prepared",
+                        {
+                            "prepare_command": "forecast-anything model prepare",
+                            "checkpoint": self.checkpoint,
+                            "revision": self.revision,
+                        },
+                    )
                 try:
-                    provenance = json.loads(
-                        distribution("timestral").read_text("direct_url.json") or "{}"
-                    )
-                except PackageNotFoundError as error:
-                    raise DomainError(
-                        "missing_optional_dependency", {"extra": "timestral"}
-                    ) from error
-                if (
-                    provenance.get("vcs_info", {}).get("commit_id")
-                    != self.code_revision
-                ):
-                    raise DomainError(
-                        "model_code_revision_mismatch", {"expected": self.code_revision}
-                    )
-                from timestral import TimestralForecaster
+                    from timestral import TimestralForecaster
 
-                self._forecaster = TimestralForecaster.from_pretrained(
-                    self.checkpoint, revision=self.revision, device="cpu"
-                )
+                    self._forecaster = TimestralForecaster.from_pretrained(
+                        self.checkpoint,
+                        revision=self.revision,
+                        device="cpu",
+                        local_files_only=True,
+                    )
+                except Exception as error:
+                    raise DomainError(
+                        "model_load_failed",
+                        {
+                            "prepare_command": "forecast-anything model prepare",
+                            "error_type": type(error).__name__,
+                        },
+                    ) from error
         return self._forecaster
 
     def forecast(self, request: ForecastRequest) -> ForecastResult:
@@ -125,12 +248,19 @@ class TimestralProvider:
                     o.value if o.value is not None else np.nan for o in cov_groups[s]
                 ]
             assumptions = (*assumptions, *snapshot.assumptions)
-        output = self._load().forecast(
-            context,
-            prediction_length=request.horizon,
-            observation_mask=np.isfinite(context),
-            known_covariates=known,
-        )
+        forecaster = self._load()
+        try:
+            output = forecaster.forecast(
+                context,
+                prediction_length=request.horizon,
+                observation_mask=np.isfinite(context),
+                known_covariates=known,
+            )
+        except Exception as error:
+            raise DomainError(
+                "model_inference_failed",
+                {"provider_id": "timestral", "error_type": type(error).__name__},
+            ) from error
         # Official outputs are CPU tensors; fixtures may supply NumPy arrays.
         values = output.quantiles
         if hasattr(values, "detach"):

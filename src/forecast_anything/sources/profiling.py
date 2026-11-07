@@ -58,7 +58,13 @@ _CANDIDATES = {
 }
 
 
-def _read(spec: SourceSpec, limit: int | None, resolver: SecretResolver | None):
+def _read(
+    spec: SourceSpec,
+    limit: int | None,
+    resolver: SecretResolver | None,
+    *,
+    read_limit: int | None = None,
+):
     if spec.kind == "http_json":
         return load_http_json(spec, limit=limit, secret_resolver=resolver)
     if spec.secret_ref is not None:
@@ -66,7 +72,9 @@ def _read(spec: SourceSpec, limit: int | None, resolver: SecretResolver | None):
             "source_unavailable", {"reason": "csv_credentials_unsupported"}
         )
     return sanitize_rows(
-        load_csv_rows(Path(spec.location)), mapping=spec.mapping, limit=limit
+        load_csv_rows(Path(spec.location), limit=read_limit),
+        mapping=spec.mapping,
+        limit=limit,
     )
 
 
@@ -131,7 +139,8 @@ def _profile(spec: SourceSpec, rows) -> SourceProfile:
         elif isinstance(value, dict) and set(value) == {"constant"}:
             constant = value["constant"]
             resolved = not isinstance(constant, (dict, list)) and (
-                not isinstance(constant, str) or sanitize_text(constant) == constant
+                not isinstance(constant, str)
+                or (bool(constant.strip()) and sanitize_text(constant) == constant)
             )
             if role != "value" and constant is None:
                 resolved = False
@@ -218,13 +227,19 @@ def _timestamp(value: Any, zone: ZoneInfo) -> datetime:
     return first
 
 
-def ingest_source(
-    spec: SourceSpec, as_of: datetime, *, secret_resolver: SecretResolver | None = None
-) -> Snapshot:
-    """Require explicit semantics, normalize observations, then core freeze."""
-    if as_of.tzinfo is None or as_of.utcoffset() is None:
-        raise DomainError("naive_timestamp", {"field": "as_of"})
-    rows = _read(spec, None, secret_resolver)
+def read_observations(
+    spec: SourceSpec,
+    *,
+    secret_resolver: SecretResolver | None = None,
+    max_rows: int | None = None,
+) -> tuple[Observation, ...]:
+    """Normalize supplied revisions without selecting a vintage or reordering."""
+    if max_rows is not None and (type(max_rows) is not int or max_rows < 1):
+        raise DomainError("invalid_row_limit", {})
+    limit = None if max_rows is None else max_rows + 1
+    rows = _read(spec, limit, secret_resolver, read_limit=limit)
+    if max_rows is not None and len(rows) > max_rows:
+        raise DomainError("source_row_limit", {"max_rows": max_rows})
     profile = _profile(spec, rows)
     if profile.unresolved:
         raise DomainError(
@@ -255,8 +270,17 @@ def ingest_source(
             observations.append(Observation.model_validate(values))
         except (KeyError, ValueError, TypeError, ValidationError):
             raise DomainError("invalid_source_row", {"row": number}) from None
+    return tuple(observations)
+
+
+def ingest_source(
+    spec: SourceSpec, as_of: datetime, *, secret_resolver: SecretResolver | None = None
+) -> Snapshot:
+    """Require explicit semantics, normalize observations, then core freeze."""
+    if as_of.tzinfo is None or as_of.utcoffset() is None:
+        raise DomainError("naive_timestamp", {"field": "as_of"})
     return freeze(
-        tuple(observations),
+        read_observations(spec, secret_resolver=secret_resolver),
         as_of,
         (
             f"source_revision={source_revision(spec)}",

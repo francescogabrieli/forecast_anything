@@ -137,7 +137,8 @@ def test_expired_owner_cannot_commit(tmp_path):
     assert current.lease_token != old.lease_token
     with pytest.raises(DomainError, match="lease_lost"):
         queue.complete(old, now[0])
-    assert provider.calls == ["a", "b"]
+    # An already expired guard now rejects graph/snapshot writes before inference.
+    assert provider.calls == []
 
 
 def test_same_source_change_only_recomputes_descendants(tmp_path):

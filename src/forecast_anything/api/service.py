@@ -5,13 +5,18 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
+from ..backtesting import service as backtesting
+from ..backtesting.store import BacktestStore
 from ..contracts import (
+    BacktestJobRequest,
     CandidateRequest,
+    ConfiguredRunJobRequest,
     DiscoveryBudget,
     DiscoveryEpoch,
     DomainError,
     EvaluationJobRequest,
     JobView,
+    OpaqueDictionary,
     ResumeJobRequest,
     RunJobRequest,
     SourceProfile,
@@ -19,12 +24,15 @@ from ..contracts import (
     SourceRegistration,
     SourceSpec,
     SourceView,
+    WatchHistoryEntry,
+    WatchHistoryPage,
     WatchPatch,
     WatchRequest,
     WatchView,
 )
 from ..discovery.agent_gateway import AgentOperationRequest, AgentOperationResponse
 from ..discovery.candidates import CandidateProposal, compile_proposal
+from ..forecast_policy import provider_epoch_context
 from ..graph import ForecastConfig, SourceConfig, compile_graph, parse_node_config
 from ..jobs import JobQueue
 from ..providers.base import frequency_step, observation_grid
@@ -32,12 +40,16 @@ from ..runtime import _digest
 from ..sources.catalog import SourceCatalog
 from ..sources.profiling import inspect_source
 from ..store import _json
-from ..watches import create_watch
+from ..watches import create_watch, summarize_watch_change
 from ..worker import Worker
-from .errors import public_error_details
+from .errors import public_event, public_failure
 
 
-def validate_run(runtime, graph, snapshots, as_of):
+def validate_run(runtime, graph, snapshots, as_of, primary_node_id=None):
+    from ..forecast_policy import ensure_required_model, validate_primary_provider
+
+    validate_primary_provider(graph, runtime.required_provider, primary_node_id)
+    ensure_required_model(runtime)
     try:
         stored = runtime.ledger.get_graph(graph.graph_id, graph.version)
     except DomainError as error:
@@ -161,7 +173,11 @@ class Observatory:
                     profiles[name] for name in proposal.source_ids if name in profiles
                 )
                 candidate = compile_proposal(
-                    proposal, selected, epoch_id=request.epoch_id
+                    proposal,
+                    selected,
+                    epoch_id=request.epoch_id,
+                    forecast_provider=self.runtime.required_provider
+                    or "seasonal_naive",
                 )
                 self.ledger.register_agent_candidate(candidate)
                 if candidate.executable:
@@ -201,11 +217,13 @@ class Observatory:
     def profile(self, source_id):
         registered = self.catalog.get(source_id)
         profile = inspect_source(registered.spec)
-        epoch_id = _digest({"profile": profile.model_dump(mode="json")})
+        context = provider_epoch_context(self.runtime)
+        epoch_id = _digest({"profile": profile.model_dump(mode="json"), **context})
         job = self.queue.enqueue(
             f"discover/templates/{epoch_id}",
             {
                 "kind": "discovery_templates",
+                **({"provider_context": context} if context else {}),
                 "source_id": source_id,
                 "revision": registered.revision,
                 "epoch_id": epoch_id,
@@ -229,6 +247,12 @@ class Observatory:
         registered = self.catalog.get(source_id)
         epoch_id = _digest({"source_id": source_id, "refresh_key": request.key})
         key = f"refresh/templates/{epoch_id}"
+        context = provider_epoch_context(self.runtime)
+        new_epoch_id = (
+            _digest({"legacy_request_epoch": epoch_id, **context})
+            if context
+            else epoch_id
+        )
         job_id = sha256(key.encode()).hexdigest()
         try:
             job = self.queue.get(job_id)
@@ -241,9 +265,10 @@ class Observatory:
                     key,
                     {
                         "kind": "discovery_templates",
+                        **({"provider_context": context} if context else {}),
                         "source_id": source_id,
                         "revision": registered.revision,
-                        "epoch_id": epoch_id,
+                        "epoch_id": new_epoch_id,
                         "profile": profile.model_dump(mode="json"),
                     },
                 )
@@ -257,7 +282,7 @@ class Observatory:
         return SourceRegistration(
             **self.source_view(registered).model_dump(),
             profile=profile,
-            epoch_id=epoch_id,
+            epoch_id=job.payload["epoch_id"],
             job_id=job.job_id,
         )
 
@@ -268,10 +293,14 @@ class Observatory:
             {
                 "profiles": [p.model_dump(mode="json") for p in profiles],
                 "proposal": request.model_dump(mode="json"),
+                **provider_epoch_context(self.runtime),
             }
         )
         candidate = compile_proposal(
-            CandidateProposal(**request.model_dump()), profiles, epoch_id=epoch_id
+            CandidateProposal(**request.model_dump()),
+            profiles,
+            epoch_id=epoch_id,
+            forecast_provider=self.runtime.required_provider or "seasonal_naive",
         )
         if candidate.executable:
             compile_graph(
@@ -297,9 +326,42 @@ class Observatory:
         self.worker._sync_watches(self.now())
         return tuple(WatchView(**w.model_dump()) for w in self.ledger.list_watches())
 
+    def watch(self, watch_id: str):
+        return WatchView(**self.ledger.get_watch(watch_id).model_dump())
+
+    def watch_history(self, watch_id: str, *, offset: int, limit: int):
+        entries, next_offset = self.ledger.watch_history_page(
+            watch_id, offset=offset, limit=limit
+        )
+        return WatchHistoryPage(
+            entries=tuple(
+                WatchHistoryEntry(
+                    **{
+                        **entry,
+                        "watch": WatchView(**entry["watch"].model_dump()),
+                    }
+                )
+                for entry in entries
+            ),
+            next_offset=next_offset,
+        )
+
+    def watch_change_summary(
+        self, watch_id: str, previous_run_id: str, current_run_id: str
+    ) -> OpaqueDictionary:
+        result = summarize_watch_change(
+            self.ledger.get_watch(watch_id),
+            self.ledger.get_run(previous_run_id),
+            self.ledger.get_run(current_run_id),
+        )
+        return OpaqueDictionary(result)
+
     def create_watch(self, request: WatchRequest):
         request = WatchRequest.model_validate(request.model_dump())
         candidate = self.ledger.get_candidate(request.candidate_id)
+        from ..forecast_policy import validate_primary_provider
+
+        validate_primary_provider(candidate.graph, self.runtime.required_provider)
         watch = create_watch(
             candidate,
             watch_id=_digest(request.model_dump(mode="json")),
@@ -316,26 +378,102 @@ class Observatory:
     def patch_watch(self, watch_id, patch: WatchPatch):
         patch = WatchPatch.model_validate(patch.model_dump(exclude_unset=True))
         self.worker._sync_watches(self.now())
-        for name in patch.model_fields_set:
-            self.ledger.advance_watch(
+        current = self.ledger.get_watch(watch_id)
+        for name in ("muted", "priority"):
+            if name not in patch.model_fields_set:
+                continue
+            value = getattr(patch, name)
+            if getattr(current, name) == value:
+                continue
+            current = self.ledger.advance_watch(
                 watch_id,
                 {
                     "kind": "muted" if name == "muted" else "priority_changed",
-                    name: getattr(patch, name),
+                    name: value,
                 },
                 self.now(),
                 event_id=uuid4().hex,
             )
-        return next(w for w in self.watches() if w.watch_id == watch_id)
+        return WatchView(**current.model_dump())
+
+    def _replay_run(self, request):
+        from ..backtesting.contracts import canonical_json
+
+        job_id = sha256(f"api/{request.key}".encode()).hexdigest()
+        try:
+            payload = self.queue.original_payload(job_id)
+        except DomainError as error:
+            if error.code == "not_found":
+                return None
+            raise
+        if payload.get("kind") != "run":
+            raise DomainError("idempotency_conflict", {"key": request.key})
+        original = {
+            "kind": "run",
+            "graph": payload["graph"],
+            "snapshot_ids": {
+                name: snap["snapshot_id"] for name, snap in payload["snapshots"].items()
+            },
+            "as_of": payload["as_of"],
+            "previous_run_id": payload.get("previous_run_id"),
+            **(
+                {"primary_node_id": payload["primary_node_id"]}
+                if "primary_node_id" in payload
+                else {}
+            ),
+        }
+        original = backtesting.original_request(
+            RunJobRequest.model_validate({**original, "key": request.key})
+        )
+        if canonical_json(original) != canonical_json(
+            backtesting.original_request(request)
+        ):
+            raise DomainError("idempotency_conflict", {"key": request.key})
+        return self.queue.get(job_id)
 
     def submit(self, request):
+        configured = None
+        if isinstance(request, (ConfiguredRunJobRequest, BacktestJobRequest)):
+            request = type(request).model_validate_json(request.model_dump_json())
+            prior = backtesting.replay_job(self.queue, request)
+            if prior is not None:
+                return self.job(prior.job_id)
+            if isinstance(request, BacktestJobRequest):
+                payload = backtesting.backtest_payload(
+                    self.runtime, self.catalog, request
+                )
+                try:
+                    job = self.queue.enqueue(f"api/{request.key}", payload)
+                except DomainError as error:
+                    if error.code != "idempotency_conflict":
+                        raise
+                    # A competing insert may bind a different current revision.
+                    # Its original public intent, not derived metadata, wins.
+                    job = backtesting.replay_job(self.queue, request)
+                    if job is None:
+                        raise
+                return self.job(job.job_id)
+            from ..forecast_policy import validate_selection
+
+            validate_selection(self.runtime, request.selection)
+            configured = request
+            request = backtesting.configured_run(self.ledger, self.catalog, configured)
         if isinstance(request, RunJobRequest):
             request = RunJobRequest.model_validate(request.model_dump())
+            prior = self._replay_run(request) if configured is None else None
+            if prior is not None:
+                return self.job(prior.job_id)
             snapshots = {
                 name: self.ledger.get_snapshot(sid)
                 for name, sid in request.snapshot_ids.items()
             }
-            validate_run(self.runtime, request.graph, snapshots, request.as_of)
+            validate_run(
+                self.runtime,
+                request.graph,
+                snapshots,
+                request.as_of,
+                request.primary_node_id,
+            )
             if self.ledger.scenario_for_graph(
                 request.graph.graph_id, request.graph.version
             ) or any(
@@ -376,6 +514,11 @@ class Observatory:
                 },
                 "as_of": request.as_of.isoformat(),
                 "previous_run_id": request.previous_run_id,
+                **(
+                    {"primary_node_id": request.primary_node_id}
+                    if request.primary_node_id is not None
+                    else {}
+                ),
             }
         elif isinstance(request, EvaluationJobRequest):
             run = self.ledger.get_run(request.run_id)
@@ -418,8 +561,27 @@ class Observatory:
             payload = request.model_dump(exclude={"key"})
         else:
             raise DomainError("invalid_job", {})
+        if configured is not None:
+            payload = {
+                **payload,
+                "kind": "configured_run",
+                "request": backtesting.original_request(configured),
+            }
         job = self.queue.enqueue(f"api/{request.key}", payload)
         return self.job(job.job_id)
+
+    def backtest(self, backtest_id):
+        return BacktestStore(self.ledger).get_report(backtest_id)
+
+    def backtest_origins(self, backtest_id, *, offset=0, limit=25):
+        store = BacktestStore(self.ledger)
+        store.get_report(backtest_id)
+        return store.list_origins(backtest_id, offset=offset, limit=limit)
+
+    def events(self, after, limit=100):
+        return tuple(
+            public_event(event) for event in self.ledger.events_after(after, limit)
+        )
 
     def job(self, job_id):
         job = self.queue.get(job_id)
@@ -430,5 +592,5 @@ class Observatory:
             state=job.state,
             attempt=job.attempt,
             result=current.get("result"),
-            error=public_error_details(current.get("error")),
+            error=public_failure(current.get("error")),
         )

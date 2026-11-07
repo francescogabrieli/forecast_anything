@@ -9,16 +9,18 @@ Use the [capability matrix](docs/capabilities.md) to distinguish implemented beh
 Use Python 3.12+ and uv from the repository root:
 
 ```sh
-uv sync --locked --extra dev
-uv run --locked ruff check src tests
-uv run --locked ruff format --check src tests
-uv run --locked pytest -q
-uv run --locked python scripts/export_contracts.py contracts/v1 --check
-uv run --locked python scripts/export_contracts.py apps/console/src/api --check
+uv sync --locked --extra dev --extra mcp
+uv run --locked --extra dev --extra mcp ruff check src tests
+uv run --locked --extra dev --extra mcp ruff format --check src tests
+uv run --locked --extra dev --extra mcp pytest -q
+uv run --locked --extra dev --extra mcp python scripts/export_contracts.py contracts/v1 --check
+uv run --locked --extra dev --extra mcp python scripts/export_contracts.py apps/console/src/api --check
 uv build
 ```
 
-CI targets Python 3.12 and 3.14. Keep dependency locks and generated contracts synchronized with intentional changes. Do not hand-edit generated schemas or use a skipped model test as evidence that the provider works. The Timestral real-model test is gated; see [its acceptance conditions](docs/implementation/timestral.md). Routine tests require neither model weights nor paid API calls.
+CI targets Python 3.12 and 3.14 and retains both extras on Python validation commands. MCP integration tests launch real loopback API, worker and stdio processes; the artifact test builds a wheel and installs its locked MCP dependency set in a temporary environment outside the checkout. Keep network/cache access and local socket binding available for those checks. SDK-dependent modules skip explicitly without the optional extra; ordinary CLI/missing-extra coverage remains runnable. See the [MCP guide](docs/implementation/mcp.md) for the tool catalog, root/source permissions, reconnect behavior and output bounds. The SDK is the reference client. The local Desktop acceptance scope is documented separately in the [recorded checks](docs/research/desktop-assistant-acceptance.md).
+
+Keep dependency locks and generated contracts synchronized with intentional changes. Do not hand-edit generated schemas or use a skipped model test as evidence that the provider works. The Timestral real-model test is gated; see [its acceptance conditions](docs/implementation/timestral.md). Routine tests require neither model weights nor paid API calls.
 
 ## Console and browser checks
 

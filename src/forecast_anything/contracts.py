@@ -63,6 +63,20 @@ class Contract(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
+class ForecastSelection(Contract):
+    provider: Identifier
+    options: Annotated[dict[str, JsonValue], AfterValidator(_require_finite_nested)] = (
+        Field(default_factory=dict)
+    )
+    horizon: Annotated[int, Field(ge=1, le=366, strict=True)]
+    baseline_period: Annotated[int, Field(ge=1, le=10000, strict=True)] = 1
+
+
+class BacktestSettings(Contract):
+    max_origins_per_partition: Annotated[int, Field(ge=1, le=50, strict=True)] = 10
+    origin_offset_seconds: Annotated[int, Field(ge=0, strict=True)] = 0
+
+
 class Observation(Contract):
     series_id: Identifier
     event_time: AwareDatetime
@@ -225,6 +239,9 @@ NodeValue = Snapshot | ForecastResult
 
 
 class RunRecord(Contract):
+    primary_node_id: Identifier | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     run_id: Identifier
     graph_id: Identifier
     graph_version: int
@@ -352,6 +369,7 @@ class EligibilityDecision(Contract):
     protocol_id: Identifier | None = None
     epoch_id: Identifier | None = None
     evaluation_ids: tuple[Identifier, ...] = ()
+    backtest_id: Identifier | None = None
     policy_version: Identifier = "discovery-v1"
 
 
@@ -362,6 +380,9 @@ class Watch(Contract):
     A minimal watch can be displayed without lineage, but cannot be qualified.
     """
 
+    migration_reason: Identifier | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
 
     watch_id: Identifier
@@ -528,19 +549,62 @@ class WatchPatch(Contract):
 
 
 class WatchView(Watch):
+    @model_validator(mode="before")
+    @classmethod
+    def discard_derived_operational(cls, value):
+        if isinstance(value, dict) and "operational" in value:
+            value = dict(value)
+            value.pop("operational")
+        return value
+
     @computed_field
     @property
     def operational(self) -> bool:
         return super().operational
 
 
+class WatchHistoryEntry(Contract):
+    sequence: Annotated[int, Field(ge=1, strict=True)]
+    event_id: Identifier
+    occurred_at: AwareDatetime
+    event: OpaqueDictionary
+    watch: WatchView
+
+
+class WatchHistoryPage(Contract):
+    entries: tuple[WatchHistoryEntry, ...]
+    next_offset: Annotated[int, Field(ge=0, strict=True)] | None
+
+
 class RunJobRequest(Contract):
+    primary_node_id: Identifier | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     kind: Literal["run"]
     key: Identifier
     graph: GraphSpec
     snapshot_ids: dict[Identifier, Identifier]
     as_of: AwareDatetime
     previous_run_id: Identifier | None = None
+
+
+class ConfiguredRunJobRequest(Contract):
+    kind: Literal["configured_run"]
+    key: Identifier
+    source_id: Identifier
+    snapshot_id: Identifier
+    selection: ForecastSelection
+
+
+class BacktestJobRequest(Contract):
+    kind: Literal["backtest"]
+    key: Identifier
+    source_id: Identifier
+    selection: ForecastSelection
+    settings: BacktestSettings = Field(default_factory=BacktestSettings)
+    watch_id: Identifier | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class EvaluationJobRequest(Contract):
@@ -557,7 +621,12 @@ class ResumeJobRequest(Contract):
 
 
 JobRequest = Annotated[
-    RunJobRequest | EvaluationJobRequest | ResumeJobRequest, Field(discriminator="kind")
+    RunJobRequest
+    | ConfiguredRunJobRequest
+    | BacktestJobRequest
+    | EvaluationJobRequest
+    | ResumeJobRequest,
+    Field(discriminator="kind"),
 ]
 
 
@@ -577,6 +646,9 @@ class ScenarioRequest(Contract):
 
 
 class ScenarioRecord(Contract):
+    primary_node_id: Identifier | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     scenario_id: Identifier
     graph_id: Identifier
     version: int
@@ -590,6 +662,12 @@ class ScenarioView(ScenarioRecord):
 
 
 class CapabilitiesView(Contract):
+    required_provider: Identifier | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    model_status: dict[str, JsonValue] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     providers: dict[str, Capabilities]
     operators: dict[str, OperatorContract]
     templates: tuple[str, ...]

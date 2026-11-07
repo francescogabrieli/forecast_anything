@@ -45,13 +45,20 @@ def request():
 
 
 @pytest.fixture
-def fake(monkeypatch):
+def fake(monkeypatch, tmp_path):
+    monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path))
+    snapshot = tmp_path / "models--mistralai--Timestral-28M" / "snapshots" / "fixture"
+    snapshot.mkdir(parents=True)
+    (snapshot / "config.json").write_text("{}")
+    (snapshot / "model.safetensors").write_bytes(b"model double")
+
     class Forecaster:
         loads = []
         calls = []
 
         @classmethod
-        def from_pretrained(cls, checkpoint, *, revision, device):
+        def from_pretrained(cls, checkpoint, *, revision, device, local_files_only):
+            assert local_files_only is True
             cls.loads.append((checkpoint, revision, device))
             return cls()
 
@@ -224,3 +231,12 @@ def test_loaded_provider_provenance_cannot_be_relabelled(fake):
         p.code_revision = "different-code"
     with pytest.raises(AttributeError):
         p.checkpoint = "different-checkpoint"
+
+
+def test_inference_failure_is_structured_without_fallback(fake, monkeypatch):
+    def fail(*args, **kwargs):
+        raise RuntimeError("fixture inference failure")
+
+    monkeypatch.setattr(fake, "forecast", fail)
+    with pytest.raises(DomainError, match="model_inference_failed"):
+        provider().forecast(request())

@@ -98,7 +98,10 @@ def create_app(
 
     @app.get("/health")
     def health():
-        return {"status": "ok"}
+        return {
+            "status": "ok",
+            "worker": ledger.worker_status(ledger.clock()),
+        }
 
     app.include_router(router(app.state.observatory))
     return app

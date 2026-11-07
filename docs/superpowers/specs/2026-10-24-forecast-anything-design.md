@@ -1,5 +1,7 @@
 # Forecast Anything — specifica di progetto
 
+> Aggiornamento / update 2026-10-29: La visione e gli invarianti restano validi; il canale principale diventa il proprio assistente via MCP, con sito di onboarding e console opzionale. See [MCP-first product direction](2026-10-29-mcp-first-product-design.md). Historical details below are retained.
+
 Data: 24 ottobre 2026
 
 Stato: approvata dall’utente in chat il 24 ottobre 2026; anche la roadmap è confermata. Modalità subagent-driven e nuovo branch nella cartella canonica scelti il 25 ottobre 2026. Il piano 01 è implementato; l’integrazione del branch è da approvare.

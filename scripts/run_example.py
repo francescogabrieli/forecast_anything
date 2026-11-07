@@ -11,7 +11,7 @@ from pathlib import Path
 from forecast_anything.connectors.csv import load_csv
 from forecast_anything.contracts import GraphSpec
 from forecast_anything.operators import register_builtin_operators
-from forecast_anything.providers.baseline import SeasonalNaiveProvider
+from forecast_anything.providers.configuration import configured_providers
 from forecast_anything.runtime import Runtime
 from forecast_anything.store import Ledger
 from forecast_anything.temporal import freeze
@@ -30,6 +30,28 @@ def run_example(name: str, database: Path):
     graph = GraphSpec.model_validate_json(
         (directory / "graph.json").read_text(encoding="utf-8")
     )
+    # Keep the checked-in seasonal graph as a historical comparator fixture;
+    # the public example emits a distinct model graph and immutable identity.
+    nodes = []
+    for node in graph.nodes:
+        if node.kind == "forecast":
+            nodes.append(
+                node.model_copy(
+                    update={
+                        "config": {
+                            **node.config,
+                            "provider": "timestral",
+                            "options": {},
+                        }
+                    }
+                )
+            )
+            nodes.append(node.model_copy(update={"node_id": "reference"}))
+        else:
+            nodes.append(node)
+    graph = graph.model_copy(
+        update={"graph_id": graph.graph_id + "_timestral", "nodes": tuple(nodes)}
+    )
     observations = load_csv(directory / "observations.csv")
     source_nodes = [node for node in graph.nodes if node.kind == "source"]
     if len(source_nodes) != 1:
@@ -37,7 +59,18 @@ def run_example(name: str, database: Path):
     source_id = source_nodes[0].config.get("source_id")
     if not isinstance(source_id, str):
         raise ValueError("example source node must declare source_id")
-    snapshot = freeze(observations, as_of, tuple(manifest.get("assumptions", ())))
+    assumptions = tuple(
+        a
+        for a in manifest.get("assumptions", ())
+        if not any(
+            word in a.lower()
+            for word in ("repetition", "point-only", "seasonal baseline")
+        )
+    ) + (
+        "Pinned local Timestral primary; seasonal repetition is only the independent reference.",
+        "Synthetic illustrative inputs; model marginal quantiles do not establish calibration, joint probabilities or general forecast accuracy.",
+    )
+    snapshot = freeze(observations, as_of, assumptions)
     snapshots = {source_id: snapshot}
     identity = json.dumps(
         {
@@ -52,9 +85,10 @@ def run_example(name: str, database: Path):
     ledger = Ledger(database, clock=lambda: as_of)
     runtime = Runtime(
         ledger,
-        {"seasonal_naive": SeasonalNaiveProvider(period=1)},
+        configured_providers(),
         register_builtin_operators(),
         lambda: as_of,
+        required_provider="timestral",
     )
     return runtime.run(graph, snapshots, as_of, key)
 

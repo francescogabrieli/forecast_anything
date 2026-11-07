@@ -17,9 +17,14 @@ from forecast_anything.contracts import (
 from forecast_anything.discovery.candidates import (
     CandidateProposal,
     compile_proposal,
+    graph_support,
     propose_candidates,
+    validate_candidate,
 )
-from forecast_anything.discovery.policy import assess_candidate
+from forecast_anything.discovery.policy import (
+    assess_candidate,
+    candidate_backtest_selection,
+)
 from forecast_anything.sources.profiling import inspect_source
 from forecast_anything.store import Ledger
 
@@ -211,6 +216,143 @@ def start_epoch(ledger, epoch, budget):
 
 def test_discovery_without_sources_proposes_nothing():
     assert propose_candidates((), DiscoveryBudget()) == ()
+
+
+def test_timestral_candidate_preserves_baseline_comparator_and_exact_replay():
+    c = compile_proposal(
+        CandidateProposal(
+            template_id="forecast_change", source_ids=("sales",), reason="Review"
+        ),
+        (profile(),),
+        epoch_id="epoch-1",
+        forecast_provider="timestral",
+    )
+    nodes = {node.node_id: node for node in c.graph.nodes}
+    assert c.executable
+    assert nodes["forecast"].config["provider"] == "timestral"
+    assert nodes["forecast"].config["options"] == {}
+    assert nodes["forecast"].config["horizon"] == 1
+    assert nodes["reference"].config["provider"] == "seasonal_naive"
+    assert nodes["reference"].config["options"] == {"period": 1}
+    assert validate_candidate(c) == ()
+    selection = candidate_backtest_selection(c)
+    assert selection.provider == "timestral"
+    assert selection.options == {}
+    assert selection.baseline_period == 1
+    assert c.candidate_id != candidate().candidate_id
+    assert c.graph.graph_id != candidate().graph.graph_id
+
+
+def test_deterministic_proposals_use_explicit_forecast_provider():
+    proposed = propose_candidates(
+        (profile(),), DiscoveryBudget(), forecast_provider="timestral"
+    )
+    assert len(proposed) == 2
+    assert all(c.executable and validate_candidate(c) == () for c in proposed)
+    assert all(
+        next(n for n in c.graph.nodes if n.node_id == "forecast").config["provider"]
+        == "timestral"
+        for c in proposed
+    )
+
+
+def test_deterministic_epoch_changes_with_provider_preserving_legacy_epoch():
+    profiles = (profile(),)
+    legacy = propose_candidates(profiles, DiscoveryBudget())
+    model = propose_candidates(
+        profiles, DiscoveryBudget(), forecast_provider="timestral"
+    )
+    assert {c.epoch_id for c in legacy} == {
+        "0658b1ff32516117403a7f41b5ac36fda235df2fa1065e11ef41e727ea4e3689"
+    }
+    assert len({c.epoch_id for c in model}) == 1
+    assert model[0].epoch_id != legacy[0].epoch_id
+
+
+def test_proposals_reject_unregistered_primary_provider():
+    with pytest.raises(DomainError, match="unknown_provider"):
+        compile_proposal(
+            CandidateProposal(
+                template_id="forecast_change", source_ids=("sales",), reason="Review"
+            ),
+            (profile(),),
+            epoch_id="epoch-1",
+            forecast_provider="untrusted",
+        )
+
+
+def test_trusted_timestral_graph_support_never_loads_weights(monkeypatch):
+    from forecast_anything.providers.timestral import TimestralProvider
+
+    def forbidden_load(self):
+        pytest.fail("discovery compilation must not load model weights")
+
+    monkeypatch.setattr(TimestralProvider, "_load", forbidden_load)
+    c = candidate()
+    graph = c.graph.model_copy(
+        update={
+            "nodes": tuple(
+                node.model_copy(
+                    update={
+                        "config": {
+                            **node.config,
+                            "provider": "timestral",
+                            "options": {},
+                        }
+                    }
+                )
+                if node.node_id == "forecast"
+                else node
+                for node in c.graph.nodes
+            )
+        }
+    )
+    assert graph_support(graph) == ()
+
+
+def test_legacy_baseline_candidate_keeps_original_identity_and_replay():
+    c = candidate()
+    assert (
+        c.candidate_id
+        == "5740f86f63864d4312ce7ff49b3246715b87a6569df42359fdffbf11d38f8fc5"
+    )
+    assert (
+        c.protocol_id
+        == "ae470041d266b45386da404ca609388f420997c688919066e1f1556923593686"
+    )
+    assert (
+        c.graph.graph_id
+        == "ca3a5e9f1def036197b779037816b811f5d6ea0281811b3faf6323180daa7d12"
+    )
+    assert validate_candidate(c) == ()
+    selection = candidate_backtest_selection(c)
+    assert selection.provider == "seasonal_naive"
+    assert selection.options == {"period": 2}
+    assert selection.baseline_period == 1
+
+
+@pytest.mark.parametrize("provider", ["untrusted", None, [], {}])
+def test_candidate_rejects_unknown_primary_provider_spoof(provider):
+    c = candidate()
+    forged = c.model_copy(
+        update={
+            "graph": c.graph.model_copy(
+                update={
+                    "nodes": tuple(
+                        node.model_copy(
+                            update={"config": {**node.config, "provider": provider}}
+                        )
+                        if node.node_id == "forecast"
+                        else node
+                        for node in c.graph.nodes
+                    )
+                }
+            )
+        }
+    )
+    assert validate_candidate(forged) == ("candidate_identity_mismatch",)
+    with pytest.raises(ValueError, match="unsupported_watch_backtest_candidate"):
+        candidate_backtest_selection(forged)
 
 
 def test_no_undeclared_operational_limit():

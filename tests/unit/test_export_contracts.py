@@ -16,3 +16,21 @@ def test_openapi_422_descriptions_are_stable_across_python_versions(tmp_path):
     }
 
     assert descriptions == {"Unprocessable Content"}
+
+
+def test_exports_public_backtest_contracts_without_private_raw_archive(tmp_path):
+    subprocess.run(
+        [sys.executable, "scripts/export_contracts.py", str(tmp_path)], check=True
+    )
+    schemas = json.loads((tmp_path / "schemas.json").read_text(encoding="utf-8"))
+    assert {
+        "ForecastSelection",
+        "BacktestSettings",
+        "BacktestReport",
+        "OriginOutcome",
+        "OriginPage",
+        "PartitionScore",
+    } <= schemas.keys()
+    assert "ObservationArchive" not in schemas
+    assert "BacktestPlan" not in schemas
+    assert "observations" not in schemas["BacktestReport"]["properties"]
