@@ -1,10 +1,12 @@
 # Quickstart
 
+For the macOS Codex Desktop route from a local wheel, start with the [guided installation](installation.md). Use the following commands for checkout development or foreground operation.
+
 Forecast Anything requires pinned local Mistral Timestral-28M for product forecasts. Install its dependencies and prepare the weights before submitting forecasts. No Mistral API key or hosted inference account is needed; seasonal-naive is only the comparison baseline.
 
-The local stdio MCP adapter is implemented. The [MCP guide](implementation/mcp.md) documents installation with `uv sync --locked --extra dev --extra mcp`, foreground API/worker startup, CSV roots and source-ID permissions, all 26 tools and complete official-SDK requests for forecasts and recurring questions. The `mcp==2.3.0` SDK is the tested reference client. Configured forecasts and watch tools also completed through Codex CLI's MCP client against the local API and worker; Desktop MCP reads/reconnect and the supported CSV-to-watch/report workflow have recorded acceptance evidence. Site publication and guided setup remain separate release tasks. The CLI and optional console paths below remain available.
+The local stdio MCP adapter is implemented. The [MCP guide](implementation/mcp.md) documents installation with `uv sync --locked --extra dev --extra mcp`, foreground API/worker startup, CSV roots and source-ID permissions, all 27 tools and complete official-SDK requests for forecasts and recurring questions. The `mcp==2.3.0` SDK is the tested reference client. Configured forecasts and watch tools also completed through Codex CLI's MCP client against the local API and worker; Desktop MCP reads/reconnect and the earlier baseline CSV-to-watch/report workflow have recorded acceptance evidence. The real Timestral journey used the official SDK. Site publication and guided setup remain separate release tasks. The CLI and optional console paths below remain available.
 
-After an MCP restart, put previously registered IDs in `FORECAST_ANYTHING_MCP_SOURCE_IDS` before profiling, refreshing, backtesting or creating watches for them. Preserve the original forecast body/key after an ambiguous response; the independent worker can finish while the assistant is disconnected. MCP output is bounded at 64 KiB and upstream requests/responses at 1 MiB; listing pagination cannot bypass those bounds. New MCP registration accepts local CSV under configured roots, with no secret reference; HTTP registration remains pending. Configured forecasts, frozen CSV backtests and recurring-question watches are available through the tools below.
+With a workspace config, grant access to existing sources using `forecast-anything permissions grant SOURCE_ID --config .local/mcp/config.json` and restart MCP. For environment-based setup, configure `FORECAST_ANYTHING_MCP_SOURCE_IDS` before starting MCP. These grants are required for profiling, refresh, backtests and watch creation. Preserve the original forecast body/key after an ambiguous response; the independent worker can finish while the assistant is disconnected. MCP output is bounded at 64 KiB and upstream requests/responses at 1 MiB; listing pagination cannot bypass those bounds. New MCP registration accepts local CSV under configured roots, with no secret reference; HTTP registration remains pending. Configured forecasts, frozen CSV backtests and recurring-question watches are available through the tools below.
 
 ## Configure a forecast or replay historical evidence through MCP
 
@@ -29,7 +31,7 @@ result = await client.call_tool(
 
 Check `result.is_error` and the `structured_content` success envelope. Poll `get_job(job_id=...)` until completed or failed, then read `get_run(run_id=...)` from the completed job result. This uses the stored snapshot vintage without source I/O. The graph records separate `model` and `baseline` results; the console prefers `forecast` for legacy runs, then `model`.
 
-To compare historical origins, grant `sales` in `FORECAST_ANYTHING_MCP_SOURCE_IDS` when starting a new MCP process, then submit:
+To compare historical origins, grant access to `sales` in the workspace config and restart MCP. If using the environment-based setup, grant it via `FORECAST_ANYTHING_MCP_SOURCE_IDS`. Then submit:
 
 ```python
 result = await client.call_tool(
@@ -64,14 +66,15 @@ summary = await client.call_tool(
 
 Backtests capture one registered CSV series/unit on a regular UTC hourly/daily grid. They freeze supplied revisions, source vintage, provider contracts, calendar and earliest bounded origins in 50/25/25 partitions before inference. History requires both occurred events and revisions available by issuance; missing cells remain missing. A later edit to the CSV cannot change an already captured report. Upstream-discarded revisions cannot be reconstructed. Horizon is 1–366, comparator period 1–10000, and origins per partition 1–50 (default 10); raw capture and complete calendar are bounded at 100000 rows/instants. Configured forecasts can also reuse supported stored HTTP snapshots; raw HTTP backtesting, scenarios and multi-history scoring are unsupported.
 
-The [reproducible synthetic acceptance](research/forecast-evidence.md) compares a period-2 alternating series with a period-1 comparator. It verifies calculation and persistence, not general predictive quality. Generic backtests do not attach discovery attestations or activate watches. Managed installation, direct desktop-host acceptance, assistant acceptance of the summaries and public onboarding remain release work.
+The [historical baseline acceptance](research/forecast-evidence.md) used an alternating synthetic series to verify calculation and persistence. [Real Timestral acceptance](research/required-timestral-acceptance.md) exercised the pinned model on synthetic input with a separate seasonal comparator, durable jobs and MCP reconnection. Generic backtests do not attach discovery attestations or activate watches.
 
 ## Run a forecast from the checkout
 
 Install Python 3.12+ and [uv](https://docs.astral.sh/uv/), then run the included minimal example:
 
 ```sh
-uv sync --locked --extra dev --extra mcp
+uv sync --locked --extra mcp
+uv run --locked --extra mcp forecast-anything model prepare
 mkdir -p .local
 uv run --locked --extra mcp forecast-anything run \
   examples/minimal/graph.json \
@@ -129,7 +132,7 @@ Stop the stack with `Ctrl+C`. The workspace database and generated token remain 
 
 ## Optional integrations
 
-- Timestral has separately pinned code and weight revisions. Real CPU fp32 parity passed for the pinned provider, and one local personal evaluation was authorized by the project owner. The weights use a separate Modified MIT license; each downstream user must assess whether its terms apply to their use. Weights are not included in this repository. The default demo does not install Timestral or download weights; see the [provider notes](implementation/timestral.md) before opting in.
+- Timestral has separately pinned code and weight revisions. Real CPU fp32 parity passed for the pinned provider, and one local personal evaluation was authorized by the project owner. The weights use a separate Modified MIT license; each downstream user must assess whether its terms apply to their use. Weights are not included in this repository. The default demo uses the required local Timestral provider. Run `model prepare` explicitly before forecasting. See the [provider notes](implementation/timestral.md).
 - `compose.agent.yaml` requires a separate workspace agent setup, distinct bridge/core tokens, a URL-safe Postgres password and an OpenAI API key. It makes paid provider calls when configured. The agent runs behind the repository's restricted egress proxy and does not receive the Docker socket. Do not start this override without intended credentials and approval for any paid inference.
 
 ## Verify changes

@@ -43,6 +43,7 @@ MIGRATIONS = (
     "007_agent_operations.sql",
     "008_backtests.sql",
     "009_worker_liveness.sql",
+    "010_worker_runtime.sql",
 )
 
 
@@ -75,7 +76,9 @@ class Ledger(AgentStorageMixin):
         finally:
             connection.close()
 
-    def update_worker_heartbeat(self, worker_id: str, now: datetime) -> None:
+    def update_worker_heartbeat(
+        self, worker_id: str, now: datetime, *, model_status: str | None = None
+    ) -> None:
         if not isinstance(worker_id, str) or not worker_id.strip():
             raise DomainError("invalid_worker_identity", {})
         if now.tzinfo is None or now.utcoffset() is None:
@@ -91,6 +94,13 @@ class Ledger(AgentStorageMixin):
                 """,
                 (worker_id, now.timestamp()),
             )
+            if model_status is not None:
+                connection.execute(
+                    """INSERT INTO worker_runtime VALUES (1, ?, ?)
+                    ON CONFLICT(singleton) DO UPDATE SET
+                        worker_id = excluded.worker_id, model_status = excluded.model_status""",
+                    (worker_id, model_status),
+                )
 
     def clear_worker_heartbeat(self, worker_id: str) -> None:
         if not isinstance(worker_id, str) or not worker_id.strip():
@@ -101,21 +111,39 @@ class Ledger(AgentStorageMixin):
                 (worker_id,),
             )
 
+            connection.execute(
+                "DELETE FROM worker_runtime WHERE singleton = 1 AND worker_id = ?",
+                (worker_id,),
+            )
+
     def worker_status(self, now: datetime, stale_after_seconds: int = 10) -> str:
+        return self.worker_diagnostics(now, stale_after_seconds)[0]
+
+    def worker_diagnostics(
+        self,
+        now: datetime,
+        stale_after_seconds: int = 10,
+        *,
+        expected_worker_id: str | None = None,
+    ) -> tuple[str, str | None]:
         if now.tzinfo is None or now.utcoffset() is None:
             raise DomainError("naive_timestamp", {})
         if type(stale_after_seconds) is not int or stale_after_seconds <= 0:
             raise DomainError("invalid_stale_after", {})
         with self._connection() as connection:
             row = connection.execute(
-                "SELECT heartbeat_at FROM worker_liveness WHERE singleton = 1"
+                """SELECT heartbeat_at, model_status, worker_id FROM worker_liveness
+                LEFT JOIN worker_runtime USING (singleton, worker_id)
+                WHERE singleton = 1"""
             ).fetchone()
-        if row is None:
-            return "not_running"
+        if row is None or (
+            expected_worker_id is not None and row[2] != expected_worker_id
+        ):
+            return "not_running", None
         age = now.timestamp() - row[0]
-        return (
-            "running" if -stale_after_seconds <= age <= stale_after_seconds else "stale"
-        )
+        if -stale_after_seconds <= age <= stale_after_seconds:
+            return "running", row[1]
+        return "stale", None
 
     @contextmanager
     def _transaction(

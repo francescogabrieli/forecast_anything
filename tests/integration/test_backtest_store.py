@@ -226,7 +226,9 @@ def test_migration_preserves_existing_ledger_and_blocks_raw_rewrites(tmp_path):
         assert connection.execute(
             "SELECT content FROM snapshots WHERE snapshot_id='old'"
         ).fetchone() == ("{}",)
-        assert connection.execute("PRAGMA user_version").fetchone() == (9,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (
+            len(MIGRATIONS),
+        )
         for table in ("backtest_plans", "backtest_origins", "backtest_reports"):
             for mutation in (
                 f"DELETE FROM {table}",

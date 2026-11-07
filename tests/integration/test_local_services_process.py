@@ -310,3 +310,49 @@ def test_up_worker_processes_a_durable_source_job(tmp_path):
         if process.poll() is None:
             process.send_signal(signal.SIGTERM)
             process.wait(timeout=10)
+
+
+def test_duplicate_worker_is_rejected_even_in_once_mode(tmp_path):
+    from forecast_anything.local_services import worker_lock
+
+    database = tmp_path / "state.db"
+    with worker_lock(database):
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "forecast_anything.cli",
+                "worker",
+                "--once",
+                "--db",
+                str(database),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    assert result.returncode == 2
+    assert json.loads(result.stderr)["code"] == "worker_already_running"
+
+
+def test_up_on_occupied_port_does_not_start_worker(tmp_path):
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        sock.listen()
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "forecast_anything.cli",
+                "up",
+                "--db",
+                str(tmp_path / "state.db"),
+                "--port",
+                str(sock.getsockname()[1]),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    assert result.returncode == 2
+    assert json.loads(result.stderr)["code"] == "port_in_use"

@@ -20,6 +20,7 @@ from forecast_anything.mcp_adapter.config import McpConfig
 ROOT = Path(__file__).resolve().parents[2]
 NAMES = {
     "get_capabilities",
+    "get_diagnostics",
     "list_sources",
     "register_csv_source",
     "get_source_profile",

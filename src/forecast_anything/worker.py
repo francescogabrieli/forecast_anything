@@ -72,19 +72,24 @@ class Worker:
             thread.join()
 
     @contextmanager
-    def liveness(self, interval_seconds: float = 2):
+    def liveness(self, interval_seconds: float = 2, *, model_status=None):
         """Publish process liveness while the worker loop can be idle or busy."""
         if interval_seconds <= 0:
             raise DomainError("invalid_heartbeat_interval", {})
         stopped = Event()
 
-        self.runtime.ledger.update_worker_heartbeat(self.owner, self.runtime.clock())
+        def publish():
+            self.runtime.ledger.update_worker_heartbeat(
+                self.owner,
+                self.runtime.clock(),
+                model_status=model_status() if model_status else None,
+            )
+
+        publish()
 
         def heartbeat_loop():
             while not stopped.wait(interval_seconds):
-                self.runtime.ledger.update_worker_heartbeat(
-                    self.owner, self.runtime.clock()
-                )
+                publish()
 
         thread = Thread(target=heartbeat_loop, daemon=True)
         thread.start()

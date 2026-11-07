@@ -28,6 +28,8 @@ from forecast_anything.providers.configuration import (
 )
 from forecast_anything.workspace_config import create_workspace
 
+JOB_TIMEOUT_SECONDS = 180
+
 
 async def journey(root: Path, report_path: Path):
     root.mkdir(mode=0o700, parents=True, exist_ok=False)
@@ -80,7 +82,7 @@ async def journey(root: Path, report_path: Path):
         return envelope["data"]
 
     async def poll(client, job_id):
-        deadline = time.monotonic() + 180
+        deadline = time.monotonic() + JOB_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
             job = await call(client, "get_job", job_id=job_id)
             assert job["state"] not in {"failed", "cancelled"}, job
@@ -159,13 +161,14 @@ async def journey(root: Path, report_path: Path):
                 "horizon": 1,
                 "baseline_period": 1,
             }
+            configured_request = {
+                "source_id": spec["source_id"],
+                "snapshot_id": snapshot_id,
+                "selection": selection,
+                "key": "real-configured",
+            }
             configured = await call(
-                mcp,
-                "submit_configured_forecast",
-                source_id=spec["source_id"],
-                snapshot_id=snapshot_id,
-                selection=selection,
-                key="real-configured",
+                mcp, "submit_configured_forecast", **configured_request
             )
             configured_run = await call(
                 mcp, "get_run", run_id=(await poll(mcp, configured["job_id"]))["run_id"]
@@ -173,8 +176,8 @@ async def journey(root: Path, report_path: Path):
             assert configured_run["primary_node_id"] == "model"
             assert configured_run["results"]["model"]["provider_id"] == "timestral"
             assert (
-                TIMESTRAL_REVISION
-                in configured_run["results"]["model"]["provider_revision"]
+                configured_run["results"]["model"]["provider_revision"]
+                == f"{TIMESTRAL_CHECKPOINT}@{TIMESTRAL_REVISION};code={TIMESTRAL_CODE_REVISION}"
             )
             assert (
                 configured_run["results"]["baseline"]["provider_id"] == "seasonal_naive"
@@ -189,7 +192,53 @@ async def journey(root: Path, report_path: Path):
                 key="real-before",
             )
             before_id = (await poll(mcp, before["job_id"]))["run_id"]
-            due = datetime.now(timezone.utc) + timedelta(seconds=35)
+            # Use independent synthetic data so this exploratory comparison
+            # does not consume the watch candidate's final windows.
+            comparator_csv = sources / "synthetic-comparator.csv"
+            comparator_rows = [
+                f"{start + timedelta(days=i)},{2 if i % 2 == 0 else 6},{start + timedelta(days=i)}"
+                for i in range(360)
+            ]
+            comparator_csv.write_text(
+                "time,value,published\n" + "\n".join(comparator_rows) + "\n"
+            )
+            comparator_source = "timestral-comparator"
+            await call(
+                mcp,
+                "register_csv_source",
+                spec={
+                    **spec,
+                    "source_id": comparator_source,
+                    "location": str(comparator_csv),
+                },
+            )
+            comparator_job = await call(
+                mcp,
+                "submit_backtest",
+                source_id=comparator_source,
+                selection={**selection, "baseline_period": 2},
+                settings={"max_origins_per_partition": 2},
+                key="real-perfect-comparator",
+            )
+            comparator_result = await poll(mcp, comparator_job["job_id"])
+            comparator_id = comparator_result["backtest_id"]
+            comparator_report = await call(
+                mcp, "get_backtest", backtest_id=comparator_id
+            )
+            final = next(
+                p for p in comparator_report["partitions"] if p["partition"] == "final"
+            )
+            assert final["evaluated"] == 2
+            assert final["baseline_mae"] == 0 and final["model_mae"] > 0, final
+            assert final["relative_mae"] is None
+            evidence["losing_comparison"] = {
+                "backtest_id": comparator_id,
+                "final": final,
+            }
+            # Keep the watch from refreshing before its backtest and MCP reads finish.
+            due = datetime.now(timezone.utc) + timedelta(
+                seconds=JOB_TIMEOUT_SECONDS + 30
+            )
             watch = await call(
                 mcp,
                 "create_watch",
@@ -226,6 +275,7 @@ async def journey(root: Path, report_path: Path):
                 backtest_summary=summary,
             )
             current = await call(mcp, "get_watch", watch_id=watch_id)
+            assert current["operational"] == (result["eligibility"] == "activate")
             evidence["watch_before_refresh"] = {
                 k: current[k]
                 for k in ("lifecycle", "quality", "operational", "next_due_at")
@@ -249,8 +299,14 @@ async def journey(root: Path, report_path: Path):
             parts = rows[i].split(",")
             parts[1] = str(int(parts[1]) + 10)
             rows[i] = ",".join(parts)
-        csv.write_text("time,value,published\n" + "\n".join(rows) + "\n")
-        deadline = datetime.fromisoformat(current["next_due_at"]).timestamp() + 75
+        replacement = csv.with_suffix(".tmp")
+        replacement.write_text("time,value,published\n" + "\n".join(rows) + "\n")
+        refresh_at = datetime.fromisoformat(current["next_due_at"]).timestamp()
+        assert time.time() < refresh_at, (
+            "Backtest and setup consumed the watch refresh deadline"
+        )
+        replacement.replace(csv)
+        deadline = refresh_at + 75
         successor = None
         while time.time() < deadline:
             response = await http.get("/v1/watches")
@@ -264,6 +320,19 @@ async def journey(root: Path, report_path: Path):
             await asyncio.sleep(0.25)
         assert successor, "No automatic successor after real deadline"
         async with client() as mcp:
+            replay = await call(mcp, "submit_configured_forecast", **configured_request)
+            assert replay["job_id"] == configured["job_id"]
+            replay_run_id = (await poll(mcp, replay["job_id"]))["run_id"]
+            assert replay_run_id == configured_run["run_id"]
+            assert await call(mcp, "get_run", run_id=replay_run_id) == configured_run
+            evidence["forecast_replay"] = {
+                "job_id": replay["job_id"],
+                "run_id": replay_run_id,
+            }
+            assert (
+                await call(mcp, "get_backtest", backtest_id=comparator_id)
+                == comparator_report
+            )
             assert (
                 await call(mcp, "get_backtest", backtest_id=result["backtest_id"])
                 == report

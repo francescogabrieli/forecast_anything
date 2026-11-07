@@ -166,6 +166,10 @@ class TimestralProvider:
         self._load()
         return self.check_model()
 
+    def verify_cached_model(self) -> None:
+        """Load the pinned local model without fetching missing artifacts."""
+        self._load()
+
     def _load(self):
         with self._load_lock:
             if self._forecaster is None:

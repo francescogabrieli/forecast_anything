@@ -6,6 +6,8 @@ The reference client is the official Python `mcp==2.3.0` SDK, locked in `uv.lock
 
 ## Install and operate
 
+For the primary macOS path from the installed wheel, follow the [guided installation](../installation.md). Call `get_diagnostics` to distinguish API, authentication, worker, model, permission and version state. The tool runs inside the MCP adapter and returns recovery guidance even while the API is unreachable. The commands below are the checkout/foreground route.
+
 ### Private workspace configuration
 
 The following uses one configuration file for the API, worker and MCP adapter. It creates a new token and refuses to overwrite an existing configuration:
@@ -15,7 +17,7 @@ uv sync --locked --extra dev --extra mcp
 uv run --locked --extra mcp forecast-anything model prepare
 mkdir -p .local/mcp/sources
 uv run --locked --extra mcp forecast-anything init --workspace .local/mcp --csv-root .local/mcp/sources
-uv run --locked --extra mcp forecast-anything up --config .local/mcp/config.json
+uv run --locked --extra mcp forecast-anything up --config .local/mcp/config.json --verify-model
 ```
 
 Keep `config.json` private: it contains the workspace token and is created with owner-only file permissions. Back up the configuration and database together; losing or changing the token requires updating every client using it. `--port` may be supplied to `init` (default 8000). The CSV root must already exist. The file records absolute paths, so update them deliberately if moving the workspace. Use the `permissions` CLI to administer `source_ids`; CSV roots remain an explicit operator setting. Restart MCP to apply permission changes.
@@ -29,7 +31,7 @@ Configure the host to launch the installed executable with arguments `mcp --conf
 }
 ```
 
-In another terminal, `forecast-anything status --config .local/mcp/config.json` checks authenticated API access and the worker heartbeat recorded in the API's SQLite database. `worker` is `running` when its heartbeat is no more than ten seconds old, `stale` when an earlier worker stopped updating it, and `not_running` before a worker has started or after a clean stop. A heartbeat shows that the worker process is alive; it does not guarantee that a particular job or provider will succeed. `status` exits successfully only when both API and worker report as running. `up` stops both services on Ctrl+C; accepted jobs remain in the database for the next start. The command remains in the foreground and does not install an OS service. Codex CLI was exercised with the same MCP server configuration surface; direct desktop UI setup remains unverified.
+In another terminal, `forecast-anything status --config .local/mcp/config.json` checks authenticated API access and the worker heartbeat recorded in the API's SQLite database. `worker` is `running` when its heartbeat is no more than ten seconds old, `stale` when an earlier worker stopped updating it, and `not_running` before a worker has started or after a clean stop. A heartbeat shows that the worker process is alive; it does not guarantee that a particular job or provider will succeed. `status` exits successfully only when both API and worker report as running. `up` stops both services on Ctrl+C; accepted jobs remain in the database for the next start. The command remains in the foreground and does not install an OS service. Codex CLI was exercised with the same configuration surface. The recorded Desktop workflow uses an already connected adapter. See the [Desktop acceptance record](../research/desktop-assistant-acceptance.md).
 
 ### Environment-based setup
 
@@ -52,7 +54,7 @@ Keep the token private. Supply the same token to the API and the MCP host using 
 
 For separate process management, `forecast-anything serve --db .local/mcp/state.db` and `forecast-anything worker --db .local/mcp/state.db` remain available. The foreground command is not a background service manager and does not provide persistent setup or a status command.
 
-The API and worker must use the same local SQLite file. MCP and API must see the same absolute CSV paths in the same filesystem namespace. Container paths and host paths are not interchangeable. The adapter does not start or stop either service. Accepted work survives a disconnected MCP process and finishes when the independently operated worker runs. The baseline path requires no LLM keys, model weights, Eve or Postgres.
+The API and worker must use the same local SQLite file. MCP and API must see the same absolute CSV paths in the same filesystem namespace. Container paths and host paths are not interchangeable. The adapter does not start or stop either service. Accepted work survives a disconnected MCP process and finishes when the independently operated worker runs. New forecasts require prepared Timestral weights. The local workflow does not require an LLM key, Eve or Postgres.
 
 A generic stdio launch object follows. Replace the absolute paths and token through your host's configuration mechanism; this JSON does not imply environment-variable expansion or a tested desktop-specific configuration schema.
 
@@ -96,7 +98,7 @@ These are local workspace policy checks, not an OS sandbox or tenant boundary. A
 
 ## Tool catalog
 
-All 26 tools publish input/output JSON schemas. Extra arguments are rejected. Successful results are `{"ok":true,"data":...}`; failures are `{"ok":false,"code":"..."}` with MCP `isError=true`. Input failures may include safe field locations/types, without submitted values. Mutating and open-world tools are marked explicitly.
+All 27 tools publish input/output JSON schemas. Extra arguments are rejected. Successful results are `{"ok":true,"data":...}`; failures are `{"ok":false,"code":"..."}` with MCP `isError=true`. Input failures may include safe field locations/types, without submitted values. Mutating and open-world tools are marked explicitly.
 
 | Tool | Arguments | Result |
 | --- | --- | --- |
@@ -309,7 +311,7 @@ Run the acceptance journeys with:
 uv run --locked --extra dev --extra mcp pytest tests/integration/test_mcp_stdio.py tests/integration/test_packaged_mcp.py -q
 ```
 
-SDK-dependent test modules skip explicitly without the optional extra; the ordinary CLI's missing-extra error remains covered separately. The four evidence tools have protocol/schema/HTTP-boundary coverage and a real subprocess/installed-wheel configured/backtest recovery journey. Watch tools also have typed protocol, source-grant, history and comparison coverage. A 24-day alternating series explicitly selects period 2 against comparator period 1: model MAE 0, comparator MAE 1, relative MAE 0. Two planned origins per partition remain fixed, including an early insufficient-history exclusion. The worker is terminated after partial persisted origins; API/worker restart after CSV corruption preserves the original capture, plan, child identities and paginated report. A separate process case retains unavailable-history and missing-target exclusions. A configured horizon-3 forecast separately proves options and future target dates. [Full numerical fixture, verification and limits](../research/forecast-evidence.md). Generic backtest reports contain no discovery attestation and do not activate or qualify watches. Direct desktop-host validation, publication/guided setup for the locally prepared site, and automatic report-to-policy qualification remain open work in the [roadmap](../roadmap.md).
+SDK-dependent test modules skip explicitly without the optional extra; the ordinary CLI's missing-extra error remains covered separately. The four evidence tools have protocol/schema/HTTP-boundary coverage and a real subprocess/installed-wheel configured/backtest recovery journey. Watch tools also have typed protocol, source-grant, history and comparison coverage. A 24-day alternating series explicitly selects period 2 against comparator period 1: model MAE 0, comparator MAE 1, relative MAE 0. Two planned origins per partition remain fixed, including an early insufficient-history exclusion. The worker is terminated after partial persisted origins; API/worker restart after CSV corruption preserves the original capture, plan, child identities and paginated report. A separate process case retains unavailable-history and missing-target exclusions. A configured horizon-3 forecast separately proves options and future target dates. [Full numerical fixture, verification and limits](../research/forecast-evidence.md). Generic backtest reports contain no discovery attestation and do not activate or qualify watches. The [phase 1 acceptance record](../research/phase-1-local-setup.md) distinguishes the installed SDK journey, Codex CLI registration and the pending Desktop and macOS login-cycle checks.
 
 ### Desktop acceptance evidence (5 November 2026)
 

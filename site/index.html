@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#010102" />
+    <meta
+      name="description"
+      content="Run local forecasts through your assistant and trace every result to the data it used."
+    />
+    <title>Forecast Anything — Local forecasting with a record</title>
+    <link rel="icon" href="assets/mark.svg" />
+    <link rel="stylesheet" href="site.css" />
+    <script src="assets/charts.js" defer></script>
+    <script src="site.js" defer></script>
+  </head>
+  <body id="top">
+    <a class="skip" href="#main">Skip to content</a>
+    <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <symbol id="i-wave" viewBox="0 0 24 24">
+        <path d="M2 16h4l3-9 4 13 4-15 3 9h2" />
+      </symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24">
+        <path d="M5 12h14m-6-6 6 6-6 6" />
+      </symbol>
+      <symbol id="i-external" viewBox="0 0 24 24">
+        <path d="M6 18 18 6M7 6h11v11" />
+      </symbol>
+      <symbol id="i-layers" viewBox="0 0 24 24">
+        <path d="m3 8 9-5 9 5-9 5zM3 12l9 5 9-5M3 16l9 5 9-5" />
+      </symbol>
+      <symbol id="i-power" viewBox="0 0 24 24">
+        <path d="m13 2-9 12h7l-1 8 10-13h-7z" />
+      </symbol>
+      <symbol id="i-activity" viewBox="0 0 24 24">
+        <path d="M2 12h5l3-8 4 16 3-8h5" />
+      </symbol>
+      <symbol id="i-grid" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="18" height="18" rx="3" />
+        <path d="M9 3v18M9 9h12" />
+      </symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24">
+        <path d="M3 7h18M3 12h18M3 17h18" />
+      </symbol>
+      <symbol id="i-terminal" viewBox="0 0 24 24">
+        <path d="m4 6 6 6-6 6m9 0h7" />
+      </symbol>
+      <symbol id="i-caret" viewBox="0 0 24 24">
+        <path d="m9 6 6 6-6 6" />
+      </symbol>
+      <symbol id="i-hash" viewBox="0 0 24 24">
+        <path d="m10 3-4 18m12-18-4 18M4 9h17M3 15h17" />
+      </symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 6v6l4 2" />
+      </symbol>
+    </svg>
+    <header class="topbar">
+      <div class="wrap navrow">
+        <a class="brand" href="#top"
+          ><img src="assets/mark.svg" width="25" height="25" alt="" />Forecast
+          Anything</a
+        >
+        <nav aria-label="Main navigation" class="desktop-nav">
+          <a href="#demo">Explorer</a><a href="#method">Method</a
+          ><a href="https://github.com/francescogabrieli/forecast_anything"
+            >GitHub
+            <svg class="icon" aria-hidden="true"><use href="#i-external" /></svg
+          ></a>
+        </nav>
+        <div class="nav-actions">
+          <a class="control small secondary" href="#setup"
+            >Get started
+            <svg class="icon" aria-hidden="true"><use href="#i-arrow" /></svg
+          ></a>
+          <details class="mobile-nav">
+            <summary aria-label="Navigation menu">
+              <svg class="icon" aria-hidden="true"><use href="#i-menu" /></svg>
+            </summary>
+            <nav aria-label="Mobile navigation">
+              <a href="#demo">Explorer</a><a href="#method">Method</a
+              ><a href="https://github.com/francescogabrieli/forecast_anything"
+                >GitHub
+                <svg class="icon" aria-hidden="true">
+                  <use href="#i-external" /></svg
+              ></a>
+            </nav>
+          </details>
+        </div>
+      </div>
+    </header>
+    <main id="main">
+      <section class="wrap hero">
+        <div class="kicker">
+          <svg class="icon" aria-hidden="true"><use href="#i-wave" /></svg>
+          Open-source forecasting runtime
+        </div>
+        <h1>Local forecasts.<br /><span>Traceable by design.</span></h1>
+        <p>
+          Run forecasts through your assistant. Follow every prediction back to
+          the data, assumptions, and model that produced it.
+        </p>
+        <div class="actions">
+          <a class="control primary" href="#setup"
+            >Set up locally
+            <svg class="icon" aria-hidden="true">
+              <use href="#i-arrow" /></svg></a
+          ><a class="control secondary" href="#demo">Explore a forecast</a>
+        </div>
+      </section>
+      <section id="demo" class="wrap explorer" aria-labelledby="demo-title">
+        <div class="instrument" data-ui>
+          <div class="appbar">
+            <div>
+              <svg class="icon" aria-hidden="true"><use href="#i-grid" /></svg
+              ><span>Workspace</span
+              ><svg class="icon" aria-hidden="true">
+                <use href="#i-caret" />
+              </svg>
+              <h2 id="demo-title">Forecast explorer</h2>
+            </div>
+            <span class="badge">Recorded run</span>
+          </div>
+          <div class="appbody">
+            <div class="rail">
+              <p>Examples</p>
+              <div
+                class="switch"
+                hidden
+                role="group"
+                aria-label="Choose dataset"
+              >
+                <button data-key="retail" aria-pressed="true">
+                  <svg class="icon" aria-hidden="true">
+                    <use href="#i-layers" /></svg
+                  >Retail</button
+                ><button data-key="energy" aria-pressed="false">
+                  <svg class="icon" aria-hidden="true">
+                    <use href="#i-power" /></svg
+                  >Energy</button
+                ><button data-key="activity" aria-pressed="false">
+                  <svg class="icon" aria-hidden="true">
+                    <use href="#i-activity" /></svg
+                  >Activity
+                </button>
+              </div>
+              <p class="rail-foot">Synthetic datasets</p>
+            </div>
+            <div class="stage">
+              <div class="workspace">
+                <div class="plot">
+                  <h3 id="series">Retail item totals</h3>
+                  <p id="meta">Daily · items · UTC</p>
+                  <div id="chart"><svg viewBox="0 0 600 180" role="img" aria-label="Synthetic retail: six observations, then Timestral forecasts of 14.382, 14.793, 14.501 items"><path d="M30.00 138.00 97.00 66.00 164.00 90.00 231.00 114.00 298.00 42.00 365.00 78.00" fill="none" stroke="#d0d6e0" stroke-width="3"/><path d="M365.00 78.00 432.00 85.41 499.00 80.48 566.00 83.99" fill="none" stroke="#d0d6e0" stroke-dasharray="6 4" stroke-width="3"/></svg>
+                  </div>
+                  <div class="legend">
+                    <span>Observed</span><span>Forecast</span>
+                  </div>
+                </div>
+                <aside>
+                  <h3>Point forecast</h3>
+                  <p class="micro">Next three periods</p>
+                  <dl id="outputs"><div><dt>22 Oct</dt><dd>14.382 <small>items</small></dd></div><div><dt>23 Oct</dt><dd>14.793 <small>items</small></dd></div><div><dt>24 Oct</dt><dd>14.501 <small>items</small></dd></div></dl>
+                </aside>
+              </div>
+              <details class="record">
+                <summary>Inspect values &amp; assumptions</summary>
+                <div class="sheet">
+                  <table>
+                    <caption>
+                      Run values (UTC)
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th>Time</th>
+                        <th>Kind</th>
+                        <th>Value</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rows"><tr><td>16 Oct</td><td>Observed</td><td>10 items</td></tr><tr><td>17 Oct</td><td>Observed</td><td>16 items</td></tr><tr><td>18 Oct</td><td>Observed</td><td>14 items</td></tr><tr><td>19 Oct</td><td>Observed</td><td>12 items</td></tr><tr><td>20 Oct</td><td>Observed</td><td>18 items</td></tr><tr><td>21 Oct</td><td>Observed</td><td>15 items</td></tr><tr><td>22 Oct</td><td>Forecast</td><td>14.382 items</td></tr><tr><td>23 Oct</td><td>Forecast</td><td>14.793 items</td></tr><tr><td>24 Oct</td><td>Forecast</td><td>14.501 items</td></tr></tbody>
+                  </table>
+                  <div>
+                    <h3>Run record</h3>
+                    <p id="origin">Issued 21 Oct 2026, 00:00 UTC · demo_retail_timestral v1</p>
+                    <ul id="assumptions"><li>Synthetic retail demonstration; hand-authored item totals, not observed customer or benchmark data.</li><li>Fixed UTC daily buckets use right endpoints; available_at equals event_time by synthetic assumption, not observed publication history.</li><li>No inventory, returns, deliveries or stockout mechanism is represented; item totals alone do not establish availability.</li><li>Pinned local Timestral primary; seasonal repetition is only the independent reference.</li><li>Synthetic illustrative inputs; model marginal quantiles do not establish calibration, joint probabilities or general forecast accuracy.</li><li>Timestral checkpoint=mistralai/Timestral-28M@49b26409ac87b5935539a5d8ffe7f397b720db47; code=a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff; CPU fp32; official defaults; missing values remain NaN; marginal quantiles only</li></ul>
+                    <p>
+                      Snapshot
+                      <code id="snap"
+                        >95ff2c1cca1fce33cff3017ddb57797918566bd8b60b8d436c5fac390ba17b2d</code
+                      ><br />Run
+                      <code id="run"
+                        >bdc999714f43b2b4ad611dec32d104cbddcecb728fc58e83958a48689592b1b8</code
+                      >
+                    </p>
+                  </div>
+                </div>
+              </details>
+            </div>
+          </div>
+        </div>
+        <p class="caption">
+          Pinned local Timestral-28M produces these recorded point forecasts. Inputs are synthetic; predictive accuracy has not been evaluated. Displayed values are rounded to three decimals; the data file retains full precision. Marginal quantiles do not establish calibrated joint probabilities.
+        </p>
+        <span id="status" role="status" class="sr"></span>
+      </section>
+      <section id="method" class="method">
+        <div class="wrap">
+          <div class="section-intro">
+            <h2>One run. A complete record.</h2>
+            <p>
+              From the first snapshot to the next evaluation, each step leaves
+              evidence you can revisit.
+            </p>
+          </div>
+          <div class="steps">
+            <article>
+              <div class="step-icon">
+                <svg class="icon" aria-hidden="true">
+                  <use href="#i-layers" />
+                </svg>
+              </div>
+              <h3>Freeze the source</h3>
+              <p>
+                A snapshot preserves the data available at cutoff. Later
+                corrections leave the original input intact.
+              </p>
+            </article>
+            <article>
+              <div class="step-icon">
+                <svg class="icon" aria-hidden="true">
+                  <use href="#i-hash" />
+                </svg>
+              </div>
+              <h3>Record the result</h3>
+              <p>
+                Each run keeps its graph version, provider and output. Retrieve
+                the same forecast after closing your assistant.
+              </p>
+            </article>
+            <article>
+              <div class="step-icon">
+                <svg class="icon" aria-hidden="true">
+                  <use href="#i-clock" />
+                </svg>
+              </div>
+              <h3>Evaluate and follow</h3>
+              <p>
+                Score a run when observations arrive, or save a recurring
+                question as a watch for the local worker.
+              </p>
+            </article>
+          </div>
+        </div>
+        <section
+          class="wrap console-plate"
+          id="console"
+          aria-labelledby="console-title"
+        >
+          <div class="tour-head">
+            <div>
+              <h2 id="console-title">Inside the local console.</h2>
+              <p>
+                Inspect a recorded forecast, or start a new one from your own
+                data.
+              </p>
+            </div>
+            <div
+              class="tour-switch"
+              role="group"
+              aria-label="Console preview"
+              hidden
+            >
+              <button
+                type="button"
+                data-view="observatory"
+                aria-controls="view-observatory"
+                aria-pressed="true"
+              >
+                Observatory</button
+              ><button
+                type="button"
+                data-view="home"
+                aria-controls="view-home"
+                aria-pressed="false"
+              >
+                Home
+              </button>
+            </div>
+          </div>
+          <figure class="tour-view" id="view-observatory">
+            <figcaption>
+              <div>
+                <strong>Inspect a forecast</strong
+                ><span>Result, observations and source dependencies</span>
+              </div>
+              <a href="assets/observatory-desktop.jpg" class="original-wide"
+                >Full image ↗</a
+              ><a href="assets/observatory-mobile.jpg" class="original-narrow"
+                >Full image ↗</a
+              >
+            </figcaption>
+            <picture
+              ><source
+                media="(max-width:640px)"
+                srcset="assets/observatory-mobile.jpg" />
+              <img
+                width="1280"
+                height="780"
+                loading="lazy"
+                src="assets/observatory-desktop.jpg"
+                alt="The Observatory shows the recorded sales forecast and observed history. The dependency graph identifies the inputs behind the result."
+            /></picture>
+          </figure>
+          <figure class="tour-view" id="view-home">
+            <figcaption>
+              <div>
+                <strong>Prepare a forecast</strong
+                ><span>Source selection and recent runs</span>
+              </div>
+              <a href="assets/home-mobile.jpg">Full image ↗</a>
+            </figcaption>
+            <div class="home-tour">
+              <div>
+                <h3>From source to forecast.</h3>
+                <ol>
+                  <li>Choose a registered source.</li>
+                  <li>Prepare the forecast and review its proposal.</li>
+                  <li>Reopen a recorded result from Home.</li>
+                </ol>
+              </div>
+              <img
+                width="390"
+                height="766"
+                loading="lazy"
+                src="assets/home-mobile.jpg"
+                alt="Mobile Home showing the source selector, the prepare action and a recorded forecast."
+              />
+            </div>
+          </figure>
+        </section>
+      </section>
+      <section id="setup" class="wrap section split">
+        <div>
+          <h2>Run it locally.</h2>
+          <p>
+            Install the local artifact on macOS, prepare the pinned Timestral model, and connect Codex. The guided setup runs the workspace service independently of the chat.
+          </p>
+          <a
+            class="control primary"
+            href="https://github.com/francescogabrieli/forecast_anything/blob/main/docs/installation.md"
+            >Open the installation guide
+            <svg class="icon" aria-hidden="true"><use href="#i-external" /></svg
+          ></a>
+        </div>
+        <div>
+          <div class="terminal" data-ui>
+            <div>
+              <svg class="icon" aria-hidden="true">
+                <use href="#i-terminal" />
+              </svg>
+              Terminal <span>Local workspace</span>
+            </div>
+            <pre><code># After setting forecast_cli in the installation guide
+"$forecast_cli" setup --prepare-model</code></pre>
+          </div>
+          <p class="caption">
+            Real Timestral forecasts were verified with the official MCP SDK.
+            Codex Desktop has read stored Timestral results and has separate
+            acceptance evidence for the earlier baseline workflow.
+            <a
+              href="https://github.com/francescogabrieli/forecast_anything/blob/main/docs/implementation/mcp.md"
+              >Connect your assistant ↗</a
+            >
+          </p>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <div class="wrap">
+        <a class="brand" href="#top"
+          ><img src="assets/mark.svg" width="32" height="32" alt="" />Forecast
+          Anything</a
+        >
+        <nav aria-label="Project resources">
+          <a
+            href="https://github.com/francescogabrieli/forecast_anything/blob/main/docs/capabilities.md"
+            >Capabilities</a
+          ><a
+            href="https://github.com/francescogabrieli/forecast_anything/blob/main/CONTRIBUTING.md"
+            >Contribute</a
+          ><a
+            href="https://github.com/francescogabrieli/forecast_anything/blob/main/SECURITY.md"
+            >Security</a
+          >
+        </nav>
+      </div>
+    </footer>
+  </body>
+</html>
