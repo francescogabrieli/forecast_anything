@@ -29,7 +29,7 @@ Configure the host to launch the installed executable with arguments `mcp --conf
 }
 ```
 
-In another terminal, `forecast-anything status --config .local/mcp/config.json` checks authenticated API access and the worker heartbeat recorded in the API's SQLite database. `worker` is `running` when its heartbeat is no more than ten seconds old, `stale` when an earlier worker stopped updating it, and `not_running` before a worker has started or after a clean stop. A heartbeat shows that the worker process is alive; it does not guarantee that a particular job or provider will succeed. `status` exits successfully only when both API and worker report as running. `up` stops both services on Ctrl+C; accepted jobs remain in the database for the next start. The command remains in the foreground and does not install an OS service. Codex CLI was exercised with the same MCP server configuration surface; direct desktop UI setup remains unverified.
+In another terminal, `forecast-anything status --config .local/mcp/config.json` checks authenticated API access and the worker heartbeat recorded in the API's SQLite database. `worker` is `running` when its heartbeat is no more than ten seconds old, `stale` when an earlier worker stopped updating it, and `not_running` before a worker has started or after a clean stop. A heartbeat shows that the worker process is alive; it does not guarantee that a particular job or provider will succeed. `status` exits successfully only when both API and worker report as running. `up` stops both services on Ctrl+C; accepted jobs remain in the database for the next start. The command remains in the foreground and does not install an OS service. Codex CLI was exercised with the same configuration surface. The recorded Desktop workflow uses an already connected adapter. See the [Desktop acceptance record](../research/desktop-assistant-acceptance.md).
 
 ### Environment-based setup
 
@@ -52,7 +52,7 @@ Keep the token private. Supply the same token to the API and the MCP host using 
 
 For separate process management, `forecast-anything serve --db .local/mcp/state.db` and `forecast-anything worker --db .local/mcp/state.db` remain available. The foreground command is not a background service manager and does not provide persistent setup or a status command.
 
-The API and worker must use the same local SQLite file. MCP and API must see the same absolute CSV paths in the same filesystem namespace. Container paths and host paths are not interchangeable. The adapter does not start or stop either service. Accepted work survives a disconnected MCP process and finishes when the independently operated worker runs. The baseline path requires no LLM keys, model weights, Eve or Postgres.
+The API and worker must use the same local SQLite file. MCP and API must see the same absolute CSV paths in the same filesystem namespace. Container paths and host paths are not interchangeable. The adapter does not start or stop either service. Accepted work survives a disconnected MCP process and finishes when the independently operated worker runs. New forecasts require prepared Timestral weights. The local workflow does not require an LLM key, Eve or Postgres.
 
 A generic stdio launch object follows. Replace the absolute paths and token through your host's configuration mechanism; this JSON does not imply environment-variable expansion or a tested desktop-specific configuration schema.
 
