@@ -15,6 +15,17 @@ from forecast_anything.backtesting.contracts import (
     PartitionScore,
 )
 from forecast_anything.operators import register_builtin_operators
+from forecast_anything.presentations import (
+    BacktestPresentation,
+    BacktestSummary,
+    FinalOriginPoint,
+    ForecastPresentation,
+    ForecastPresentationPoint,
+    ForecastProviderUse,
+    QuestionPresentation,
+    QuestionPresentationReference,
+    WatchBacktestSummary,
+)
 from forecast_anything.providers.baseline import SeasonalNaiveProvider
 from forecast_anything.runtime import Runtime
 from forecast_anything.store import Ledger
@@ -47,7 +58,21 @@ def export_contracts(output: Path) -> None:
         }
         schemas.update(
             (model.__name__, model.model_json_schema(mode="serialization"))
-            for model in (BacktestReport, OriginOutcome, OriginPage, PartitionScore)
+            for model in (
+                BacktestReport,
+                OriginOutcome,
+                OriginPage,
+                PartitionScore,
+                BacktestPresentation,
+                BacktestSummary,
+                FinalOriginPoint,
+                ForecastPresentation,
+                ForecastPresentationPoint,
+                ForecastProviderUse,
+                QuestionPresentation,
+                QuestionPresentationReference,
+                WatchBacktestSummary,
+            )
         )
         output.mkdir(parents=True, exist_ok=True)
         openapi = _normalize_openapi(app.openapi())

@@ -1,10 +1,22 @@
 """Strict MCP argument contracts, independent of the optional SDK."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, Field, StringConstraints, model_validator
 
-from ..contracts import BacktestSettings, Contract, ForecastSelection, SourceSpec
+from ..contracts import (
+    BacktestSettings,
+    Contract,
+    ForecastSelection,
+    OperationCreateRequest,
+    OperationSubmitRequest,
+    OperationUpdateRequest,
+    QuestionForecastSelection,
+    QuestionMeaning,
+    QuestionSourceId,
+    QuestionTitle,
+    SourceSpec,
+)
 
 # Unlike contract Identifiers, tool arguments never silently trim a replay key
 # or a route identity. The core still validates its existing request contracts.
@@ -63,6 +75,11 @@ class SnapshotArguments(Contract):
     snapshot_id: ToolIdentifier
 
 
+class SnapshotSeriesArguments(SnapshotArguments):
+    offset: NonNegative = 0
+    limit: Annotated[int, Field(ge=1, le=5, strict=True)] = 5
+
+
 class EvaluationArguments(Contract):
     evaluation_id: ToolIdentifier
 
@@ -100,6 +117,10 @@ class BacktestReadArguments(Contract):
 
 
 class BacktestSummaryArguments(BacktestReadArguments):
+    watch_id: ToolIdentifier | None = None
+
+
+class BacktestPresentationArguments(BacktestReadArguments):
     watch_id: ToolIdentifier | None = None
 
 
@@ -148,3 +169,95 @@ class WatchHistoryArguments(Contract):
 class WatchChangeArguments(WatchArguments):
     previous_run_id: ToolIdentifier
     current_run_id: ToolIdentifier
+
+
+class QuestionCreateArguments(Contract):
+    key: ToolIdentifier
+    title: QuestionTitle
+    meaning: QuestionMeaning
+    source_ids: Annotated[tuple[QuestionSourceId, ...], Field(max_length=16)] = ()
+    selection: QuestionForecastSelection
+
+
+class QuestionListArguments(Contract):
+    offset: NonNegative = 0
+    limit: Annotated[int, Field(ge=1, le=2, strict=True)] = 2
+
+
+class QuestionIdArguments(Contract):
+    question_id: ToolIdentifier
+
+
+class QuestionPatchArguments(QuestionIdArguments):
+    title: QuestionTitle | None = None
+    status: Literal["open", "paused", "resolved"] | None = None
+
+    @model_validator(mode="after")
+    def require_update(self):
+        controls = self.model_fields_set & {"title", "status"}
+        if not controls or any(getattr(self, field) is None for field in controls):
+            raise ValueError("at least one non-null question field is required")
+        return self
+
+
+class QuestionReviseArguments(Contract):
+    question_id: ToolIdentifier
+    key: ToolIdentifier
+    expected_revision: Annotated[int, Field(ge=1, strict=True)]
+    meaning: QuestionMeaning
+    source_ids: Annotated[tuple[QuestionSourceId, ...], Field(max_length=16)] = ()
+    selection: QuestionForecastSelection
+
+
+class QuestionRevisionPageArguments(QuestionIdArguments):
+    offset: NonNegative = 0
+    limit: Annotated[int, Field(ge=1, le=2, strict=True)] = 2
+
+
+class QuestionRevisionArguments(QuestionIdArguments):
+    revision: Annotated[int, Field(ge=1, strict=True)]
+
+
+class QuestionReferenceLinkArguments(QuestionIdArguments):
+    key: ToolIdentifier
+    revision: Annotated[int, Field(ge=1, strict=True)]
+    target_type: Literal[
+        "candidate", "run", "backtest", "watch", "evaluation", "operation"
+    ]
+    target_id: ToolIdentifier
+    note: Annotated[str, StringConstraints(max_length=800)] = ""
+
+
+class QuestionReferencePageArguments(QuestionIdArguments):
+    revision: Annotated[int, Field(ge=1, strict=True)] | None = None
+    offset: NonNegative = 0
+    limit: Annotated[int, Field(ge=1, le=5, strict=True)] = 5
+
+
+class QuestionPresentationArguments(QuestionIdArguments):
+    offset: NonNegative = 0
+    limit: Annotated[int, Field(ge=1, le=3, strict=True)] = 3
+
+
+class OperationIdArguments(Contract):
+    operation_id: ToolIdentifier
+
+
+class OperationCreateArguments(OperationCreateRequest):
+    key: ToolIdentifier
+    question_id: ToolIdentifier | None = None
+
+
+class OperationListArguments(Contract):
+    question_id: ToolIdentifier | None = None
+    offset: NonNegative = 0
+    limit: Annotated[int, Field(ge=1, le=5, strict=True)] = 5
+
+
+class OperationUpdateArguments(OperationUpdateRequest):
+    operation_id: ToolIdentifier
+    key: ToolIdentifier
+
+
+class OperationSubmitArguments(OperationSubmitRequest):
+    operation_id: ToolIdentifier

@@ -22,8 +22,23 @@ import httpx
 ROOT = Path(__file__).resolve().parents[2]
 ISSUED = "2026-10-23T12:00:00+00:00"
 TOOLS = {
+    "create_question",
+    "list_questions",
+    "get_question",
+    "update_question",
+    "revise_question",
+    "list_question_revisions",
+    "get_question_revision",
+    "link_question_reference",
+    "list_question_references",
     "get_capabilities",
     "get_diagnostics",
+    "create_operation",
+    "update_operation",
+    "list_operations",
+    "get_operation",
+    "submit_operation",
+    "resume_operation",
     "list_sources",
     "register_csv_source",
     "get_source_profile",
@@ -34,11 +49,16 @@ TOOLS = {
     "submit_configured_forecast",
     "submit_backtest",
     "get_backtest",
+    "get_backtest_presentation",
     "summarize_backtest",
     "list_backtest_origins",
     "get_run",
+    "get_forecast_presentation",
+    "get_question_presentation",
     "get_graph",
     "get_snapshot",
+    "summarize_snapshot",
+    "list_snapshot_series",
     "list_run_evaluations",
     "get_evaluation",
     "submit_evaluation",
@@ -75,6 +95,7 @@ def source_spec(workspace, source_id="sales"):
 
 async def call(client, name, *, error=None, **arguments):
     result = await client.call_tool(name, arguments)
+    assert len(result.model_dump_json(by_alias=True).encode("utf-8")) <= 65536
     envelope = result.structured_content
     assert envelope is not None
     assert json.loads(result.content[0].text) == envelope
@@ -99,13 +120,16 @@ async def poll_job(client, job_id):
 
 
 class LocalWorkspace:
-    def __init__(self, root, *, python=None, executable=None):
+    def __init__(self, root, *, python=None, executable=None, source_root=None):
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.python = str(python or sys.executable)
         self.executable = str(
             executable or Path(sys.executable).parent / "forecast-anything"
         )
+        if source_root is None and executable is None:
+            source_root = ROOT
+        self.source_root = Path(source_root).resolve() if source_root else None
         self.history = self.root / "history.csv"
         self.command_marker = self.root / "instruction-was-executed"
         self.instruction = (
@@ -153,15 +177,34 @@ class LocalWorkspace:
     def launch(self, mode):
         log = (self.root / f"{mode}-{len(self.logs)}.log").open("w+")
         self.logs.append(log)
-        process = subprocess.Popen(
-            [
+        fixture = str(Path(__file__).resolve())
+        if self.source_root is None:
+            command = [
                 self.python,
                 "-I",
-                str(Path(__file__).resolve()),
+                fixture,
                 mode,
                 str(self.root),
                 str(self.port),
-            ],
+            ]
+        else:
+            code = (
+                "import runpy,sys; "
+                f"sys.path.insert(0,{str(self.source_root / 'src')!r}); "
+                f"sys.argv=[{fixture!r},*sys.argv[1:]]; "
+                f"runpy.run_path({fixture!r},run_name='__main__')"
+            )
+            command = [
+                self.python,
+                "-I",
+                "-c",
+                code,
+                mode,
+                str(self.root),
+                str(self.port),
+            ]
+        process = subprocess.Popen(
+            command,
             cwd=self.root,
             env=self.env,
             stdout=log,
@@ -261,9 +304,20 @@ class LocalWorkspace:
         from mcp import Client
         from mcp.client.stdio import StdioServerParameters, stdio_client
 
+        if self.source_root is None:
+            command, args = self.executable, ["mcp"]
+        else:
+            code = (
+                "import sys; "
+                f"sys.path.insert(0,{str(self.source_root / 'src')!r}); "
+                "from forecast_anything.cli import main; "
+                "sys.argv=['forecast-anything',*sys.argv[1:]]; "
+                "raise SystemExit(main())"
+            )
+            command, args = self.python, ["-I", "-c", code, "mcp"]
         parameters = StdioServerParameters(
-            command=self.executable,
-            args=["mcp"],
+            command=command,
+            args=args,
             cwd=self.root,
             env={
                 **self.env,

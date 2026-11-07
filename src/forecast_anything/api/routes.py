@@ -19,10 +19,27 @@ from ..contracts import (
     JobRequest,
     JobView,
     OpaqueDictionary,
+    OperationCreateRequest,
+    OperationPage,
+    OperationSubmitRequest,
+    OperationUpdateRequest,
+    OperationView,
+    QuestionCreateRequest,
+    QuestionPage,
+    QuestionReference,
+    QuestionReferencePage,
+    QuestionReferenceRequest,
+    QuestionRevision,
+    QuestionRevisionPage,
+    QuestionRevisionRequest,
+    QuestionTitlePatch,
+    QuestionView,
     RunRecord,
     ScenarioRequest,
     ScenarioView,
     Snapshot,
+    SnapshotSeriesPage,
+    SnapshotSummary,
     SourceProfile,
     SourceRefreshRequest,
     SourceRegistration,
@@ -35,6 +52,11 @@ from ..contracts import (
 )
 from ..discovery.agent_gateway import AgentOperationRequest, AgentOperationResponse
 from ..discovery.candidates import TEMPLATES
+from ..presentations import (
+    BacktestPresentation,
+    ForecastPresentation,
+    QuestionPresentation,
+)
 from ..sources.profiling import inspect_source
 from .scenarios import create_scenario
 
@@ -82,6 +104,102 @@ def router(service):
     def watches():
         return service.watches()
 
+    @api.post("/questions", response_model=QuestionView, status_code=201)
+    def create_question(request: QuestionCreateRequest):
+        return service.create_question(request)
+
+    @api.get("/questions", response_model=QuestionPage)
+    def questions(
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    ):
+        return service.questions(offset=offset, limit=limit)
+
+    @api.get("/questions/{question_id}", response_model=QuestionView)
+    def question(question_id: str):
+        return service.question(question_id)
+
+    @api.patch("/questions/{question_id}", response_model=QuestionView)
+    def patch_question(question_id: str, request: QuestionTitlePatch):
+        return service.patch_question(question_id, request)
+
+    @api.post("/questions/{question_id}/revisions", response_model=QuestionView)
+    def revise_question(question_id: str, request: QuestionRevisionRequest):
+        return service.revise_question(question_id, request)
+
+    @api.get("/questions/{question_id}/revisions", response_model=QuestionRevisionPage)
+    def question_revisions(
+        question_id: str,
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    ):
+        return service.question_revisions(question_id, offset=offset, limit=limit)
+
+    @api.get(
+        "/questions/{question_id}/revisions/{revision}", response_model=QuestionRevision
+    )
+    def question_revision(question_id: str, revision: int):
+        return service.question_revision(question_id, revision)
+
+    @api.post(
+        "/questions/{question_id}/references",
+        response_model=QuestionReference,
+        status_code=201,
+    )
+    def link_question_reference(question_id: str, request: QuestionReferenceRequest):
+        return service.link_question_reference(question_id, request)
+
+    @api.get(
+        "/questions/{question_id}/references", response_model=QuestionReferencePage
+    )
+    def question_references(
+        question_id: str,
+        revision: Annotated[int | None, Query(ge=1)] = None,
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    ):
+        return service.question_references(
+            question_id, revision=revision, offset=offset, limit=limit
+        )
+
+    @api.get(
+        "/questions/{question_id}/presentation", response_model=QuestionPresentation
+    )
+    def question_presentation(
+        question_id: str,
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=3)] = 3,
+    ):
+        return service.question_presentation(question_id, offset=offset, limit=limit)
+
+    @api.post("/operations", response_model=OperationView, status_code=201)
+    def create_operation(request: OperationCreateRequest):
+        return service.create_operation(request)
+
+    @api.get("/operations", response_model=OperationPage)
+    def operations(
+        question_id: Annotated[str | None, Query(min_length=1)] = None,
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    ):
+        return service.operations(question_id=question_id, offset=offset, limit=limit)
+
+    @api.get("/operations/{operation_id}", response_model=OperationView)
+    def operation(operation_id: str):
+        return service.operation(operation_id)
+
+    @api.patch("/operations/{operation_id}", response_model=OperationView)
+    def update_operation(operation_id: str, request: OperationUpdateRequest):
+        return service.update_operation(operation_id, request)
+
+    @api.post("/operations/{operation_id}/submit", response_model=OperationView)
+    def submit_operation(operation_id: str, request: OperationSubmitRequest):
+        return service.submit_operation(operation_id, request)
+
+    @api.post("/operations/{operation_id}/resume", response_model=OperationView)
+    def resume_operation(operation_id: str):
+        return service.resume_operation(operation_id)
+
     @api.get("/watches/{watch_id}", response_model=WatchView)
     def get_watch(watch_id: str):
         return service.watch(watch_id)
@@ -122,6 +240,10 @@ def router(service):
     def run(run_id: str):
         return service.ledger.get_run(run_id)
 
+    @api.get("/runs/{run_id}/presentation", response_model=ForecastPresentation)
+    def forecast_presentation(run_id: str):
+        return service.forecast_presentation(run_id)
+
     @api.get("/runs/{run_id}/evaluations", response_model=list[EvaluationRecord])
     def run_evaluations(run_id: str):
         return service.ledger.evaluations_for_run(run_id)
@@ -134,6 +256,16 @@ def router(service):
     def backtest(backtest_id: str):
         return service.backtest(backtest_id)
 
+    @api.get(
+        "/backtests/{backtest_id}/presentation",
+        response_model=BacktestPresentation,
+    )
+    def backtest_presentation(
+        backtest_id: str,
+        watch_id: Annotated[str | None, Query(min_length=1)] = None,
+    ):
+        return service.backtest_presentation(backtest_id, watch_id=watch_id)
+
     @api.get("/backtests/{backtest_id}/origins", response_model=OriginPage)
     def backtest_origins(
         backtest_id: str,
@@ -145,6 +277,18 @@ def router(service):
     @api.get("/snapshots/{snapshot_id}", response_model=Snapshot)
     def snapshot(snapshot_id: str):
         return service.ledger.get_snapshot(snapshot_id)
+
+    @api.get("/snapshots/{snapshot_id}/summary", response_model=SnapshotSummary)
+    def snapshot_summary(snapshot_id: str):
+        return service.snapshot_summary(snapshot_id)
+
+    @api.get("/snapshots/{snapshot_id}/series", response_model=SnapshotSeriesPage)
+    def snapshot_series(
+        snapshot_id: str,
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    ):
+        return service.snapshot_series(snapshot_id, offset=offset, limit=limit)
 
     @api.get("/graphs/{graph_id}", response_model=GraphSpec)
     def graph(graph_id: str, version: Annotated[int, Query(gt=0)] = 1):

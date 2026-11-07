@@ -6,7 +6,7 @@ const openapiSource = new URL("../../../contracts/v1/openapi.json", import.meta.
 const target = new URL("../src/schema.generated.ts", import.meta.url);
 const all = JSON.parse(await readFile(source, "utf8"));
 const openapi = JSON.parse(await readFile(openapiSource, "utf8"));
-const names = ["ForecastSelection", "BacktestSettings", "BacktestReport", "OriginPage", "CandidateRequest", "Candidate", "SourceProfile", "RunRecord", "AgentOperationRequest", "AgentOperationResponse"];
+const names = ["ForecastSelection", "BacktestSettings", "BacktestReport", "OriginPage", "CandidateRequest", "Candidate", "SourceProfile", "RunRecord", "AgentOperationRequest", "AgentOperationResponse", "QuestionCreateRequest", "QuestionRevisionRequest", "QuestionTitlePatch", "QuestionRevision", "QuestionView", "QuestionReferenceRequest", "QuestionReference", "QuestionPage", "QuestionRevisionPage", "QuestionReferencePage", "OperationCreateRequest", "OperationUpdateRequest", "OperationSubmitRequest", "OperationView", "OperationPage", "SnapshotSummary", "SnapshotSeriesSummary", "SnapshotSeriesPage", "ForecastPresentation", "ForecastPresentationPoint", "ForecastProviderUse", "BacktestPresentation", "BacktestSummary", "QuestionPresentation", "QuestionPresentationReference"];
 let output = "// Generated from contracts/v1/schemas.json and openapi.json. Run npm run contracts:generate.\n\n";
 for (const name of names) {
   const schema = name.startsWith("AgentOperation")

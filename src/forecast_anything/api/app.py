@@ -85,7 +85,17 @@ def create_app(
             404
             if error.code in {"not_found", "source_not_found"}
             else 409
-            if error.code in {"idempotency_conflict", "immutable_identity"}
+            if error.code
+            in {
+                "idempotency_conflict",
+                "immutable_identity",
+                "stale_question_revision",
+                "operation_version_conflict",
+                "stale_operation_version",
+                "operation_already_submitted",
+                "operation_not_ready",
+                "operation_job_mismatch",
+            }
             else 422
         )
         payload = error.model_dump(mode="json")

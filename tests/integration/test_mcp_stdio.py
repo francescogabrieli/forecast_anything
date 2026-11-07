@@ -349,6 +349,18 @@ def test_stdio_missing_targets_and_unavailable_revision_keep_planned_origins(tmp
             origins = (
                 await call(client, "list_backtest_origins", backtest_id=job["job_id"])
             )["origins"]
+            legacy_summary = await call(
+                client, "summarize_backtest", backtest_id=job["job_id"]
+            )
+            presentation = await call(
+                client,
+                "get_backtest_presentation",
+                backtest_id=job["job_id"],
+            )
+            assert presentation["summary"] == legacy_summary
+            assert presentation == workspace.get(
+                f"/v1/backtests/{job['job_id']}/presentation"
+            )
             assert len(origins) == 6
             assert [(o["status"], o["reason_code"]) for o in origins] == [
                 ("excluded", "insufficient_history"),

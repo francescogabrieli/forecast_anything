@@ -19,6 +19,26 @@ from forecast_anything.mcp_adapter.config import McpConfig
 
 ROOT = Path(__file__).resolve().parents[2]
 NAMES = {
+    "create_operation",
+    "update_operation",
+    "list_operations",
+    "get_operation",
+    "submit_operation",
+    "resume_operation",
+    "summarize_snapshot",
+    "list_snapshot_series",
+    "get_backtest_presentation",
+    "get_forecast_presentation",
+    "get_question_presentation",
+    "create_question",
+    "list_questions",
+    "get_question",
+    "update_question",
+    "revise_question",
+    "list_question_revisions",
+    "get_question_revision",
+    "link_question_reference",
+    "list_question_references",
     "get_capabilities",
     "get_diagnostics",
     "list_sources",
@@ -57,6 +77,14 @@ MUTATIONS = {
     "submit_evaluation",
     "create_watch",
     "update_watch",
+    "create_question",
+    "update_question",
+    "revise_question",
+    "link_question_reference",
+    "create_operation",
+    "update_operation",
+    "submit_operation",
+    "resume_operation",
 }
 JOB = {
     "job_id": "job-1",
@@ -217,6 +245,8 @@ def test_discovery_has_typed_schemas_and_honest_annotations(monkeypatch):
                     "submit_configured_forecast",
                     "submit_backtest",
                     "create_watch",
+                    "submit_operation",
+                    "resume_operation",
                 }
             )
             assert tool.annotations.idempotent_hint is (

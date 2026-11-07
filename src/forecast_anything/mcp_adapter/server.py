@@ -36,9 +36,19 @@ from ..contracts import (
     GraphSpec,
     JobView,
     OpaqueDictionary,
+    OperationPage,
+    OperationView,
+    QuestionPage,
+    QuestionReference,
+    QuestionReferencePage,
+    QuestionRevision,
+    QuestionRevisionPage,
+    QuestionView,
     RunJobRequest,
     RunRecord,
     Snapshot,
+    SnapshotSeriesPage,
+    SnapshotSummary,
     SourceProfile,
     SourceRefreshRequest,
     SourceRegistration,
@@ -50,9 +60,15 @@ from ..contracts import (
 )
 from ..diagnostics import diagnose, runtime_version
 from ..graph import SourceConfig, parse_node_config
+from ..presentations import (
+    BacktestPresentation,
+    ForecastPresentation,
+    QuestionPresentation,
+)
 from .arguments import (
     BacktestArguments,
     BacktestOriginsArguments,
+    BacktestPresentationArguments,
     BacktestReadArguments,
     BacktestSummaryArguments,
     CandidateArguments,
@@ -64,10 +80,26 @@ from .arguments import (
     GraphArguments,
     JobArguments,
     NoArguments,
+    OperationCreateArguments,
+    OperationIdArguments,
+    OperationListArguments,
+    OperationSubmitArguments,
+    OperationUpdateArguments,
+    QuestionCreateArguments,
+    QuestionIdArguments,
+    QuestionListArguments,
+    QuestionPatchArguments,
+    QuestionPresentationArguments,
+    QuestionReferenceLinkArguments,
+    QuestionReferencePageArguments,
+    QuestionReviseArguments,
+    QuestionRevisionArguments,
+    QuestionRevisionPageArguments,
     RefreshArguments,
     RegisterArguments,
     RunArguments,
     SnapshotArguments,
+    SnapshotSeriesArguments,
     SourceArguments,
     SourcePageArguments,
     SubmitEvaluationArguments,
@@ -81,7 +113,7 @@ from .arguments import NonNegative as NonNegative
 from .arguments import ToolIdentifier as ToolIdentifier
 from .client import CoreClient, CoreRequestError, encode_identifier
 from .config import McpConfig, McpConfigError
-from .summaries import BacktestSummary, summarize_backtest_records
+from .summaries import BacktestSummary
 
 T = TypeVar("T")
 
@@ -196,6 +228,106 @@ _TOOLS = (
         "Read actual installed provider, operator and template contracts.",
     ),
     _Tool(
+        "create_operation",
+        OperationCreateArguments,
+        OperationView,
+        "Create or replay a durable operation linked to a question revision.",
+        mutating=True,
+    ),
+    _Tool(
+        "update_operation",
+        OperationUpdateArguments,
+        OperationView,
+        "Update operation phase and missing-data fields with version checks and an idempotency key.",
+        mutating=True,
+    ),
+    _Tool(
+        "list_operations",
+        OperationListArguments,
+        OperationPage,
+        "Read a bounded page of compact durable operation state, optionally for one question.",
+    ),
+    _Tool(
+        "get_operation",
+        OperationIdArguments,
+        OperationView,
+        "Read compact durable operation state and its job status without returning the full request or result.",
+    ),
+    _Tool(
+        "submit_operation",
+        OperationSubmitArguments,
+        OperationView,
+        "Freeze a confirmed supported job request, reserve its deterministic job identity, then submit it through the durable queue.",
+        mutating=True,
+        open_world=True,
+    ),
+    _Tool(
+        "resume_operation",
+        OperationIdArguments,
+        OperationView,
+        "Recover an operation after reconnect or an interrupted enqueue; polling state is safe to repeat.",
+        mutating=True,
+        open_world=True,
+    ),
+    _Tool(
+        "create_question",
+        QuestionCreateArguments,
+        QuestionView,
+        "Create or replay a durable research question with its first semantic revision.",
+        mutating=True,
+    ),
+    _Tool(
+        "list_questions",
+        QuestionListArguments,
+        QuestionPage,
+        "Read a bounded, stable page of durable questions.",
+    ),
+    _Tool(
+        "get_question",
+        QuestionIdArguments,
+        QuestionView,
+        "Read a question's current semantic revision and compact reference counts.",
+    ),
+    _Tool(
+        "update_question",
+        QuestionPatchArguments,
+        QuestionView,
+        "Update a question's title or lifecycle status without changing its semantic revision.",
+        mutating=True,
+    ),
+    _Tool(
+        "revise_question",
+        QuestionReviseArguments,
+        QuestionView,
+        "Append a semantic revision using expected_revision compare-and-swap and an idempotency key.",
+        mutating=True,
+    ),
+    _Tool(
+        "list_question_revisions",
+        QuestionRevisionPageArguments,
+        QuestionRevisionPage,
+        "Read a bounded page of immutable semantic question revisions.",
+    ),
+    _Tool(
+        "get_question_revision",
+        QuestionRevisionArguments,
+        QuestionRevision,
+        "Read one immutable historical semantic question revision by number.",
+    ),
+    _Tool(
+        "link_question_reference",
+        QuestionReferenceLinkArguments,
+        QuestionReference,
+        "Attach an existing candidate, run, report, watch, evaluation, or operation to a question revision.",
+        mutating=True,
+    ),
+    _Tool(
+        "list_question_references",
+        QuestionReferencePageArguments,
+        QuestionReferencePage,
+        "Read a bounded page of revision-bound references.",
+    ),
+    _Tool(
         "list_sources",
         SourcePageArguments,
         SourcePage,
@@ -305,6 +437,12 @@ _TOOLS = (
         "Read the full completed immutable backtest report. For interpretation and final-origin chart points, use summarize_backtest. Missing/pending reports return not_found; poll get_job. No raw archive is exposed.",
     ),
     _Tool(
+        "get_backtest_presentation",
+        BacktestPresentationArguments,
+        BacktestPresentation,
+        "Read the shared versioned backtest comparison presentation; historical report evidence remains immutable.",
+    ),
+    _Tool(
         "summarize_backtest",
         BacktestSummaryArguments,
         BacktestSummary,
@@ -323,6 +461,18 @@ _TOOLS = (
         "Read immutable issued forecast values, provider and evidence identities. An issued forecast is not an accuracy score; use list_run_evaluations for recorded validation.",
     ),
     _Tool(
+        "get_forecast_presentation",
+        RunArguments,
+        ForecastPresentation,
+        "Read the shared bounded chart presentation for one recorded forecast run.",
+    ),
+    _Tool(
+        "get_question_presentation",
+        QuestionPresentationArguments,
+        QuestionPresentation,
+        "Read a question with bounded references and explicit applicability to the current semantic revision.",
+    ),
+    _Tool(
         "get_graph", GraphArguments, GraphSpec, "Read an exact stored graph version."
     ),
     _Tool(
@@ -330,6 +480,18 @@ _TOOLS = (
         SnapshotArguments,
         Snapshot,
         "Read an immutable snapshot; oversized output is refused.",
+    ),
+    _Tool(
+        "summarize_snapshot",
+        SnapshotArguments,
+        SnapshotSummary,
+        "Read counts, event and availability coverage, assumptions, and missingness without returning raw observations.",
+    ),
+    _Tool(
+        "list_snapshot_series",
+        SnapshotSeriesArguments,
+        SnapshotSeriesPage,
+        "Read a bounded page of per-series coverage, unit samples and revision counts without observation values.",
     ),
     _Tool(
         "list_run_evaluations",
@@ -437,43 +599,141 @@ async def _delegate(
             config.csv_roots,
             allowed.copy(),
         )
-    if name == "summarize_backtest":
+    if name == "summarize_snapshot":
+        return await client.request(
+            "GET",
+            "/v1/snapshots/" + encode_identifier(arguments.snapshot_id) + "/summary",
+        )
+    if name == "list_snapshot_series":
+        return await client.request(
+            "GET",
+            "/v1/snapshots/" + encode_identifier(arguments.snapshot_id) + "/series",
+            params={"offset": arguments.offset, "limit": arguments.limit},
+        )
+    if name == "get_forecast_presentation":
+        return await client.request(
+            "GET",
+            "/v1/runs/" + encode_identifier(arguments.run_id) + "/presentation",
+        )
+    if name == "get_question_presentation":
+        return await client.request(
+            "GET",
+            "/v1/questions/"
+            + encode_identifier(arguments.question_id)
+            + "/presentation",
+            params={"offset": arguments.offset, "limit": arguments.limit},
+        )
+    if name == "create_question":
+        return await client.request(
+            "POST", "/v1/questions", body=arguments.model_dump(mode="json")
+        )
+    if name == "list_questions":
+        return await client.request(
+            "GET",
+            "/v1/questions",
+            params={"offset": arguments.offset, "limit": arguments.limit},
+        )
+    if name == "get_question":
+        return await client.request(
+            "GET", "/v1/questions/" + encode_identifier(arguments.question_id)
+        )
+    if name == "update_question":
+        return await client.request(
+            "PATCH",
+            "/v1/questions/" + encode_identifier(arguments.question_id),
+            body=arguments.model_dump(
+                mode="json", exclude={"question_id"}, exclude_unset=True
+            ),
+        )
+    if name == "revise_question":
+        return await client.request(
+            "POST",
+            "/v1/questions/" + encode_identifier(arguments.question_id) + "/revisions",
+            body=arguments.model_dump(mode="json", exclude={"question_id"}),
+        )
+    if name == "list_question_revisions":
+        return await client.request(
+            "GET",
+            "/v1/questions/" + encode_identifier(arguments.question_id) + "/revisions",
+            params={"offset": arguments.offset, "limit": arguments.limit},
+        )
+    if name == "get_question_revision":
+        return await client.request(
+            "GET",
+            "/v1/questions/"
+            + encode_identifier(arguments.question_id)
+            + f"/revisions/{arguments.revision}",
+        )
+    if name == "link_question_reference":
+        return await client.request(
+            "POST",
+            "/v1/questions/" + encode_identifier(arguments.question_id) + "/references",
+            body=arguments.model_dump(mode="json", exclude={"question_id"}),
+        )
+    if name == "list_question_references":
+        params = {"offset": arguments.offset, "limit": arguments.limit}
+        if arguments.revision is not None:
+            params["revision"] = arguments.revision
+        return await client.request(
+            "GET",
+            "/v1/questions/" + encode_identifier(arguments.question_id) + "/references",
+            params=params,
+        )
+    if name == "create_operation":
+        return await client.request(
+            "POST", "/v1/operations", body=arguments.model_dump(mode="json")
+        )
+    if name == "list_operations":
+        params = {"offset": arguments.offset, "limit": arguments.limit}
+        if arguments.question_id is not None:
+            params["question_id"] = arguments.question_id
+        return await client.request("GET", "/v1/operations", params=params)
+    if name == "get_operation":
+        return await client.request(
+            "GET", "/v1/operations/" + encode_identifier(arguments.operation_id)
+        )
+    if name == "update_operation":
+        return await client.request(
+            "PATCH",
+            "/v1/operations/" + encode_identifier(arguments.operation_id),
+            body=arguments.model_dump(mode="json", exclude={"operation_id"}),
+        )
+    if name == "submit_operation":
+        if (
+            arguments.request.kind == "backtest"
+            and arguments.request.source_id not in allowed
+        ):
+            raise McpConfigError("source_forbidden")
+        return await client.request(
+            "POST",
+            "/v1/operations/" + encode_identifier(arguments.operation_id) + "/submit",
+            body=arguments.model_dump(mode="json", exclude={"operation_id"}),
+        )
+    if name == "resume_operation":
+        operation_id = encode_identifier(arguments.operation_id)
+        current = OperationView.model_validate(
+            await client.request("GET", "/v1/operations/" + operation_id)
+        )
+        if current.request_kind == "backtest" and not set(current.source_ids).issubset(
+            allowed
+        ):
+            raise McpConfigError("source_forbidden")
+        return await client.request("POST", f"/v1/operations/{operation_id}/resume")
+    if name in {"summarize_backtest", "get_backtest_presentation"}:
         backtest_id = encode_identifier(arguments.backtest_id)
-        base_path = f"/v1/backtests/{backtest_id}"
-        report = BacktestReport.model_validate(await client.request("GET", base_path))
-        if report.backtest_id != arguments.backtest_id:
-            raise CoreRequestError("invalid_response")
-        origins = []
-        offset = 0
-        while True:
-            page = OriginPage.model_validate(
-                await client.request(
-                    "GET",
-                    base_path + "/origins",
-                    params={"offset": offset, "limit": 50},
-                )
-            )
-            if page.backtest_id != report.backtest_id or page.offset != offset:
-                raise CoreRequestError("invalid_response")
-            origins.extend(page.origins)
-            if len(origins) > 150:
-                raise CoreRequestError("invalid_response")
-            if page.next_offset is None:
-                break
-            if page.next_offset <= offset or page.next_offset > 150:
-                raise CoreRequestError("invalid_response")
-            offset = page.next_offset
-        watch = None
+        params = {}
         if arguments.watch_id is not None:
-            watch = WatchView.model_validate(
-                await client.request(
-                    "GET", "/v1/watches/" + encode_identifier(arguments.watch_id)
-                )
+            params["watch_id"] = arguments.watch_id
+        presentation = BacktestPresentation.model_validate(
+            await client.request(
+                "GET",
+                f"/v1/backtests/{backtest_id}/presentation",
+                params=params,
             )
-        try:
-            return summarize_backtest_records(report, tuple(origins), watch)
-        except ValueError:
-            raise CoreRequestError("invalid_response") from None
+        )
+        if presentation.summary.backtest_id != arguments.backtest_id:
+            raise CoreRequestError("invalid_response")
+        return presentation.summary if name == "summarize_backtest" else presentation
     if name in _READS:
         resource, identifier = _READS[name]
         path = f"/v1/{resource}"
