@@ -69,6 +69,37 @@ def test_320_row_csv_summary_paging_and_stored_snapshot_forecast(tmp_path):
             assert len(forecast["point"][0]) == 1
             assert forecast["point"][0][0] == values[-1]
 
+            long_job = await call(
+                client,
+                "submit_configured_forecast",
+                key="large-presentation",
+                source_id="large",
+                snapshot_id=snapshot_id,
+                selection={"provider": "seasonal_naive", "horizon": 80},
+            )
+            completed = await poll_job(client, long_job["job_id"])
+            run_id = completed["result"]["run_id"]
+            presentation = await call(
+                client, "get_forecast_presentation", run_id=run_id
+            )
+            assert presentation == workspace.get(f"/v1/runs/{run_id}/presentation")
+            assert presentation["primary_node_id"] == "model"
+            assert (
+                presentation["truncated"] and presentation["total_point_count"] == 160
+            )
+            assert len(presentation["points"]) == 64
+            primary = {
+                (p["series_id"], p["timestamp"], p["unit"])
+                for p in presentation["points"]
+                if p["node_id"] == "model"
+            }
+            baseline = {
+                (p["series_id"], p["timestamp"], p["unit"])
+                for p in presentation["points"]
+                if p["node_id"] == "baseline"
+            }
+            assert len(primary) == 32 and primary == baseline
+
     with LocalWorkspace(
         tmp_path, source_root=Path(__file__).resolve().parents[2]
     ) as workspace:

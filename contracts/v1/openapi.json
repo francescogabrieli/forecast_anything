@@ -1150,6 +1150,18 @@
             "title": "Points",
             "type": "array"
           },
+          "primary_node_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Node Id"
+          },
           "providers": {
             "items": {
               "$ref": "#/components/schemas/ForecastProviderUse"

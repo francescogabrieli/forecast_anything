@@ -5363,6 +5363,19 @@ export const forecastPresentationSchema = {
       "title": "Points",
       "type": "array"
     },
+    "primary_node_id": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Primary Node Id"
+    },
     "providers": {
       "items": {
         "$ref": "#/$defs/ForecastProviderUse"
@@ -5454,6 +5467,7 @@ export namespace ForecastPresentationGenerated {
    * @maxItems 64
    */
   export type Points = ForecastPresentationPoint[];
+  export type PrimaryNodeId = string | null;
   /**
    * @maxItems 16
    */
@@ -5678,6 +5692,7 @@ export namespace ForecastPresentationGenerated {
     graph_id: GraphId;
     graph_version: GraphVersion;
     points: Points;
+    primary_node_id?: PrimaryNodeId;
     providers: Providers;
     providers_truncated: ProvidersTruncated;
     run_id: RunId;

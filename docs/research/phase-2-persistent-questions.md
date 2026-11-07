@@ -69,3 +69,19 @@ The Phase 2 test files are `tests/integration/test_questions_api.py`, `tests/int
 An operation resumes through the same source grants as the corresponding existing MCP submission. In particular, backtest resume rechecks the current source grant even when an operation already has a queued job. The attempted relaxation to let an already queued backtest resume without a current grant was rejected by automatic approval review because it would weaken source authorization; this phase keeps the stricter grant-preserving behavior. If a grant is revoked, restore the operator-approved source grant before calling `resume_operation`.
 
 The work is the phase 2 implementation candidate for review. No phase 3 work, Desktop-specific manual acceptance, live model call, or external service deployment is included.
+
+## Review correction: primary forecast and source grant
+
+The shared forecast presentation now exposes `primary_node_id` and prioritizes pairs of primary and baseline points with the same series, timestamp and unit. It returns at most 64 points and retains the total and truncation indicators. For older configured runs without an explicit primary ID, a `model` result is treated as primary. If no aligned baseline exists, the primary forecast receives priority.
+
+The synthetic 320-row MCP journey also requests an 80-step forecast from each node. It verifies 32 aligned pairs, the 64-point cap, truncation, the serialized MCP limit, and identical API and MCP presentations. A separate real MCP stdio journey queues a backtest with its worker stopped, reconnects without the source grant, reads the operation and job, and receives `source_forbidden` on resume. After restoring the grant, three concurrent resumes return the original pending job ID and the operation list contains one linked operation. These checks use public API and MCP calls without inspecting SQLite.
+
+After this correction the full Python suite passed with 929 tests and 2 skips; the four focused tests passed. Ruff lint and formatting, generated contract checks, and console and agent TypeScript checks also passed.
+
+```sh
+PYTHONPATH=src:tests/integration uv run --locked --extra dev --extra mcp pytest -q \
+  tests/unit/test_forecast_presentation.py \
+  tests/integration/test_operation_grant_stdio.py \
+  tests/integration/test_snapshot_summary_stdio.py \
+  tests/integration/test_questions_stdio.py
+```

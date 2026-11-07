@@ -2345,6 +2345,7 @@ export namespace ForecastPresentationGenerated {
    * @maxItems 64
    */
   export type Points = ForecastPresentationPoint[];
+  export type PrimaryNodeId = string | null;
   /**
    * @maxItems 16
    */
@@ -2569,6 +2570,7 @@ export namespace ForecastPresentationGenerated {
     graph_id: GraphId;
     graph_version: GraphVersion;
     points: Points;
+    primary_node_id?: PrimaryNodeId;
     providers: Providers;
     providers_truncated: ProvidersTruncated;
     run_id: RunId;

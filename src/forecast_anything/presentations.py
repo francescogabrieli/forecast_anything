@@ -45,6 +45,7 @@ class ForecastPresentation(Contract):
     schema_version: Literal["forecast-presentation-v1"] = "forecast-presentation-v1"
     visual_destination: Literal["time_series"] = "time_series"
     run_id: Identifier
+    primary_node_id: Identifier | None = None
     graph_id: Identifier
     graph_version: Annotated[int, Field(ge=1, strict=True)]
     as_of: AwareDatetime
@@ -226,20 +227,20 @@ def snapshot_series_page(
 
 def present_run(run: RunRecord) -> ForecastPresentation:
     points = []
-    providers = []
+    providers = [
+        ForecastProviderUse(
+            node_id=node_id,
+            requested_provider=run.requested_provider.get(node_id),
+            actual_provider=run.actual_provider.get(node_id),
+        )
+        for node_id in sorted(run.results)[:16]
+    ]
     total_point_count = sum(
         len(result.series_ids) * len(result.timestamps)
         for result in run.results.values()
     )
-    for node_id, result in sorted(run.results.items()):
-        if len(providers) < 16:
-            providers.append(
-                ForecastProviderUse(
-                    node_id=node_id,
-                    requested_provider=run.requested_provider.get(node_id),
-                    actual_provider=run.actual_provider.get(node_id),
-                )
-            )
+
+    def make_point(node_id, result, series_index, time_index):
         representation = (
             "joint_paths"
             if result.paths is not None
@@ -252,30 +253,62 @@ def present_run(run: RunRecord) -> ForecastPresentation:
             key for key in all_quantile_keys if len(key.encode("utf-8")) <= 32
         )[:3]
         quantiles_truncated = len(quantile_keys) < len(all_quantile_keys)
-        for series_index, series_id in enumerate(result.series_ids):
-            for time_index, timestamp in enumerate(result.timestamps):
-                if len(points) == 64:
-                    break
-                points.append(
-                    ForecastPresentationPoint(
-                        node_id=node_id,
-                        series_id=series_id,
-                        timestamp=timestamp,
-                        unit=result.units[series_index],
-                        representation=representation,
-                        point=(
-                            result.point[series_index][time_index]
-                            if result.point is not None
-                            else None
-                        ),
-                        quantiles={
-                            key: result.quantiles[key][series_index][time_index]
-                            for key in quantile_keys
-                        },
-                        quantiles_truncated=quantiles_truncated,
-                        sample_count=len(result.paths or ()),
-                    )
-                )
+        return ForecastPresentationPoint(
+            node_id=node_id,
+            series_id=result.series_ids[series_index],
+            timestamp=result.timestamps[time_index],
+            unit=result.units[series_index],
+            representation=representation,
+            point=(
+                result.point[series_index][time_index]
+                if result.point is not None
+                else None
+            ),
+            quantiles={
+                key: result.quantiles[key][series_index][time_index]
+                for key in quantile_keys
+            },
+            quantiles_truncated=quantiles_truncated,
+            sample_count=len(result.paths or ()),
+        )
+
+    def node_points(node_id, result):
+        for series_index in range(len(result.series_ids)):
+            for time_index in range(len(result.timestamps)):
+                yield make_point(node_id, result, series_index, time_index)
+
+    selected = set()
+    primary_id = run.primary_node_id or ("model" if "model" in run.results else None)
+    baseline = run.results.get("baseline") if primary_id != "baseline" else None
+    if primary_id in run.results and baseline is not None:
+        baseline_series = {
+            (s, baseline.units[i]): i for i, s in enumerate(baseline.series_ids)
+        }
+        baseline_times = {
+            timestamp: i for i, timestamp in enumerate(baseline.timestamps)
+        }
+        for point in node_points(primary_id, run.results[primary_id]):
+            key = (point.series_id, point.timestamp, point.unit)
+            series_index = baseline_series.get((point.series_id, point.unit))
+            time_index = baseline_times.get(point.timestamp)
+            if (
+                series_index is not None
+                and time_index is not None
+                and len(points) <= 62
+            ):
+                comparison = make_point("baseline", baseline, series_index, time_index)
+                points.extend((point, comparison))
+                selected.update(((primary_id, *key), ("baseline", *key)))
+            if len(points) >= 63:
+                break
+    order = sorted(
+        run.results, key=lambda node: (node != primary_id, node != "baseline", node)
+    )
+    for node_id in order:
+        for point in node_points(node_id, run.results[node_id]):
+            key = (node_id, point.series_id, point.timestamp, point.unit)
+            if key not in selected and len(points) < 64:
+                points.append(point)
             if len(points) == 64:
                 break
         if len(points) == 64:
@@ -284,6 +317,7 @@ def present_run(run: RunRecord) -> ForecastPresentation:
     all_provider_nodes = sorted(run.actual_provider)
     return ForecastPresentation(
         run_id=run.run_id,
+        primary_node_id=primary_id,
         graph_id=run.graph_id,
         graph_version=run.graph_version,
         as_of=run.as_of,
