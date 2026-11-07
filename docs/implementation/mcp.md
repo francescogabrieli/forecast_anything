@@ -1,8 +1,8 @@
 # Local MCP adapter
 
-The optional stdio adapter exposes the existing authenticated API to an MCP client. It registers mapped CSV sources, submits existing executable candidates or explicit configured forecasts, submits bounded historical backtests, manages recurring-question watches, reads immutable results and submits single-run evaluations. The API owns graphs, snapshots, jobs, computation, watch scheduling and evidence; MCP creates no second ledger.
+The stdio adapter (installed with the optional MCP extra) exposes the existing authenticated API to an MCP client. It registers mapped CSV sources, submits existing executable candidates or explicit configured forecasts, submits bounded historical backtests, manages recurring-question watches, reads immutable results and submits single-run evaluations. The API owns graphs, snapshots, jobs, computation, watch scheduling and evidence; MCP creates no second ledger.
 
-The reference client is the official Python `mcp==2.3.0` SDK, locked in `uv.lock`. Real subprocess tests exercise stdio, loopback HTTP and an independent worker, including an installed wheel outside the checkout. A separate configured-forecast smoke used Codex CLI as an MCP client; the Codex Desktop UI has not been directly verified. These tests use synthetic observations and the real seasonal baseline; they make no language-model or forecast-quality claim.
+The reference client is the official Python `mcp==2.3.0` SDK, locked in `uv.lock`. Real subprocess tests exercise stdio, loopback HTTP and an independent worker, including an installed wheel outside the checkout. A separate configured-forecast smoke used Codex CLI as an MCP client; Desktop MCP reads/reconnect were owner-confirmed. Historical library fixtures use a seasonal baseline; the current product requires Timestral and has a separate genuine-model acceptance record. Neither synthetic fixture establishes general predictive quality.
 
 ## Install and operate
 
@@ -12,6 +12,7 @@ The following uses one configuration file for the API, worker and MCP adapter. I
 
 ```sh
 uv sync --locked --extra dev --extra mcp
+uv run --locked --extra mcp forecast-anything model prepare
 mkdir -p .local/mcp/sources
 uv run --locked --extra mcp forecast-anything init --workspace .local/mcp --csv-root .local/mcp/sources
 uv run --locked --extra mcp forecast-anything up --config .local/mcp/config.json
@@ -36,6 +37,7 @@ From the checkout with Python 3.12+ and uv:
 
 ```sh
 uv sync --locked --extra dev --extra mcp
+uv run --locked --extra mcp forecast-anything model prepare
 mkdir -p .local/mcp/sources
 export FORECAST_ANYTHING_WORKSPACE_TOKEN="$(uv run --locked --extra mcp python -c 'import secrets; print(secrets.token_urlsafe(32))')"
 export FORECAST_ANYTHING_MCP_API_URL=http://127.0.0.1:8000
@@ -134,7 +136,7 @@ Profiling is a mutating operation (`readOnlyHint=false`): the existing core GET 
 ```json
 {
   "source_id": "sales",
-  "selection": {"provider": "seasonal_naive", "horizon": 2, "options": {"period": 2}, "baseline_period": 1},
+  "selection": {"provider": "timestral", "horizon": 2, "options": {}, "baseline_period": 1},
   "settings": {"max_origins_per_partition": 10, "origin_offset_seconds": 0},
   "key": "sales/backtest-v1"
 }
@@ -155,18 +157,23 @@ Use an existing candidate to create a watch only after inspecting its question, 
 To request qualification, submit the candidate's exact selection with `watch_id` and at least 30 origins per partition. The source revision and graph selection must still match. The core reserves the final target windows, computes the decision after the backtest completes, and records it with the watch transition. Call `summarize_backtest` with the completed `backtest_id` and `watch_id`; it reports whether the current decision is linked to that exact report and includes the action and reason codes only when it is. Only 30 or more evaluated, non-overlapping final origins with lower mean MAE than the declared baseline can make an eligible watch operational. Generic backtests, a forecast, or a mismatched report never change watch state. A final window already used by a generic backtest cannot be reused for watch qualification; the watch needs fresh holdout data.
 
 ```python
-watch = await call(client, "create_watch", candidate_id=candidate_id,
-                   next_due_at="2026-11-05T00:00:00Z")
+watch = await call(
+    client,
+    "create_watch",
+    candidate_id=candidate_id,
+    next_due_at="2026-11-05T00:00:00Z",
+)
 state = await call(client, "get_watch", watch_id=watch["watch_id"])
-history = await call(client, "get_watch_history", watch_id=watch["watch_id"],
-                     offset=0, limit=25)
+history = await call(
+    client, "get_watch_history", watch_id=watch["watch_id"], offset=0, limit=25
+)
 ```
 
 Use `update_watch` to mute or change priority, and `list_watches` to page through current states. The worker checks due watches and refreshes their registered sources independently of an MCP connection. Inspect `get_watch_history` for recorded lifecycle transitions; use its returned `next_offset` to continue. If a history page returns `result_too_large`, retry the same offset with a smaller limit (down to 1); state snapshots can be large even on short histories. `summarize_watch_change` compares two completed runs for a selected watch and returns common-target changes, added/removed targets and new snapshot/evidence IDs. The runs must be comparable and use the watch's graph; otherwise the core returns a safe domain error. The explanation concerns observed changes and does not assign causality. Generic backtest reports do not qualify or activate watches.
 
 ## Complete SDK example
 
-Start the API and worker above. Save this as a local script and run it with `uv run --locked --extra mcp python /path/to/script.py` from the repository root. It writes three synthetic daily observations, registers their explicit mapping, waits for discovery, binds the returned snapshot and submits the existing one-step baseline candidate. The target is tomorrow's UTC midnight, relative to the date the example creates its inputs. The example has no historical replay clock or invented publication dates: the synthetic fixture declares each row available at that day's midnight.
+Start the API and worker above. Save this as a local script and run it with `uv run --locked --extra mcp python /path/to/script.py` from the repository root. It writes three synthetic daily observations, registers their explicit mapping, waits for discovery, binds the returned snapshot and submits the existing one-step Timestral candidate. The target is tomorrow's UTC midnight, relative to the date the example creates its inputs. The example has no historical replay clock or invented publication dates: the synthetic fixture declares each row available at that day's midnight.
 
 ```python
 import asyncio
@@ -183,18 +190,27 @@ root = Path.cwd()
 source = root / ".local/mcp/sources/sales.csv"
 source.parent.mkdir(parents=True, exist_ok=True)
 today = datetime.now(timezone.utc).date()
-source.write_text("time,value,published\n" + "".join(
-    f"{today - timedelta(days=2-i)},{i+1},{today - timedelta(days=2-i)}\n"
-    for i in range(3)
-))
+source.write_text(
+    "time,value,published\n"
+    + "".join(
+        f"{today - timedelta(days=2 - i)},{i + 1},{today - timedelta(days=2 - i)}\n"
+        for i in range(3)
+    )
+)
 parameters = StdioServerParameters(
     command=str(root / ".venv/bin/forecast-anything"),
     args=["mcp"],
-    env={key: os.environ[key] for key in (
-        "FORECAST_ANYTHING_WORKSPACE_TOKEN", "FORECAST_ANYTHING_MCP_API_URL",
-        "FORECAST_ANYTHING_MCP_CSV_ROOTS", "FORECAST_ANYTHING_MCP_SOURCE_IDS",
-    )},
+    env={
+        key: os.environ[key]
+        for key in (
+            "FORECAST_ANYTHING_WORKSPACE_TOKEN",
+            "FORECAST_ANYTHING_MCP_API_URL",
+            "FORECAST_ANYTHING_MCP_CSV_ROOTS",
+            "FORECAST_ANYTHING_MCP_SOURCE_IDS",
+        )
+    },
 )
+
 
 async def call(client, tool, **arguments):
     result = await client.call_tool(tool, arguments)
@@ -202,6 +218,7 @@ async def call(client, tool, **arguments):
     if result.is_error or not body["ok"]:
         raise RuntimeError(body["code"])
     return body["data"]
+
 
 async def wait(client, job_id):
     deadline = time.monotonic() + 30
@@ -214,23 +231,39 @@ async def wait(client, job_id):
         await asyncio.sleep(0.1)
     raise TimeoutError("job remains pending; keep its ID and check the worker")
 
+
 async def main():
     async with Client(parameters, mode="legacy", read_timeout_seconds=20) as client:
         print([tool.name for tool in (await client.list_tools()).tools])
-        registration = await call(client, "register_csv_source", spec={
-            "source_id": "sales", "kind": "csv", "location": str(source),
-            "refresh_seconds": 86400,
-            "mapping": {
-                "event_time": "time", "value": "value", "available_at": "published",
-                "revision": {"constant": "1"}, "series_id": {"constant": "sales"},
-                "unit": {"constant": "count"}, "frequency": {"constant": "1d"},
-                "timezone": {"constant": "UTC"}, "calendar": {"constant": "gregorian"},
-                "missing_values": {"constant": [""]},
+        registration = await call(
+            client,
+            "register_csv_source",
+            spec={
+                "source_id": "sales",
+                "kind": "csv",
+                "location": str(source),
+                "refresh_seconds": 86400,
+                "mapping": {
+                    "event_time": "time",
+                    "value": "value",
+                    "available_at": "published",
+                    "revision": {"constant": "1"},
+                    "series_id": {"constant": "sales"},
+                    "unit": {"constant": "count"},
+                    "frequency": {"constant": "1d"},
+                    "timezone": {"constant": "UTC"},
+                    "calendar": {"constant": "gregorian"},
+                    "missing_values": {"constant": [""]},
+                },
             },
-        })
+        )
         discovery = await wait(client, registration["job_id"])
-        candidate = await call(client, "get_candidate", candidate_id=discovery["candidate_ids"][0])
-        snapshot = await call(client, "get_snapshot", snapshot_id=discovery["source_snapshot_ids"][0])
+        candidate = await call(
+            client, "get_candidate", candidate_id=discovery["candidate_ids"][0]
+        )
+        snapshot = await call(
+            client, "get_snapshot", snapshot_id=discovery["source_snapshot_ids"][0]
+        )
         request = {
             "candidate_id": candidate["candidate_id"],
             "snapshot_ids": {"sales": snapshot["snapshot_id"]},
@@ -247,8 +280,11 @@ async def main():
         assert replay["job_id"] == accepted["job_id"]
         completed = await wait(client, replay["job_id"])
         run = await call(client, "get_run", run_id=completed["run_id"])
-        graph = await call(client, "get_graph", graph_id=run["graph_id"], version=run["graph_version"])
+        graph = await call(
+            client, "get_graph", graph_id=run["graph_id"], version=run["graph_version"]
+        )
         print(json.dumps({"run": run, "graph": graph}, indent=2))
+
 
 asyncio.run(main())
 ```
@@ -280,3 +316,11 @@ SDK-dependent test modules skip explicitly without the optional extra; the ordin
 The owner-observed Desktop chat successfully read sources/watches, compared a backtest summary with its persisted report/origins, displayed a textual MAE chart and reread the immutable result. The two isolated real-process acceptance tests additionally cover candidate-bound qualification, 30 final points, persistent CLI grants/revocation, reconnect/restart, automatic source refresh and successor-watch evidence invalidation. Full Desktop quit/reopen was confirmed by the owner; a subsequent live assistant journey completed source correction, watch qualification, automatic refresh and a nonzero recorded forecast-change summary. Native graphical rendering is not established. See [acceptance record](../research/desktop-assistant-acceptance.md).
 
 When explaining a known synthetic example, explicitly label it synthetic. Present MAE as error on recorded matched cells, preserve exclusions and unavailable reasons, and do not infer future accuracy or qualify a watch from a generic report. Chart data are per-origin errors rather than forecast values; identify textual charts as such.
+
+## Required Timestral product policy
+
+The installed CLI API/worker require the pinned local Timestral model, not a remote Mistral API key. Inspect `get_capabilities.required_provider` and `model_status` separately from heartbeat health. Missing artifacts require `forecast-anything model prepare`; inference never substitutes seasonal-naive. Configured forecasts and backtests must select `timestral` with supported options. Candidate graphs generated by the product already select it.
+
+Raw graph submissions may supply `primary_node_id`; the product resolves conventional unambiguous outputs otherwise. The primary output must depend on Timestral and may not incorporate a seasonal baseline as a primary input. An unrelated Timestral node is insufficient. The primary is persisted on new runs and inherited by scenarios. Old baseline-only accepted keys/results remain readable, but pending numerical jobs fail terminally with a migration reason; legacy watches pause rather than generate baseline forecasts.
+
+[Real model acceptance](../research/required-timestral-acceptance.md) uses the pinned CPU model through actual CLI/API/worker/MCP processes, a bound backtest and autonomous source refresh. The older measured baseline/disconnect journeys above remain labeled library fixtures, not acceptance of the required Timestral product engine. Restart the assistant's MCP server after upgrading contracts.

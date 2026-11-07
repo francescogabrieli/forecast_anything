@@ -334,6 +334,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "numpy" },
     { name = "pydantic" },
+    { name = "timestral" },
     { name = "uvicorn" },
 ]
 
@@ -361,6 +362,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2,<3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<10" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.17,<0.18" },
+    { name = "timestral", git = "https://github.com/mistralai/timestral.git?rev=a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff" },
     { name = "timestral", marker = "extra == 'timestral'", git = "https://github.com/mistralai/timestral.git?rev=a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff" },
     { name = "uvicorn", specifier = ">=0.30,<1" },
 ]

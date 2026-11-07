@@ -1,16 +1,18 @@
-# Optional Timestral provider
+# Required local Timestral provider
 
-The library adapter is implemented and **real CPU fp32 parity passed** against the pinned official implementation. The project owner authorized one local personal evaluation of the weights for this open-source project; that authorization applies to this evaluation only and does not resolve the license for other users or deployments. The stock CLI uses the seasonal-naive provider; Timestral remains opt-in.
+The library adapter is implemented and **real CPU fp32 parity passed** against the pinned official implementation. The project owner authorized one local personal evaluation of the weights for this open-source project; that authorization applies to this evaluation only and does not resolve the license for other users or deployments. The product CLI/API/worker now require pinned Timestral for primary forecasts. Seasonal-naive remains the independent reference. No remote inference API key is required.
 
-## Install the optional dependency
+## Install and prepare the model
 
 From the repository root:
 
 ```sh
-uv sync --locked --extra timestral --extra dev
+uv sync --locked --extra dev --extra mcp
+uv run --locked --extra mcp forecast-anything model status
+uv run --locked --extra mcp forecast-anything model prepare
 ```
 
-This installs the pinned Timestral source package and its Python dependencies, including PyTorch. It does **not** download model weights. Weights are not included in this repository. With `FORECAST_ANYTHING_TIMESTRAL_WEIGHTS_APPROVED=1`, an explicitly invoked forecast can download the pinned weights to the Hugging Face cache on its first model load. Importing the provider or reading its capabilities does not load Timestral or PyTorch; the core remains usable without this extra.
+The normal package includes the pinned model code and PyTorch dependencies. Weights remain separate and are never bundled in the wheel. `model prepare` explicitly fetches missing pinned artifacts into the Hugging Face cache and verifies CPU loading. Inference requires that prepared local cache and uses `local_files_only=True`; it never silently downloads weights or falls back to the seasonal reference. Metadata/cache checks do not import Torch or model code. The legacy `timestral` installation extra remains a compatibility alias, not an opt-in product mode.
 
 ## Pins and licenses
 
@@ -25,7 +27,9 @@ The code and weights have separate licenses. The [pinned weights license](https:
 
 The adapter checks the installed source commit before model loading and retains checkpoint, weights revision, and code revision in its results. It exposes point forecasts and marginal quantiles; it does not supply joint paths.
 
-The optional deployment requires `FORECAST_ANYTHING_TIMESTRAL_ENABLED=1`, `FORECAST_ANYTHING_TIMESTRAL_CHECKPOINT`, `FORECAST_ANYTHING_TIMESTRAL_REVISION` and `FORECAST_ANYTHING_TIMESTRAL_CODE_REVISION`. Registration reads capabilities but does not import PyTorch or download weights. The `compose.timestral.yaml` overlay uses pinned values from `integrations/models.lock.json` and installs the optional library code; the first run whose graph explicitly selects Timestral attempts the weight download.
+Pinned configuration is packaged with the code. Legacy environment aliases are accepted only when equal to the exact packaged pins; disabling Timestral or pointing at another revision is rejected. Compose core and worker share the same model cache. Before starting the forecasting workflow, run `docker compose ... run --rm core model prepare` after building the images. The old Timestral overlay is a compatible alias; the default product images already include the model dependency.
+
+`model status` reports `cached` separately from `loaded`: cache presence alone does not prove inference succeeds. The public health/worker heartbeat reports process liveness; authenticated capabilities include model status inspected in the API process. A worker's loaded instance is distinct from the API's metadata-only instance.
 
 ## Real parity and benchmark evidence
 
@@ -36,3 +40,7 @@ uv run --locked --extra timestral --extra dev pytest tests/model/test_timestral_
 ```
 
 The owner-approved local run passed against the pinned official API on macOS arm64, Python 3.14, CPU fp32. It verified source and model revisions before weight download, compared medians and every marginal quantile at absolute and relative tolerances of `1e-5`, and recorded cold/warm latency and peak process memory. The measured cross-domain benchmark is archived in [`timestral-benchmark/report.json`](../research/timestral-benchmark/report.json), with its [environment](../research/timestral-benchmark/environment.json) and [assumptions](../research/timestral-benchmark/assumptions.json): Timestral relative MAE was 0.896 on activity, 0.793 on energy, and 1.043 on retail, over the same 130, 230, and 37 final origins respectively. Values below 1 favor Timestral; these results describe this pinned evaluation and do not establish general superiority.
+
+## Required-product acceptance
+
+[Current acceptance](../research/required-timestral-acceptance.md) records a genuine candidate-bound model backtest, foreground product services, real MCP reconnect, automatic source refresh and stored change explanation. An insufficient/losing backtest remains provisional/rejected even though Timestral is required; model selection never certifies forecast quality. Legacy `timestral_acceptance_pending` logic applies to the old evaluation-attestation path; the supported candidate-bound backtest uses its own preserved final-evidence safeguards.

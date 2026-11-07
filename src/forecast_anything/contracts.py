@@ -239,6 +239,9 @@ NodeValue = Snapshot | ForecastResult
 
 
 class RunRecord(Contract):
+    primary_node_id: Identifier | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     run_id: Identifier
     graph_id: Identifier
     graph_version: int
@@ -377,6 +380,9 @@ class Watch(Contract):
     A minimal watch can be displayed without lineage, but cannot be qualified.
     """
 
+    migration_reason: Identifier | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
 
     watch_id: Identifier
@@ -571,6 +577,9 @@ class WatchHistoryPage(Contract):
 
 
 class RunJobRequest(Contract):
+    primary_node_id: Identifier | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     kind: Literal["run"]
     key: Identifier
     graph: GraphSpec
@@ -637,6 +646,9 @@ class ScenarioRequest(Contract):
 
 
 class ScenarioRecord(Contract):
+    primary_node_id: Identifier | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     scenario_id: Identifier
     graph_id: Identifier
     version: int
@@ -650,6 +662,12 @@ class ScenarioView(ScenarioRecord):
 
 
 class CapabilitiesView(Contract):
+    required_provider: Identifier | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    model_status: dict[str, JsonValue] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     providers: dict[str, Capabilities]
     operators: dict[str, OperatorContract]
     templates: tuple[str, ...]

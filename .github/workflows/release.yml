@@ -20,8 +20,8 @@ jobs:
         run: uv sync --locked --extra dev
       - name: Build wheel and source distribution
         run: uv build
-      - name: Install wheel in a fresh environment and run the packaged example
-        run: uv run --locked python scripts/check_release.py --dist dist | tee release-check.json
+      - name: Verify installed artifact without model weights
+        run: uv run --locked python scripts/check_release.py --dist dist --artifact-only | tee release-check.json
       - name: Upload candidate artifacts for review
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

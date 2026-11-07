@@ -158,13 +158,30 @@ describe("FirstForecast", () => {
     expect(api.submitRun).not.toHaveBeenCalled();
   });
 
-  it("does not label a different model as the baseline", async () => {
+  it("issues Timestral without substituting the seasonal reference", async () => {
+    // Model double: checks UI provenance, not real numerical acceptance.
     const api = client();
     api.getCandidate.mockResolvedValue({ ...candidate, graph: { ...candidate.graph, nodes: candidate.graph.nodes.map((node) =>
       node.node_id === "forecast" ? { ...node, config: { ...node.config, provider: "timestral" } } : node) } });
-    render(<FirstForecast client={api} registration={registration} onRunReady={vi.fn()} />);
-    expect(await screen.findByText(/non è disponibile una previsione/i)).toBeVisible();
-    expect(api.submitRun).not.toHaveBeenCalled();
+    const run = oneStepRun();
+    run.results.forecast.provider_id = "timestral";
+    api.getRun.mockResolvedValue(run);
+    const onRunReady = vi.fn();
+    render(<FirstForecast client={api} registration={registration} onRunReady={onRunReady} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Calcola la prima previsione" }));
+    await waitFor(() => expect(onRunReady).toHaveBeenCalledWith("run-1"));
+    expect(screen.getByText(/Modello: timestral/)).toBeVisible();
+  });
+
+  it("rejects a baseline result substituted for the Timestral candidate", async () => {
+    const api = client();
+    api.getCandidate.mockResolvedValue({ ...candidate, graph: { ...candidate.graph, nodes: candidate.graph.nodes.map((node) =>
+      node.node_id === "forecast" ? { ...node, config: { ...node.config, provider: "timestral" } } : node) } });
+    const onRunReady = vi.fn();
+    render(<FirstForecast client={api} registration={registration} onRunReady={onRunReady} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Calcola la prima previsione" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/non ha prodotto una previsione futura verificabile/);
+    expect(onRunReady).not.toHaveBeenCalled();
   });
 
   it("does not present a historical target as a future forecast", async () => {

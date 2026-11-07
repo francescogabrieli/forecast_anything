@@ -423,6 +423,7 @@ export namespace RunRecordGenerated {
   export type GraphId = string;
   export type GraphVersion = number;
   export type ParentRunId = string | null;
+  export type PrimaryNodeId = string | null;
   export type Assumptions = string[];
   export type Paths = number[][][] | null;
   export type Point = number[][] | null;
@@ -447,6 +448,7 @@ export namespace RunRecordGenerated {
     graph_id: GraphId;
     graph_version: GraphVersion;
     parent_run_id: ParentRunId;
+    primary_node_id?: PrimaryNodeId;
     requested_provider: RequestedProvider;
     results: Results;
     run_id: RunId;
@@ -642,6 +644,7 @@ export namespace WatchGenerated {
   export type GraphVersion = number;
   export type InvalidatedEvaluationIds = string[];
   export type Lifecycle = "candidate" | "evaluating" | "active" | "paused" | "unsupported";
+  export type MigrationReason = string | null;
   export type Muted = boolean;
   export type NextDueAt = string;
   export type PolicyVersion1 = string;
@@ -668,6 +671,7 @@ export namespace WatchGenerated {
     graph_version: GraphVersion;
     invalidated_evaluation_ids?: InvalidatedEvaluationIds;
     lifecycle: Lifecycle;
+    migration_reason?: MigrationReason;
     muted: Muted;
     next_due_at: NextDueAt;
     policy_version: PolicyVersion1;
@@ -814,6 +818,7 @@ export namespace WatchViewGenerated {
   export type GraphVersion = number;
   export type InvalidatedEvaluationIds = string[];
   export type Lifecycle = "candidate" | "evaluating" | "active" | "paused" | "unsupported";
+  export type MigrationReason = string | null;
   export type Muted = boolean;
   export type NextDueAt = string;
   export type Operational = boolean;
@@ -835,6 +840,7 @@ export namespace WatchViewGenerated {
     graph_version: GraphVersion;
     invalidated_evaluation_ids?: InvalidatedEvaluationIds;
     lifecycle: Lifecycle;
+    migration_reason?: MigrationReason;
     muted: Muted;
     next_due_at: NextDueAt;
     operational: Operational;
@@ -1119,6 +1125,7 @@ export namespace ScenarioViewGenerated {
   export type JobId = string;
   export type Label = string;
   export type ParentRunId = string;
+  export type PrimaryNodeId = string | null;
   export type ScenarioId = string;
   export type Version = number;
 
@@ -1127,6 +1134,7 @@ export namespace ScenarioViewGenerated {
     job_id: JobId;
     label: Label;
     parent_run_id: ParentRunId;
+    primary_node_id?: PrimaryNodeId;
     scenario_id: ScenarioId;
     snapshot_ids: SnapshotIds;
     version: Version;

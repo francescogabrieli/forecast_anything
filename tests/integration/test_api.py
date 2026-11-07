@@ -1,6 +1,7 @@
 """HTTP trust boundaries, replay and hypothetical lineage."""
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -534,7 +535,13 @@ def test_serve_and_worker_recover_killed_job_via_http(tmp_path):
 
     def launch(*args):
         process = subprocess.Popen(
-            [sys.executable, "-m", "forecast_anything.cli", *args, "--db", str(db)],
+            [
+                sys.executable,
+                str(Path(__file__).resolve().parents[1] / "fixtures/library_cli.py"),
+                *args,
+                "--db",
+                str(db),
+            ],
             env=env,
             stdout=log,
             stderr=log,

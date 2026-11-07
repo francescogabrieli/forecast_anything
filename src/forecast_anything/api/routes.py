@@ -211,7 +211,13 @@ def router(service):
 
     @api.get("/capabilities", response_model=CapabilitiesView)
     def capabilities():
+        from ..forecast_policy import model_readiness
+
         return CapabilitiesView(
+            required_provider=service.runtime.required_provider,
+            model_status=model_readiness(service.runtime)
+            if service.runtime.required_provider
+            else None,
             providers={
                 k: p.capabilities() for k, p in service.runtime.providers.items()
             },

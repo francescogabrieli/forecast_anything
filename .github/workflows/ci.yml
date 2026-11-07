@@ -38,8 +38,8 @@ jobs:
         run: uv run --locked --extra dev --extra mcp pytest -q
       - name: Build wheel and source distribution
         run: uv build
-      - name: Smoke-test the installed wheel outside the checkout
-        run: uv run --locked --extra dev --extra mcp python scripts/check_release.py --dist dist
+      - name: Verify installed artifact outside checkout (model execution separate)
+        run: uv run --locked --extra dev --extra mcp python scripts/check_release.py --dist dist --artifact-only
 
   agent:
     name: Agent package (Node 24)

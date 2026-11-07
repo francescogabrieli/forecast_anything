@@ -78,6 +78,9 @@ def configured_run(ledger, catalog, request: ConfiguredRunJobRequest) -> RunJobR
 
 
 def _provider_contracts(runtime, selection):
+    from ..forecast_policy import validate_selection
+
+    validate_selection(runtime, selection)
     contracts = {}
     for name in {selection.provider, "seasonal_naive"}:
         provider = runtime.providers.get(name)
@@ -140,6 +143,12 @@ def backtest_payload(runtime, catalog, request: BacktestJobRequest) -> dict:
 def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
     """Capture once; existing plans/report recovery never consult source state."""
     store = BacktestStore(runtime.ledger)
+    if runtime.required_provider is not None:
+        selected = job.payload.get("request", {}).get("selection", {}).get("provider")
+        if selected != runtime.required_provider:
+            raise DomainError(
+                "required_forecast_provider", {"provider": runtime.required_provider}
+            )
     try:
         plan = store.get_plan(job.job_id)
     except DomainError as error:

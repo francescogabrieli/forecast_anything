@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import AwareDatetime
+from pydantic import AwareDatetime, Field
 
 from ..backtesting.contracts import BacktestReport, OriginOutcome, PartitionScore
 from ..contracts import Contract, ForecastSelection, Identifier, WatchView
@@ -22,6 +22,9 @@ class FinalOriginPoint(Contract):
 
 
 class WatchBacktestSummary(Contract):
+    migration_reason: Identifier | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     watch_id: Identifier
     lifecycle: Literal["candidate", "evaluating", "active", "paused", "unsupported"]
     quality: Literal["provisional", "usable", "stale", "degraded"]
@@ -102,6 +105,7 @@ def summarize_backtest_records(
         linked = decision is not None and decision.backtest_id == report.backtest_id
         watch_summary = WatchBacktestSummary(
             watch_id=watch.watch_id,
+            migration_reason=watch.migration_reason,
             lifecycle=watch.lifecycle,
             quality=watch.quality,
             evidence_applicable=watch.evidence_applicable,

@@ -1,7 +1,7 @@
 """Real CPU parity gate. A skipped run never satisfies provider acceptance.
 
-Only set FORECAST_ANYTHING_TIMESTRAL_WEIGHTS_APPROVED=1 after the pending
-Modified MIT license applicability question has been resolved by the user.
+Set FORECAST_ANYTHING_TIMESTRAL_WEIGHTS_APPROVED=1 for explicit owner-authorized
+local weight execution; downstream license applicability remains separate.
 """
 
 import json
@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.mark.skipif(
     os.environ.get("FORECAST_ANYTHING_TIMESTRAL_WEIGHTS_APPROVED") != "1",
-    reason="Unresolved Modified MIT weights license applicability; real parity not executed",
+    reason="Real weight execution not enabled; explicit local approval and prepared pinned cache required",
 )
 def test_real_timestral_cpu_fp32_parity(tmp_path):
     # Resolve/verify provenance before from_pretrained can download any weights.

@@ -957,6 +957,7 @@
         "title": "Capabilities",
         "type": "object"
       },
+      "JsonValue": {},
       "OperatorContract": {
         "additionalProperties": false,
         "properties": {
@@ -1032,6 +1033,21 @@
     },
     "additionalProperties": false,
     "properties": {
+      "model_status": {
+        "anyOf": [
+          {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Model Status"
+      },
       "operators": {
         "additionalProperties": {
           "$ref": "#/$defs/OperatorContract"
@@ -1045,6 +1061,19 @@
         },
         "title": "Providers",
         "type": "object"
+      },
+      "required_provider": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Required Provider"
       },
       "templates": {
         "items": {
@@ -2909,6 +2938,19 @@
         "default": null,
         "title": "Previous Run Id"
       },
+      "primary_node_id": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Primary Node Id"
+      },
       "snapshot_ids": {
         "additionalProperties": {
           "minLength": 1,
@@ -3110,6 +3152,19 @@
         ],
         "title": "Parent Run Id"
       },
+      "primary_node_id": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Primary Node Id"
+      },
       "requested_provider": {
         "additionalProperties": {
           "minLength": 1,
@@ -3196,6 +3251,19 @@
         "minLength": 1,
         "title": "Parent Run Id",
         "type": "string"
+      },
+      "primary_node_id": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Primary Node Id"
       },
       "scenario_id": {
         "minLength": 1,
@@ -3379,6 +3447,19 @@
         "minLength": 1,
         "title": "Parent Run Id",
         "type": "string"
+      },
+      "primary_node_id": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Primary Node Id"
       },
       "scenario_id": {
         "minLength": 1,
@@ -4485,6 +4566,19 @@
         "title": "Lifecycle",
         "type": "string"
       },
+      "migration_reason": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Migration Reason"
+      },
       "muted": {
         "title": "Muted",
         "type": "boolean"
@@ -5075,6 +5169,19 @@
             ],
             "title": "Lifecycle",
             "type": "string"
+          },
+          "migration_reason": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Migration Reason"
           },
           "muted": {
             "title": "Muted",
@@ -5746,6 +5853,19 @@
             ],
             "title": "Lifecycle",
             "type": "string"
+          },
+          "migration_reason": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Migration Reason"
           },
           "muted": {
             "title": "Muted",
@@ -6427,6 +6547,19 @@
         ],
         "title": "Lifecycle",
         "type": "string"
+      },
+      "migration_reason": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Migration Reason"
       },
       "muted": {
         "title": "Muted",

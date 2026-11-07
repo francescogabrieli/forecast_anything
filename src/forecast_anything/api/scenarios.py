@@ -54,11 +54,12 @@ def create_scenario(runtime: Runtime, request: ScenarioRequest) -> ScenarioView:
     # Validate before persistence/enqueue; no inference runs inside this boundary.
     from .service import validate_run
 
-    validate_run(runtime, graph, snapshots, parent.as_of)
+    validate_run(runtime, graph, snapshots, parent.as_of, parent.primary_node_id)
     ledger.put_graph(graph)
     for snap in snapshots.values():
         ledger.put_snapshot(snap)
     record = ScenarioRecord(
+        primary_node_id=parent.primary_node_id,
         scenario_id=scenario_id,
         graph_id=graph.graph_id,
         version=1,
@@ -78,6 +79,11 @@ def create_scenario(runtime: Runtime, request: ScenarioRequest) -> ScenarioView:
             "as_of": parent.as_of.isoformat(),
             "previous_run_id": parent.run_id,
             "scenario_id": scenario_id,
+            **(
+                {"primary_node_id": parent.primary_node_id}
+                if parent.primary_node_id is not None
+                else {}
+            ),
         },
     )
     return ScenarioView(**record.model_dump(), job_id=job.job_id)

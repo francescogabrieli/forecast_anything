@@ -15,10 +15,12 @@ COPY README.md LICENSE NOTICE ./
 COPY src ./src
 COPY examples ./examples
 COPY contracts/v1 ./contracts/v1
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 RUN uv sync --frozen --no-dev --no-editable
 RUN mkdir /data
 
-# The default API and worker contain no optional model runtime or weights.
+# Default API and worker include pinned model code; prepare weights explicitly in a mounted cache.
 FROM python-base AS api
 EXPOSE 8000
 ENTRYPOINT ["forecast-anything"]
@@ -27,18 +29,9 @@ CMD ["serve", "--db", "/data/state.db", "--host", "0.0.0.0", "--port", "8000"]
 FROM api AS worker
 CMD ["worker", "--db", "/data/state.db"]
 
-# Install the pinned optional code only. Weights load lazily into the mounted cache.
-FROM python-base AS api-timestral
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-RUN uv sync --frozen --no-dev --no-editable --extra timestral
-ENV FORECAST_ANYTHING_TIMESTRAL_ENABLED=1
-EXPOSE 8000
-ENTRYPOINT ["forecast-anything"]
-CMD ["serve", "--db", "/data/state.db", "--host", "0.0.0.0", "--port", "8000"]
-
-FROM api-timestral AS worker-timestral
-CMD ["worker", "--db", "/data/state.db"]
+# Compatibility aliases for existing Compose commands.
+FROM api AS api-timestral
+FROM worker AS worker-timestral
 
 FROM node:24-bookworm-slim AS console-build
 WORKDIR /app
