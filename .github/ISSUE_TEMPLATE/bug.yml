@@ -18,10 +18,10 @@ body:
     attributes:
       label: Execution path
       options:
-        - Baseline CLI or demo
+        - Local CLI or example
         - Local API or worker
         - Console or deterministic browser E2E
-        - Optional Timestral adapter
+        - Timestral model setup or inference
         - Optional Eve agent
         - Other documented path
     validations:

@@ -40,7 +40,9 @@ For the assistant/MCP path, see the [MCP guide](docs/implementation/mcp.md). For
 | Joint residual trajectories | Experimental shared-origin residual-panel sampling with temporal and cross-series sample identity | The recorded experiment did not pass its positive lower Brier-skill acceptance bound in any domain. Available for research; calibrated joint forecast probabilities remain unaccepted. |
 | Discovery agent | Optional Eve service with budgeted tools and separate Postgres state | Scripted tests and restart/egress checks exercise integration. A bounded GPT-6 Luna live smoke on 2026-10-26 completed one `inspect_source` tool call against synthetic local data and confirmed a persisted core operation ID; this does not establish model quality or production readiness. |
 
-See the [capability matrix](docs/capabilities.md) for precise boundaries and [Timestral status](docs/implementation/timestral.md) for the separate code/weights licenses. Historical replay and synthetic assumptions must remain labeled. Generic backtest reports carry no discovery attestation and do not qualify or activate watches; that lifecycle integration remains future work.
+See the [capability matrix](docs/capabilities.md) for precise boundaries and [Timestral status](docs/implementation/timestral.md) for the separate code/weights licenses. Historical replay and synthetic assumptions must remain labeled. A candidate-bound backtest can qualify a watch when its final evidence meets the policy. Generic reports are available for analysis. See the [MCP guide](docs/implementation/mcp.md).
+
+For a service that starts at macOS login, see [installation, updates and removal](docs/installation.md). See [public repository readiness](docs/public-repository.md) for the publication checklist.
 
 ## Run the local API
 
