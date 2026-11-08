@@ -1285,6 +1285,18 @@
             "title": "As Of",
             "type": "string"
           },
+          "baseline_node_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Node Id"
+          },
           "graph_id": {
             "minLength": 1,
             "title": "Graph Id",

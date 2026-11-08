@@ -393,3 +393,31 @@ test("switches between separate workspaces and ignores a late rejected connectio
   await page.reload();
   await expect(page.getByText(`ID run: ${runId}`)).toBeVisible();
 });
+
+test("reuses and revokes the local connection across independent tabs", async ({ context, page, request }) => {
+  const api = "http://127.0.0.1:8000/v1";
+  const headers = { Authorization: "Bearer local-e2e-token" };
+  const { workspace_id: workspaceId } = await (await request.get(`${api}/workspace`, { headers })).json();
+  const events = await (await request.get(`${api}/events?limit=1000`, { headers })).json();
+  const runId = events.find((event: { kind: string }) => event.kind === "run_completed").run_id;
+  const link = `/#/w/${workspaceId}/run/${encodeURIComponent(runId)}`;
+  await page.goto(link);
+  await page.getByLabel("Indirizzo API").fill("http://127.0.0.1:8000");
+  await page.getByLabel("Token workspace").fill("local-e2e-token");
+  await page.getByRole("button", { name: /Apri il workspace/ }).click();
+  await expect(page.getByText(`ID run: ${runId}`)).toBeVisible();
+  const questionResponse = await request.post(`${api}/questions`, { headers, data: { key: "cross-tab-question", title: "Domanda tra schede", meaning: "Prevedere le vendite", source_ids: ["sales"], selection: { provider: "seasonal_naive", horizon: 1 } } });
+  expect(questionResponse.status()).toBe(201);
+  const questionId = (await questionResponse.json()).question_id;
+  const secondLink = `/#/w/${workspaceId}/question/${encodeURIComponent(questionId)}`;
+  const other = await context.newPage();
+  await other.goto(secondLink);
+  await expect(other.getByText(`ID domanda: ${questionId}`)).toBeVisible({ timeout: 4000 });
+  expect(other.url()).not.toContain("local-e2e-token");
+  await page.goto("/#workspace");
+  await page.getByRole("button", { name: "Scollega questo browser" }).click();
+  await expect(other.getByLabel("Token workspace")).toBeVisible();
+  await other.reload();
+  await expect(other.getByLabel("Token workspace")).toBeVisible();
+  await expect(other.getByText(`ID domanda: ${questionId}`)).toHaveCount(0);
+});

@@ -6,7 +6,7 @@ import { ContextView } from "./ContextView";
 it("shows the primary forecast with the aligned baseline and explicit truncation", async () => {
   const client = new ApiClient("http://localhost:8000", "token");
   vi.spyOn(client, "getForecastPresentation").mockResolvedValue({
-    run_id: "run-a", primary_node_id: "model", as_of: "2026-11-08T00:00:00Z", state: "completed",
+    run_id: "run-a", primary_node_id: "model", baseline_node_id: "baseline", as_of: "2026-11-08T00:00:00Z", state: "completed",
     graph_id: "graph", graph_version: 1, snapshot_ids: [], snapshot_ids_truncated: false,
     providers: [{ node_id: "model", requested_provider: "timestral", actual_provider: "timestral" }, { node_id: "baseline", requested_provider: "seasonal_naive", actual_provider: "seasonal_naive" }], providers_truncated: false, total_point_count: 3, truncated: true,
     points: [
@@ -52,4 +52,22 @@ it("announces a new run while retaining the linked run", async () => {
   await act(async () => { emit({ cursor: 1, event_id: "new", kind: "run_completed", run_id: "run-b", payload: {} }); });
   expect(screen.getByText(/Nuovo risultato disponibile: run-b/)).toBeVisible();
   expect(screen.getByText("ID run: run-a")).toBeVisible();
+});
+
+it("uses the explicitly associated comparator even when another seasonal node is aligned", async () => {
+  const client = new ApiClient("http://localhost:8000", "token");
+  const point = (node_id: string, value: number) => ({ node_id, series_id: "sales", timestamp: "2026-11-09T00:00:00Z", unit: "count", representation: "point" as const, point: value, quantiles: {}, quantiles_truncated: false, sample_count: 0 });
+  vi.spyOn(client, "getForecastPresentation").mockResolvedValue({ run_id: "run-a", primary_node_id: "model", baseline_node_id: "baseline", as_of: "2026-11-08T00:00:00Z", state: "completed", graph_id: "graph", graph_version: 1, snapshot_ids: [], snapshot_ids_truncated: false, providers: [{ node_id: "other", requested_provider: "seasonal_naive", actual_provider: "seasonal_naive" }, { node_id: "baseline", requested_provider: "seasonal_naive", actual_provider: "seasonal_naive" }], providers_truncated: false, total_point_count: 3, truncated: false, points: [point("model", 23), point("other", 99), point("baseline", 22)] });
+  render(<ContextView client={client} workspaceId={"a".repeat(32)} resource={{ kind: "run", id: "run-a" }} />);
+  expect(await screen.findByText("22")).toBeVisible();
+  expect(screen.queryByText("99")).not.toBeInTheDocument();
+});
+
+it("does not infer a comparator when no baseline reference is present", async () => {
+  const client = new ApiClient("http://localhost:8000", "token");
+  const point = (node_id: string, value: number) => ({ node_id, series_id: "sales", timestamp: "2026-11-09T00:00:00Z", unit: "count", representation: "point" as const, point: value, quantiles: {}, quantiles_truncated: false, sample_count: 0 });
+  vi.spyOn(client, "getForecastPresentation").mockResolvedValue({ run_id: "run-a", primary_node_id: "model", as_of: "2026-11-08T00:00:00Z", state: "completed", graph_id: "graph", graph_version: 1, snapshot_ids: [], snapshot_ids_truncated: false, providers: [{ node_id: "other", requested_provider: "seasonal_naive", actual_provider: "seasonal_naive" }], providers_truncated: false, total_point_count: 2, truncated: false, points: [point("model", 23), point("other", 99)] });
+  render(<ContextView client={client} workspaceId={"a".repeat(32)} resource={{ kind: "run", id: "run-a" }} />);
+  expect(await screen.findByText("Non disponibile o non confrontabile")).toBeVisible();
+  expect(screen.queryByText("99")).not.toBeInTheDocument();
 });

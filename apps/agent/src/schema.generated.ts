@@ -5345,6 +5345,19 @@ export const forecastPresentationSchema = {
       "title": "As Of",
       "type": "string"
     },
+    "baseline_node_id": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Baseline Node Id"
+    },
     "graph_id": {
       "minLength": 1,
       "title": "Graph Id",
@@ -5453,6 +5466,7 @@ export const forecastPresentationSchema = {
 
 export namespace ForecastPresentationGenerated {
   export type AsOf = string;
+  export type BaselineNodeId = string | null;
   export type GraphId = string;
   export type GraphVersion = number;
   export type NodeId = string;
@@ -5689,6 +5703,7 @@ export namespace ForecastPresentationGenerated {
 
   export interface ForecastPresentation {
     as_of: AsOf;
+    baseline_node_id?: BaselineNodeId;
     graph_id: GraphId;
     graph_version: GraphVersion;
     points: Points;

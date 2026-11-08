@@ -2353,6 +2353,7 @@ export type SnapshotSeriesPage = SnapshotSeriesPageGenerated.SnapshotSeriesPage;
 
 export namespace ForecastPresentationGenerated {
   export type AsOf = string;
+  export type BaselineNodeId = string | null;
   export type GraphId = string;
   export type GraphVersion = number;
   export type NodeId = string;
@@ -2589,6 +2590,7 @@ export namespace ForecastPresentationGenerated {
 
   export interface ForecastPresentation {
     as_of: AsOf;
+    baseline_node_id?: BaselineNodeId;
     graph_id: GraphId;
     graph_version: GraphVersion;
     points: Points;

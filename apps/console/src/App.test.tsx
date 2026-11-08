@@ -4,7 +4,18 @@ import { App } from "./App";
 import { ApiClient } from "./api/client";
 import { makeRun } from "./test/fixtures";
 afterEach(() => vi.restoreAllMocks());
-beforeEach(() => { window.sessionStorage.clear(); window.location.hash = "home"; vi.spyOn(ApiClient.prototype, "getHealth").mockResolvedValue({ status: "ok", worker: "running", worker_model: "loaded" }); });
+beforeEach(() => {
+  window.sessionStorage.clear();
+  const values = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value),
+    removeItem: (key: string) => values.delete(key),
+    clear: () => values.clear(),
+  });
+  window.location.hash = "home";
+  vi.spyOn(ApiClient.prototype, "getHealth").mockResolvedValue({ status: "ok", worker: "running", worker_model: "loaded" });
+});
 describe("product navigation", () => {
   it("opens setup from home and responds to browser hash navigation", () => {
     render(<App />);
@@ -97,6 +108,16 @@ it("does not declare the workspace connected when the credential is rejected", a
   expect(screen.getByText("Workspace da configurare")).toBeVisible();
   expect(window.location.hash).toBe("#workspace");
   vi.unstubAllGlobals();
+});
+
+it("allows a saved session to be revoked when the workspace cannot be reached", async () => {
+  localStorage.setItem("forecast-anything.workspace-session.v1", JSON.stringify({ url: "http://localhost:8000", token: "saved" }));
+  vi.spyOn(ApiClient.prototype, "getCapabilities").mockRejectedValue(new Error("offline"));
+  window.location.hash = "workspace";
+  render(<App />);
+  const disconnect = await screen.findByRole("button", { name: "Scollega questo browser" });
+  fireEvent.click(disconnect);
+  expect(localStorage.getItem("forecast-anything.workspace-session.v1")).toBeNull();
 });
 
 it("ignores a rejected connection attempt after a newer connection succeeded", async () => {

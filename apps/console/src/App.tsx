@@ -42,6 +42,7 @@ export function App() {
   const [error, setError] = useState<string>();
   const [health, setHealth] = useState<{ status: string; worker: string; worker_model: string | null }>();
   const [modelStatus, setModelStatus] = useState<string>();
+  const [hasStoredSession, setHasStoredSession] = useState(false);
   const connectionAttempt = useRef(0);
   const menuButton = useRef<HTMLButtonElement>(null);
   const firstNav = useRef<HTMLAnchorElement>(null);
@@ -79,7 +80,9 @@ export function App() {
     const attempt = ++connectionAttempt.current;
     async function restore() {
       try {
-        const saved = JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null") as { url?: unknown; token?: unknown } | null;
+        const stored = localStorage.getItem(SESSION_KEY);
+        if (active && attempt === connectionAttempt.current) setHasStoredSession(stored !== null);
+        const saved = JSON.parse(stored || "null") as { url?: unknown; token?: unknown } | null;
         if (!saved || typeof saved.url !== "string" || typeof saved.token !== "string") return;
         const client = new ApiClient(saved.url, saved.token);
         const capabilities = await client.getCapabilities();
@@ -93,11 +96,28 @@ export function App() {
         setHealth(state);
         setModelStatus(capabilities.model_status?.status ?? (capabilities.required_provider ? "sconosciuto" : "non richiesto"));
         setWorkspace((current) => ({ client, id: (current?.id ?? 0) + 1, url: saved.url as string, workspaceId: identity.workspace_id }));
-      } catch { if (active && attempt === connectionAttempt.current) sessionStorage.removeItem(SESSION_KEY); }
+      } catch { if (active && attempt === connectionAttempt.current) setError("Impossibile verificare la sessione del workspace."); }
     }
     void restore();
     return () => { active = false; };
   }, []);
+  useEffect(() => {
+    function sessionChanged(event: StorageEvent) {
+      if (event.storageArea !== localStorage || event.key !== SESSION_KEY) return;
+      connectionAttempt.current += 1;
+      setHasStoredSession(event.newValue !== null);
+      setWorkspace(undefined); setHealth(undefined); setModelStatus(undefined); setToken("");
+      setError("La sessione del browser è cambiata. Collega il workspace per continuare.");
+    }
+    window.addEventListener("storage", sessionChanged);
+    return () => window.removeEventListener("storage", sessionChanged);
+  }, []);
+  function disconnect() {
+    connectionAttempt.current += 1;
+    localStorage.removeItem(SESSION_KEY);
+    setHasStoredSession(false);
+    setWorkspace(undefined); setHealth(undefined); setModelStatus(undefined); setToken(""); setError(undefined);
+  }
   async function connect(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const attempt = ++connectionAttempt.current;
@@ -117,7 +137,8 @@ export function App() {
       }
       setHealth(state);
       setModelStatus(capabilities.model_status?.status ?? (capabilities.required_provider ? "sconosciuto" : "non richiesto"));
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ url: url.toString().replace(/\/+$/, ""), token }));
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ url: url.toString().replace(/\/+$/, ""), token }));
+      setHasStoredSession(true);
       setWorkspace((current) => ({ client, id: (current?.id ?? 0) + 1, url: url.origin, workspaceId: identity.workspace_id }));
       setToken("");
       if (!target) window.location.hash = "sources";
@@ -135,7 +156,7 @@ export function App() {
     }}>{pages.map((item, index) => <a key={item.id} ref={index === 0 ? firstNav : undefined} href={`#${item.id}`} aria-current={page === item.id ? "page" : undefined} onClick={() => { setMenuOpen(false); heading.current?.focus(); }}><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true"><path d={item.path}/></svg>{item.label}</a>)}</nav><div className="sidebar-scope"><span>Core indipendente</span><p>Dati, ipotesi e futuri<br/>restano distinguibili.</p></div></aside>}
     <header className="app-topbar">{!compact && <button ref={menuButton} className="menu-toggle" aria-label="Apri navigazione" aria-expanded={menuOpen} aria-controls="main-navigation" onClick={() => setMenuOpen((value) => !value)}><svg width="20" height="20" viewBox="0 0 20 20" stroke="currentColor" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14"/></svg></button>}<span className="topbar-product">Forecast Anything</span><a href="#workspace" className="workspace-status"><span className={connected ? "connection-dot connected" : "connection-dot"}/>{connected ? connected.url : "Workspace da configurare"}</a></header>
     <main id="main-content" className="app-sheet">{resource && <a className="context-mode" href={`#/w/${resource.workspaceId}/${resource.kind}/${encodeURIComponent(resource.id)}${resource.extended ? "" : "/full"}`}>{resource.extended ? "Vista compatta" : "Vista estesa"}</a>}<div className="page-heading"><div><h1 ref={heading} tabIndex={-1}>{pages.find((item) => item.id === page)?.label}</h1><p>{page === "home" ? "Prepara una previsione o riapri un risultato." : page === "sources" ? "Collega e interpreta i dati prima di attivarli." : page === "observatory" ? "Previsioni, evidenze e dipendenze dei tuoi dati." : "La connessione al tuo core di forecasting."}</p></div>{page === "home" && workspace && <a className="button button-outline" href="#sources">Collega una fonte <span aria-hidden="true">＋</span></a>}</div>
-      {(page === "workspace" || (!!resource && !connected)) && <section className="workspace-settings" aria-labelledby="connection-title"><div><h2 id="connection-title">Il tuo workspace</h2><p className="muted">Usa l’indirizzo del core e il suo token. La sessione resta disponibile in questa scheda anche dopo il reload e termina alla chiusura della scheda.</p>{connected && health && <ul aria-label="Stato workspace"><li>API disponibile</li><li>Autenticazione valida</li><li>Worker: {health.worker}</li><li>Disponibilità modello: {modelStatus ?? "sconosciuta"}</li><li>Modello caricato dal worker: {health.worker_model ?? "sconosciuto"}</li></ul>}</div><form onSubmit={connect}><label>Indirizzo API<input type="url" value={apiUrl} onChange={(event) => setApiUrl(event.target.value)}/></label><label>Token workspace<input type="password" autoComplete="off" value={token} onChange={(event) => setToken(event.target.value)}/></label>{error && <p role="alert">{error}</p>}<button className="button button-dark" type="submit">Apri il workspace <span aria-hidden="true">↗</span></button></form></section>}
+      {(page === "workspace" || (!!resource && !connected)) && <section className="workspace-settings" aria-labelledby="connection-title"><div><h2 id="connection-title">Il tuo workspace</h2><p className="muted">Usa l’indirizzo del core e il suo token. La sessione resta disponibile nelle schede di questo profilo browser finché non la scolleghi.</p>{connected && health && <ul aria-label="Stato workspace"><li>API disponibile</li><li>Autenticazione valida</li><li>Worker: {health.worker}</li><li>Disponibilità modello: {modelStatus ?? "sconosciuta"}</li><li>Modello caricato dal worker: {health.worker_model ?? "sconosciuto"}</li></ul>}{hasStoredSession && <button type="button" onClick={disconnect}>Scollega questo browser</button>}</div><form onSubmit={connect}><label>Indirizzo API<input type="url" value={apiUrl} onChange={(event) => setApiUrl(event.target.value)}/></label><label>Token workspace<input type="password" autoComplete="off" value={token} onChange={(event) => setToken(event.target.value)}/></label>{error && <p role="alert">{error}</p>}<button className="button button-dark" type="submit">Apri il workspace <span aria-hidden="true">↗</span></button></form></section>}
       {connected ? <ConnectedWorkspace key={connected.id} client={connected.client} page={page} sourceId={sourceId} onSourceIdChange={setSourceId} resource={resource} workspaceId={connected.workspaceId}/> : page === "home" ? <Home onRunReady={() => undefined}/> : page !== "workspace" && <div className="disconnected-state"><h2>Apri il workspace per continuare</h2><p className="muted">Le fonti e le previsioni appartengono al tuo core.</p><a className="button button-dark" href="#workspace">Configura il workspace</a></div>}
       <footer className="app-footer"><span>Forecast Anything</span><span>Osservazioni → previsioni → verifica</span></footer>
     </main>
