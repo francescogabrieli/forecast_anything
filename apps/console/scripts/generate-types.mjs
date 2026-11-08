@@ -16,6 +16,7 @@ const names = [
   "SourceProfile",
   "SourceSpec",
   "SourceView",
+  "SourceConfiguration",
   "SourceRegistration",
   "ForecastResult",
   "RunRecord",

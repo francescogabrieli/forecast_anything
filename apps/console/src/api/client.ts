@@ -1,4 +1,10 @@
 import type {
+  BacktestPresentation,
+  ForecastPresentation,
+  OriginPage,
+  QuestionPresentation,
+  QuestionPage,
+  QuestionView,
   EventRecord,
   Candidate,
   EvaluationRecord,
@@ -12,6 +18,7 @@ import type {
   SourceRegistration,
   SourceSpec,
   SourceView,
+  SourceConfiguration,
   WatchView,
 } from "./schema.generated";
 
@@ -37,8 +44,24 @@ export class ApiClient {
     this.origin = url.toString().replace(/\/+$/, "");
   }
 
+  getHealth(): Promise<{ status: string; worker: string; worker_model: string | null }> {
+    return this.request("GET", "/health");
+  }
+
+  getWorkspace(): Promise<{ workspace_id: string }> {
+    return this.request("GET", "/v1/workspace");
+  }
+
+  getCapabilities(): Promise<{ required_provider?: string | null; model_status?: { status?: string } | null }> {
+    return this.request("GET", "/v1/capabilities");
+  }
+
   inspectSource(sourceId: string): Promise<SourceProfile> {
     return this.request("GET", `/v1/sources/${encodeURIComponent(sourceId)}/profile`);
+  }
+
+  getSourceConfiguration(sourceId: string): Promise<SourceConfiguration> {
+    return this.request("GET", `/v1/sources/${encodeURIComponent(sourceId)}/configuration`);
   }
 
   previewSource(spec: SourceSpec): Promise<SourceProfile> {
@@ -59,6 +82,14 @@ export class ApiClient {
 
   getSources(): Promise<SourceView[]> {
     return this.request("GET", "/v1/sources");
+  }
+
+  getQuestions(offset = 0): Promise<QuestionPage> {
+    return this.request("GET", `/v1/questions?offset=${offset}&limit=25`);
+  }
+
+  renameQuestion(questionId: string, title: string): Promise<QuestionView> {
+    return this.request("PATCH", `/v1/questions/${encodeURIComponent(questionId)}`, { title });
   }
 
   async getRecentRuns(limit = 4): Promise<RunRecord[]> {
@@ -84,6 +115,30 @@ export class ApiClient {
 
   getEvents(after = 0, limit = 100): Promise<EventRecord[]> {
     return this.request("GET", `/v1/events?after=${Math.max(0, after)}&limit=${Math.max(1, Math.min(1000, limit))}`);
+  }
+
+  getForecastPresentation(runId: string): Promise<ForecastPresentation> {
+    return this.request("GET", `/v1/runs/${encodeURIComponent(runId)}/presentation`);
+  }
+
+  getQuestionPresentation(questionId: string, offset = 0): Promise<QuestionPresentation> {
+    return this.request("GET", `/v1/questions/${encodeURIComponent(questionId)}/presentation?offset=${offset}&limit=3`);
+  }
+
+  getReportPresentation(reportId: string): Promise<BacktestPresentation> {
+    return this.request("GET", `/v1/reports/${encodeURIComponent(reportId)}/presentation`);
+  }
+
+  getReportOrigins(reportId: string, offset = 0): Promise<OriginPage> {
+    return this.request("GET", `/v1/reports/${encodeURIComponent(reportId)}/origins?offset=${offset}&limit=50`);
+  }
+
+  getBacktestPresentation(backtestId: string): Promise<BacktestPresentation> {
+    return this.request("GET", `/v1/backtests/${encodeURIComponent(backtestId)}/presentation`);
+  }
+
+  getBacktestOrigins(backtestId: string, offset = 0): Promise<OriginPage> {
+    return this.request("GET", `/v1/backtests/${encodeURIComponent(backtestId)}/origins?offset=${offset}&limit=50`);
   }
 
   getRun(runId: string): Promise<RunRecord> {

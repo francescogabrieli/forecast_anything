@@ -86,6 +86,15 @@ def test_backtest_job_publishes_manual_scores_and_bounded_immutable_reads(tmp_pa
     report = client.get(f"/v1/backtests/{job_id}")
     assert report.status_code == 200, report.text
     value = report.json()
+    report_id = value["report_id"]
+    by_report = client.get(f"/v1/reports/{report_id}/presentation")
+    assert by_report.status_code == 200
+    assert by_report.json() == client.get(f"/v1/backtests/{job_id}/presentation").json()
+    assert (
+        client.get(f"/v1/reports/{report_id}/origins?limit=2").json()
+        == client.get(f"/v1/backtests/{job_id}/origins?limit=2").json()
+    )
+    assert client.get("/v1/reports/missing/presentation").status_code == 404
     assert value["source_revision"] == revision.revision
     assert value["status"] == "completed"
     final = value["partitions"][2]

@@ -217,6 +217,19 @@ def test_sources_are_write_only_and_discovery_is_provisional(tmp_path):
     response = client.post("/v1/sources", json=spec)
     assert "private-secret-reference" not in response.text
     assert "private-secret-reference" not in client.get("/v1/sources").text
+    config = client.get(f"/v1/sources/{spec['source_id']}/configuration")
+    assert config.status_code == 200
+    assert config.json()["location"] == spec["location"]
+    assert config.json()["mapping"] == spec["mapping"]
+    assert config.json()["has_secret_ref"] is True
+    assert "private-secret-reference" not in config.text
+    assert (
+        client.get(
+            f"/v1/sources/{spec['source_id']}/configuration",
+            headers={"Authorization": ""},
+        ).status_code
+        == 401
+    )
     spec["secret_ref"] = None
     response = client.post("/v1/sources", json=spec)
     Worker(runtime, JobQueue(ledger)).run_due(T)
@@ -1180,4 +1193,25 @@ def test_watch_change_summary_uses_recorded_runs_and_preserves_question_lineage(
             params={"previous_run_id": run_ids[0], "current_run_id": "missing-run"},
         ).status_code
         == 404
+    )
+
+
+def test_workspace_identity_is_authenticated_stable_and_distinct(tmp_path):
+    first_dir, second_dir = tmp_path / "first", tmp_path / "second"
+    first_dir.mkdir()
+    second_dir.mkdir()
+    ledger, _, client = setup(first_dir)
+    _, _, other = setup(second_dir)
+    first = client.get("/v1/workspace")
+    assert first.status_code == 200
+    workspace_id = first.json()["workspace_id"]
+    assert len(workspace_id) == 32
+    assert client.get("/v1/workspace").json()["workspace_id"] == workspace_id
+    assert Ledger(ledger.path).workspace_id() == workspace_id
+    assert other.get("/v1/workspace").json()["workspace_id"] != workspace_id
+    assert (
+        client.get(
+            "/v1/workspace", headers={"Authorization": "Bearer wrong"}
+        ).status_code
+        == 401
     )

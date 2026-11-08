@@ -333,6 +333,28 @@ export namespace SourceViewGenerated {
 }
 export type SourceView = SourceViewGenerated.SourceView;
 
+export namespace SourceConfigurationGenerated {
+  export type HasSecretRef = boolean;
+  export type Kind = "csv" | "http_json";
+  export type Location = string;
+  export type JsonValue = unknown;
+  export type RefreshSeconds = number;
+  export type SourceId = string;
+
+  export interface SourceConfiguration {
+    has_secret_ref: HasSecretRef;
+    kind: Kind;
+    location: Location;
+    mapping: Mapping;
+    refresh_seconds: RefreshSeconds;
+    source_id: SourceId;
+  }
+  export interface Mapping {
+    [k: string]: JsonValue;
+  }
+}
+export type SourceConfiguration = SourceConfigurationGenerated.SourceConfiguration;
+
 export namespace SourceRegistrationGenerated {
   export type EpochId = string;
   export type JobId = string;

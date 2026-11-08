@@ -30,6 +30,12 @@ class NoArguments(Contract):
     pass
 
 
+class BrowserLinkArguments(Contract):
+    kind: Literal["run", "question", "report"]
+    resource_id: ToolIdentifier
+    browser_url: str
+
+
 class SourcePageArguments(Contract):
     offset: NonNegative = 0
     limit: Annotated[int, Field(ge=1, le=100, strict=True)] = 25

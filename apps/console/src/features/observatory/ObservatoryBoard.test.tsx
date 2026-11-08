@@ -28,7 +28,7 @@ it("keeps the most recently requested run when an older response arrives late", 
   expect(screen.queryByText("ID run: old")).not.toBeInTheDocument();
 });
 
-it("opens the completed run and surfaces a failed watch refresh", async () => {
+it("announces a completed run without replacing the selected run", async () => {
   const client = new ApiClient("http://localhost:8000", "test-token");
   let deliverEvent: ((event: EventRecord) => void) | undefined;
   vi.spyOn(client, "getWatches")
@@ -57,8 +57,9 @@ it("opens the completed run and surfaces a failed watch refresh", async () => {
     deliverEvent!({ cursor: 2, event_id: "event-2", kind: "run_completed", run_id: "run-2", payload: { node_ids: ["forecast"] } });
   });
 
-  expect(await screen.findByText("ID run: run-2")).toBeVisible();
-  expect(screen.queryByText("ID run: run-1")).not.toBeInTheDocument();
+  expect(screen.getByText("ID run: run-1")).toBeVisible();
+  expect(await screen.findByText(/Nuovo risultato disponibile/)).toBeVisible();
+  expect(screen.queryByText("ID run: run-2")).not.toBeInTheDocument();
   expect(await screen.findByRole("alert")).toHaveTextContent("Watch refresh unavailable");
 });
 
@@ -96,6 +97,8 @@ it("opens a completed run without stale evidence when its evaluation lookup fail
     deliverEvent!({ cursor: 2, event_id: "event-2", kind: "run_completed", run_id: "run-2", payload: { node_ids: ["forecast"] } });
   });
 
+  expect(screen.getByText("ID run: run-1")).toBeVisible();
+  await user.click(await screen.findByRole("button", { name: "Apri run run-2" }));
   expect(await screen.findByText("ID run: run-2")).toBeVisible();
   expect(screen.queryByText("ID run: run-1")).not.toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "Valutazione evaluation-1" })).not.toBeInTheDocument();

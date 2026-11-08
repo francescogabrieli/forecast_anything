@@ -22,6 +22,7 @@ import httpx
 ROOT = Path(__file__).resolve().parents[2]
 ISSUED = "2026-10-23T12:00:00+00:00"
 TOOLS = {
+    "get_browser_link",
     "create_question",
     "list_questions",
     "get_question",

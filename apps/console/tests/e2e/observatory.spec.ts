@@ -43,6 +43,9 @@ test("connects a source and issues its first forecast through the worker", async
   await page.addInitScript(() => { Date.now = () => Date.parse("2026-10-24T12:00:00Z"); });
   await page.goto("/#workspace");
   await page.getByLabel("Indirizzo API").fill("http://127.0.0.1:8000");
+  await page.getByLabel("Token workspace").fill("wrong-token");
+  await page.getByRole("button", { name: /Apri il workspace/ }).click();
+  await expect(page.getByRole("alert")).toContainText("Token workspace non valido");
   await page.getByLabel("Token workspace").fill("local-e2e-token");
   await page.getByRole("button", { name: /Apri il workspace/ }).click();
   await page.getByLabel("ID della fonte").fill("first-sales");
@@ -143,6 +146,9 @@ test("reviews two-source evaluation, revision notification and immutable scenari
   expect(baseRun.results.forecast.point).toEqual([[12]]);
   expect(baseRun.results.reference.point).toEqual([[13]]);
   await expect(page.getByText(`${initialEvents.length} eventi unici`)).toBeVisible();
+  await page.getByText("Cronologia", { exact: true }).click();
+  await page.locator(".event-list li").filter({ hasText: "run completed" }).getByRole("button", { name: `Apri run ${baseRunId}`, exact: true }).click();
+  await expect(page.locator(".run-card").getByText(`ID run: ${baseRunId}`)).toBeVisible();
   expect(interruptedStream).toBe(true);
   await page.getByRole("button", { name: "Silenzia segnalazioni" }).click();
   await expect(page.getByRole("button", { name: "Riattiva segnalazioni" })).toBeVisible();
@@ -181,6 +187,10 @@ test("reviews two-source evaluation, revision notification and immutable scenari
   const revisionBinding = revisedEvents.find((event: { kind: string; run_id: string }) => event.kind === "run_started" && event.run_id === notification.run_id).payload.source_bindings;
   expect(revisionBinding.sales).not.toBe(bindings.sales);
   await expect(page.locator(".event-list li").filter({ hasText: "run completed" }).filter({ hasText: notification.run_id })).toHaveCount(1);
+  await expect(page.getByText(`Nuovo risultato disponibile: ${notification.run_id}. Aprilo dalla cronologia.`)).toBeVisible();
+  await expect(page.locator(".run-card").getByText(`ID run: ${baseRunId}`)).toBeVisible();
+  await expect(page.locator(".run-card").getByText(`ID run: ${notification.run_id}`)).toHaveCount(0);
+  await page.locator(".event-list li").filter({ hasText: "run completed" }).getByRole("button", { name: `Apri run ${notification.run_id}`, exact: true }).click();
   await expect(page.locator(".run-card").getByText(`ID run: ${notification.run_id}`)).toBeVisible();
   await expect(page.locator('.graph-node[data-modified="true"]')).toHaveCount(3);
   for (const id of ["forecast", "question", "reference"]) {
@@ -199,7 +209,6 @@ test("reviews two-source evaluation, revision notification and immutable scenari
   await expect(page.getByText(`${revisedEvents.length} eventi unici`)).toBeVisible();
 
   // Each event has an open action; choose the single run-completion entry.
-  await page.getByText("Cronologia", { exact: true }).click();
   const runButton = page.locator(".event-list li").filter({ hasText: "run completed" })
     .getByRole("button", { name: `Apri run ${baseRunId}`, exact: true });
   await expect(runButton).toBeVisible();
@@ -243,12 +252,15 @@ test("reviews two-source evaluation, revision notification and immutable scenari
   await page.keyboard.press("Enter");
   await expect(page.getByRole("status").filter({ hasText: "Selezionato:" })).toBeVisible();
 
+  await page.getByText("Opzioni avanzate: JSON degli snapshot").click();
   const scenarioInput = page.getByLabel("Snapshot ipotetici per fonte");
   const current = JSON.parse(await scenarioInput.inputValue()) as Record<string, { observations: Array<{ value: number | null }> }>;
   const source = "sales";
   current[source].observations = current[source].observations.map((item) => ({ ...item, value: 8 }));
   await scenarioInput.fill(JSON.stringify(current, null, 2));
-  await page.getByRole("button", { name: "Crea scenario" }).click();
+  await page.getByRole("button", { name: "Mostra modifiche proposte" }).click();
+  await expect(page.getByRole("region", { name: "Modifiche proposte" })).toBeVisible();
+  await page.getByRole("button", { name: "Conferma e crea scenario" }).click();
   await expect(page.getByText("Scenario pronto. Il confronto usa soltanto timestamp e unità comuni.")).toBeVisible({ timeout: 25_000 });
   await expect(page.getByRole("heading", { name: "Confronto sulle date comuni" })).toBeVisible();
   const comparison = page.locator(".scenario-card");
@@ -260,4 +272,124 @@ test("reviews two-source evaluation, revision notification and immutable scenari
   expect(unchanged.run_id).toBe(baseRunId);
   expect(unchanged.results).toEqual(baseRun.results);
   expect(unchanged).toEqual(baseRun);
+});
+
+test("opens the linked run after a cold browser connection and retains it on reload", async ({ page, request }) => {
+  const api = "http://127.0.0.1:8000/v1";
+  const headers = { Authorization: "Bearer local-e2e-token" };
+  const workspaceResponse = await request.get(`${api}/workspace`, { headers });
+  expect(workspaceResponse.ok()).toBeTruthy();
+  const { workspace_id: workspaceId } = await workspaceResponse.json();
+  const events = await (await request.get(`${api}/events?limit=1000`, { headers })).json();
+  const runId = events.find((event: { kind: string }) => event.kind === "run_completed").run_id;
+  const link = `/#/w/${workspaceId}/run/${encodeURIComponent(runId)}`;
+  await page.goto(link);
+  await expect(page.getByLabel("Token workspace")).toBeVisible();
+  await page.getByLabel("Indirizzo API").fill("http://127.0.0.1:8000");
+  await page.getByLabel("Token workspace").fill("local-e2e-token");
+  await page.getByRole("button", { name: /Apri il workspace/ }).click();
+  await expect(page.locator(".run-card").getByText(`ID run: ${runId}`)).toBeVisible();
+  expect(new URL(page.url()).hash).toBe(link.slice(1));
+  expect(page.url()).not.toContain("local-e2e-token");
+  const streaming = page.waitForRequest(req => req.url().includes("/v1/events/stream?"));
+  await page.reload();
+  await expect(page.locator(".run-card").getByText(`ID run: ${runId}`)).toBeVisible();
+  await streaming;
+  expect(new URL(page.url()).hash).toBe(link.slice(1));
+  const original = await (await request.get(`${api}/runs/${runId}`, { headers })).json();
+  const graph = await (await request.get(`${api}/graphs/${original.graph_id}?version=${original.graph_version}`, { headers })).json();
+  const bindings = events.find((event: { kind: string; run_id: string }) => event.kind === "run_started" && event.run_id === runId).payload.source_bindings;
+  const submitted = await request.post(`${api}/jobs`, { headers, data: { kind: "run", key: "browser-new-result", graph, snapshot_ids: bindings, as_of: original.as_of } });
+  expect(submitted.status()).toBe(202);
+  const jobId = (await submitted.json()).job_id;
+  await expect.poll(async () => (await (await request.get(`${api}/jobs/${jobId}`, { headers })).json()).state, { timeout: 20000 }).toBe("completed");
+  const newRunId = (await (await request.get(`${api}/jobs/${jobId}`, { headers })).json()).result.run_id;
+  expect(newRunId).not.toBe(runId);
+  await expect(page.getByRole("status").filter({ hasText: `Nuovo risultato disponibile: ${newRunId}` })).toBeVisible();
+  await expect(page.locator(".run-card").getByText(`ID run: ${runId}`)).toBeVisible();
+  await page.goto(`/#/w/${workspaceId}/run/missing`);
+  await expect(page.getByRole("alert")).toContainText("Risorsa non trovata");
+  await page.goto(`/#/w/${"f".repeat(32)}/run/${encodeURIComponent(runId)}`);
+  await expect(page.getByLabel("Token workspace")).toBeVisible();
+  await page.getByLabel("Indirizzo API").fill("http://127.0.0.1:8000");
+  await page.getByLabel("Token workspace").fill("local-e2e-token");
+  await page.getByRole("button", { name: /Apri il workspace/ }).click();
+  await expect(page.getByRole("alert")).toContainText("workspace diverso");
+});
+
+test("opens exact saved question and historical report across navigation and reload", async ({ page, request }) => {
+  const api = "http://127.0.0.1:8000/v1";
+  const headers = { Authorization: "Bearer local-e2e-token" };
+  const sourcePath = "/private/tmp/forecast-phase4-browser-history.csv";
+  await writeFile(sourcePath, "time,value\n" + Array.from({ length: 20 }, (_, i) => `2026-10-${String(i + 1).padStart(2, "0")},${i + 1}\n`).join(""));
+  const source = await request.post(`${api}/sources`, { headers, data: { source_id: "browser-history", kind: "csv", location: sourcePath, refresh_seconds: 86400, mapping: { event_time: "time", available_at: "time", value: "value", revision: { constant: "1" }, series_id: { constant: "sales" }, unit: { constant: "count" }, frequency: { constant: "1d" }, timezone: { constant: "UTC" }, calendar: { constant: "gregorian" }, missing_values: { constant: [""] } } } });
+  expect(source.status()).toBe(201);
+  const backtest = await request.post(`${api}/jobs`, { headers, data: { kind: "backtest", key: "browser-history-test", source_id: "browser-history", selection: { provider: "seasonal_naive", horizon: 2, options: { period: 2 } } } });
+  expect(backtest.status()).toBe(202);
+  const jobId = (await backtest.json()).job_id;
+  await expect.poll(async () => (await (await request.get(`${api}/jobs/${jobId}`, { headers })).json()).state, { timeout: 20000 }).toBe("completed");
+  const report = await (await request.get(`${api}/backtests/${jobId}`, { headers })).json();
+  const questionResponse = await request.post(`${api}/questions`, { headers, data: { key: "browser-question", title: "Domanda browser", meaning: "Prevedere le vendite", source_ids: ["browser-history"], selection: { provider: "seasonal_naive", horizon: 2 } } });
+  expect(questionResponse.status()).toBe(201);
+  const question = await questionResponse.json();
+  const workspace = await (await request.get(`${api}/workspace`, { headers })).json();
+  const questionLink = `/#/w/${workspace.workspace_id}/question/${question.question_id}`;
+  const reportLink = `/#/w/${workspace.workspace_id}/report/${report.report_id}`;
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(questionLink);
+  await page.getByLabel("Indirizzo API").fill("http://127.0.0.1:8000");
+  await page.getByLabel("Token workspace").fill("local-e2e-token");
+  await page.getByRole("button", { name: /Apri il workspace/ }).click();
+  await expect(page.getByText(`ID domanda: ${question.question_id}`)).toBeVisible();
+  await page.goto(reportLink);
+  await expect(page.getByText(`ID report: ${report.report_id}`)).toBeVisible();
+  await expect(page.getByRole("table", { name: /Confronto e origini escluse/ })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText(`ID report: ${report.report_id}`)).toBeVisible();
+  await page.goBack();
+  await expect(page.getByText(`ID domanda: ${question.question_id}`)).toBeVisible();
+  await page.goForward();
+  await expect(page.getByText(`ID report: ${report.report_id}`)).toBeVisible();
+  await page.goto("/#questions");
+  await expect(page.getByRole("link", { name: "Domanda browser" })).toBeVisible();
+  await page.getByRole("link", { name: "Domanda browser" }).click();
+  await expect(page.getByText(`ID domanda: ${question.question_id}`)).toBeVisible();
+  expect(page.url()).not.toContain("local-e2e-token");
+  await page.keyboard.press("Tab");
+  expect(await page.evaluate(() => document.activeElement !== document.body)).toBeTruthy();
+});
+
+test("switches between separate workspaces and ignores a late rejected connection", async ({ page, request }) => {
+  const headers = { Authorization: "Bearer local-e2e-token" };
+  const first = await (await request.get("http://127.0.0.1:8000/v1/workspace", { headers })).json();
+  const second = await (await request.get("http://127.0.0.1:8001/v1/workspace", { headers })).json();
+  expect(second.workspace_id).not.toBe(first.workspace_id);
+  const events = await (await request.get("http://127.0.0.1:8001/v1/events?limit=1000", { headers })).json();
+  const runId = events.find((event: { kind: string }) => event.kind === "run_completed").run_id;
+  await page.goto(`/#/w/${second.workspace_id}/run/${runId}`);
+  await page.getByLabel("Indirizzo API").fill("http://127.0.0.1:8000");
+  await page.getByLabel("Token workspace").fill("local-e2e-token");
+  await page.getByRole("button", { name: /Apri il workspace/ }).click();
+  await expect(page.getByRole("alert")).toContainText("workspace diverso");
+  await expect(page.getByText(`ID run: ${runId}`)).toHaveCount(0);
+  await page.getByLabel("Indirizzo API").fill("http://127.0.0.1:8001");
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  let observed!: () => void;
+  const started = new Promise<void>(resolve => { observed = resolve; });
+  await page.route("**/v1/capabilities", async route => {
+    if (route.request().headers().authorization === "Bearer wrong-late-token") { observed(); await held; }
+    await route.continue();
+  });
+  await page.getByLabel("Token workspace").fill("wrong-late-token");
+  await page.getByRole("button", { name: /Apri il workspace/ }).click();
+  await started;
+  await page.getByLabel("Token workspace").fill("local-e2e-token");
+  await page.getByRole("button", { name: /Apri il workspace/ }).click();
+  await expect(page.getByText(`ID run: ${runId}`)).toBeVisible();
+  release();
+  await expect(page.getByText(`ID run: ${runId}`)).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByText(`ID run: ${runId}`)).toBeVisible();
 });

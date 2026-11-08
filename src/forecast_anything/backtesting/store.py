@@ -400,6 +400,14 @@ class BacktestStore:
             )
         return report.report_id
 
+    def get_report_by_id(self, report_id: str) -> BacktestReport:
+        with self.ledger._connection() as connection:
+            report = self._decode(
+                connection, "backtest_reports", {"report_id": report_id}, BacktestReport
+            )
+            self._check_report(connection, report)
+            return report
+
     def get_report(self, backtest_id: str) -> BacktestReport:
         with self.ledger._connection() as connection:
             report = self._decode(

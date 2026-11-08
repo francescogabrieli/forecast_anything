@@ -44,6 +44,7 @@ from ..contracts import (
     Snapshot,
     SnapshotSeriesPage,
     SnapshotSummary,
+    SourceConfiguration,
     SourceProfile,
     SourceRefreshRequest,
     SourceRegistration,
@@ -53,6 +54,7 @@ from ..contracts import (
     WatchPatch,
     WatchRequest,
     WatchView,
+    WorkspaceIdentity,
 )
 from ..discovery.agent_gateway import AgentOperationRequest, AgentOperationResponse
 from ..discovery.candidates import TEMPLATES
@@ -67,6 +69,10 @@ from .scenarios import create_scenario
 
 def router(service):
     api = APIRouter(prefix="/v1", dependencies=[Depends(HTTPBearer(auto_error=False))])
+
+    @api.get("/workspace", response_model=WorkspaceIdentity)
+    def workspace_identity():
+        return WorkspaceIdentity(workspace_id=service.ledger.workspace_id())
 
     @api.post("/sources", response_model=SourceRegistration, status_code=201)
     def register(spec: SourceSpec):
@@ -93,6 +99,18 @@ def router(service):
     @api.get("/sources/{source_id}/profile", response_model=SourceProfile)
     def profile(source_id: str):
         return service.profile(source_id)[0]
+
+    @api.get("/sources/{source_id}/configuration", response_model=SourceConfiguration)
+    def source_configuration(source_id: str):
+        spec = service.catalog.get(source_id).spec
+        return SourceConfiguration(
+            source_id=spec.source_id,
+            kind=spec.kind,
+            location=spec.location,
+            mapping=spec.mapping,
+            refresh_seconds=spec.refresh_seconds,
+            has_secret_ref=spec.secret_ref is not None,
+        )
 
     @api.post(
         "/sources/{source_id}/refresh",
@@ -265,6 +283,20 @@ def router(service):
     @api.get("/evaluations/{evaluation_id}", response_model=EvaluationRecord)
     def evaluation(evaluation_id: str):
         return service.ledger.get_evaluation(evaluation_id)
+
+    @api.get("/reports/{report_id}/presentation", response_model=BacktestPresentation)
+    def report_presentation(report_id: str):
+        report = service.report_by_id(report_id)
+        return service.backtest_presentation(report.backtest_id, watch_id=None)
+
+    @api.get("/reports/{report_id}/origins", response_model=OriginPage)
+    def report_origins(
+        report_id: str,
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=50)] = 25,
+    ):
+        report = service.report_by_id(report_id)
+        return service.backtest_origins(report.backtest_id, offset=offset, limit=limit)
 
     @api.get("/backtests/{backtest_id}", response_model=BacktestReport)
     def backtest(backtest_id: str):

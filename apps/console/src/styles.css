@@ -350,3 +350,8 @@ pre, code, .advanced-mapping textarea, .scenario-builder textarea {
 .event-list time {white-space:nowrap;font-variant-numeric:tabular-nums}
 .run-meta dd {overflow-wrap:anywhere}
 @media(max-width:640px){.recorded-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.event-list time{white-space:normal}}
+
+.compact-route { padding-left: 8px; }
+.compact-route .app-topbar { left: 8px; }
+.compact-route .app-sheet { max-width: 980px; margin: 0 auto; }
+.context-mode { align-self: flex-end; margin-bottom: 12px; }
