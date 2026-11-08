@@ -198,6 +198,10 @@ class Worker:
     def _execute_with_budget(self, job: Job, now: datetime):
         if not job.payload.get("automatic_requalification"):
             return self._execute(job, now)
+        if self._has_persisted_requalification_report(job):
+            # The immutable report is sufficient to finish publication without
+            # starting inference again, even when the original deadline passed.
+            return self._execute(job, now)
         deadline_text = job.payload.get("execution_deadline_at")
         remaining = (
             (datetime.fromisoformat(deadline_text) - now).total_seconds()
@@ -231,6 +235,19 @@ class Worker:
             )
         return result
 
+    def _has_persisted_requalification_report(self, job: Job) -> bool:
+        if not job.payload.get("automatic_requalification"):
+            return False
+        from .backtesting.store import BacktestStore
+
+        try:
+            BacktestStore(self.runtime.ledger).get_report(job.job_id)
+        except DomainError as error:
+            if error.code == "not_found":
+                return False
+            raise
+        return True
+
     def _execute(self, job: Job, now: datetime) -> dict | None:
         payload = job.payload
         context = provider_epoch_context(self.runtime)
@@ -245,25 +262,27 @@ class Worker:
             )
         if payload.get("kind") == "backtest":
             if payload.get("watch_id"):
-                watch = self.runtime.ledger.get_watch(payload["watch_id"])
-                if watch.lifecycle in {"paused", "unsupported"}:
-                    return {
-                        "suppressed": "watch_not_active",
-                        "watch_id": watch.watch_id,
-                    }
-                if watch.candidate_invalidated:
-                    return {
-                        "suppressed": "watch_candidate_invalidated",
-                        "watch_id": watch.watch_id,
-                    }
-                if payload.get("automatic_requalification") and (
-                    not watch.source_snapshot_ids
-                    or payload.get("snapshot_id") != watch.source_snapshot_ids[-1]
-                ):
-                    return {
-                        "suppressed": "source_snapshot_superseded",
-                        "watch_id": watch.watch_id,
-                    }
+                recovering_report = self._has_persisted_requalification_report(job)
+                if not recovering_report:
+                    watch = self.runtime.ledger.get_watch(payload["watch_id"])
+                    if watch.lifecycle in {"paused", "unsupported"}:
+                        return {
+                            "suppressed": "watch_not_active",
+                            "watch_id": watch.watch_id,
+                        }
+                    if watch.candidate_invalidated:
+                        return {
+                            "suppressed": "watch_candidate_invalidated",
+                            "watch_id": watch.watch_id,
+                        }
+                    if payload.get("automatic_requalification") and (
+                        not watch.source_snapshot_ids
+                        or payload.get("snapshot_id") != watch.source_snapshot_ids[-1]
+                    ):
+                        return {
+                            "suppressed": "source_snapshot_superseded",
+                            "watch_id": watch.watch_id,
+                        }
             return execute_backtest_job(
                 self.runtime,
                 self.catalog,
@@ -892,7 +911,6 @@ class Worker:
                         for link in eligible
                     ),
                     "execution_budget_seconds": 300,
-                    "execution_deadline_at": (now + timedelta(seconds=300)).isoformat(),
                 }
             )
             with ledger._transaction() as connection:

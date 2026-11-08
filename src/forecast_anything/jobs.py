@@ -164,7 +164,7 @@ class JobQueue:
             raise DomainError("invalid_lease", {})
         with self.ledger._transaction() as connection:
             row = connection.execute(
-                "SELECT job_id, attempt FROM jobs WHERE next_due_at <= ? AND "
+                "SELECT job_id, attempt, payload FROM jobs WHERE next_due_at <= ? AND "
                 "(state = 'pending' OR (state = 'running' AND lease_until <= ?)) "
                 "ORDER BY priority ASC, next_due_at ASC, rowid ASC LIMIT 1",
                 (stamp, stamp),
@@ -172,13 +172,24 @@ class JobQueue:
             if row is None:
                 return None
             token = uuid4().hex
+            payload = json.loads(row[2])
+            if payload.get("automatic_requalification") and not payload.get(
+                "execution_started_at"
+            ):
+                budget_seconds = payload.get("execution_budget_seconds", 300)
+                if type(budget_seconds) is not int or budget_seconds <= 0:
+                    raise DomainError("invalid_job_execution_budget", {})
+                payload["execution_started_at"] = now.isoformat()
+                payload["execution_deadline_at"] = (
+                    now + timedelta(seconds=budget_seconds)
+                ).isoformat()
             connection.execute(
-                "UPDATE jobs SET state = 'running', owner = ?, lease_token = ?, lease_until = ? WHERE job_id = ?",
-                (owner, token, stamp + ttl_seconds, row[0]),
+                "UPDATE jobs SET payload = ?, state = 'running', owner = ?, lease_token = ?, lease_until = ? WHERE job_id = ?",
+                (_json(payload), owner, token, stamp + ttl_seconds, row[0]),
             )
             connection.execute(
                 "INSERT OR IGNORE INTO job_attempts (job_id, attempt, state) VALUES (?, ?, 'running')",
-                row,
+                row[:2],
             )
         return self.get(row[0])
 

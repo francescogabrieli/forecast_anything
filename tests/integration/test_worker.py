@@ -131,6 +131,7 @@ def test_automatic_requalification_deadline_triggers_worker_timeout_handler(
             "kind": "backtest",
             "automatic_requalification": True,
             "execution_budget_seconds": 1,
+            "execution_started_at": T.isoformat(),
             "execution_deadline_at": deadline.isoformat(),
         },
     )
@@ -847,6 +848,127 @@ def _provisional_requalification_case(tmp_path, *, appended_days):
         event_id=f"test-append/{snapshot.snapshot_id}",
     )
     return ledger, runtime, question, now
+
+
+def test_requalification_budget_starts_on_first_claim_after_queue_delay(
+    tmp_path, monkeypatch
+):
+    ledger, runtime, _, scheduled_at = _provisional_requalification_case(
+        tmp_path, appended_days=141
+    )
+    queue = JobQueue(ledger)
+    worker = Worker(runtime, queue)
+    worker._schedule_requalifications(scheduled_at)
+    with ledger._connection() as connection:
+        row = connection.execute(
+            "SELECT job_id, payload FROM jobs WHERE json_extract(payload, '$.automatic_requalification') = 1"
+        ).fetchone()
+    job_id, original_payload = row
+    import json
+
+    assert "execution_deadline_at" not in json.loads(original_payload)
+
+    # The durable job waits longer than its 300-second compute budget before
+    # any worker claims it. A crash then lets a second worker reclaim the lease.
+    first_claim_at = scheduled_at + timedelta(seconds=301)
+    ledger.clock = runtime.clock = lambda: first_claim_at
+    observed = []
+
+    def crash_after_claim(job, now):
+        observed.append(job.payload.copy())
+        raise KeyboardInterrupt("worker exited after first claim")
+
+    monkeypatch.setattr(worker, "_execute", crash_after_claim)
+    with pytest.raises(KeyboardInterrupt, match="first claim"):
+        worker.run_due(first_claim_at)
+
+    first_payload = queue.get(job_id).payload
+    expected_deadline = first_claim_at + timedelta(seconds=300)
+    assert first_payload["execution_started_at"] == first_claim_at.isoformat()
+    assert first_payload["execution_deadline_at"] == expected_deadline.isoformat()
+
+    second_claim_at = first_claim_at + timedelta(seconds=61)
+    ledger.clock = runtime.clock = lambda: second_claim_at
+    resumed = Worker(runtime, queue)
+    monkeypatch.setattr(
+        resumed,
+        "_execute",
+        lambda job, now: observed.append(job.payload.copy()) or {"recovered": True},
+    )
+    resumed.run_due(second_claim_at)
+
+    assert observed[1]["execution_deadline_at"] == expected_deadline.isoformat()
+    assert (
+        datetime.fromisoformat(observed[1]["execution_deadline_at"]) > second_claim_at
+    )
+    assert queue.get(job_id).state == "completed"
+
+
+def test_requalification_publication_replays_after_deadline_without_duplicates(
+    tmp_path, monkeypatch
+):
+    from forecast_anything.backtesting.store import BacktestStore
+
+    ledger, runtime, question, scheduled_at = _provisional_requalification_case(
+        tmp_path, appended_days=141
+    )
+    queue = JobQueue(ledger)
+    worker = Worker(runtime, queue)
+    worker._schedule_requalifications(scheduled_at)
+    with ledger._connection() as connection:
+        job_id = connection.execute(
+            "SELECT job_id FROM jobs WHERE json_extract(payload, '$.automatic_requalification') = 1"
+        ).fetchone()[0]
+    job = queue.get(job_id)
+    candidate_id = job.payload["candidate_id"]
+    decision_count_before = len(ledger.eligibility_decisions(candidate_id))
+    original_complete = queue.complete
+
+    def crash_after_publication(*args, **kwargs):
+        raise KeyboardInterrupt("worker exited after decision publication")
+
+    monkeypatch.setattr(queue, "complete", crash_after_publication)
+    with pytest.raises(KeyboardInterrupt, match="decision publication"):
+        worker.run_due(scheduled_at)
+
+    report = BacktestStore(ledger).get_report(job_id)
+    persisted_event_ids = {
+        event.event_id
+        for event in ledger.list_inbox_events(question_id=question.question_id).events
+    }
+    persisted_decisions = ledger.eligibility_decisions(candidate_id)
+    persisted_watch_events = ledger.watch_history("watch")
+    provider_calls = len(runtime.providers["seasonal_naive"].calls)
+    deadline = datetime.fromisoformat(
+        queue.get(job_id).payload["execution_deadline_at"]
+    )
+    replay_at = deadline + timedelta(seconds=1)
+    ledger.clock = runtime.clock = lambda: replay_at
+    monkeypatch.setattr(queue, "complete", original_complete)
+
+    completed = Worker(runtime, queue).run_due(replay_at)
+
+    assert completed == (job_id,)
+    assert queue.get(job_id).state == "completed"
+    assert queue.get(job_id).attempt == 1
+    assert len(queue.history(job_id)) == 1
+    assert queue.history(job_id)[-1]["result"]["report_id"] == report.report_id
+    assert len(runtime.providers["seasonal_naive"].calls) == provider_calls
+    assert len(ledger.eligibility_decisions(candidate_id)) == decision_count_before + 1
+    assert ledger.eligibility_decisions(candidate_id) == persisted_decisions
+    assert {
+        event.event_id
+        for event in ledger.list_inbox_events(question_id=question.question_id).events
+    } == persisted_event_ids
+    final_watch_events = ledger.watch_history("watch")
+    assert len(final_watch_events) == len(persisted_watch_events)
+    assert (
+        sum(
+            entry["event_id"] == f"backtest/{report.report_id}"
+            for entry in final_watch_events
+        )
+        == 1
+    )
 
 
 def test_automatic_requalification_waits_when_fewer_than_30_final_origins_exist(

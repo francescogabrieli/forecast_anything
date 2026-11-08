@@ -22,5 +22,7 @@
   - Implementazione aggiornamenti post-append con stato provvisorio e scheduling riqualifica.
   - Endpoint e tool MCP per gestione controlli (Pausa, Mute, Priorità), consultazione Inbox e configurazione Webhook.
   - Verificati scenari deterministici, retry/crash webhook, Timestral reale e journey end-to-end con assistente chiuso via MCP stdio, receiver locale e recupero della stessa domanda.
-  - Il budget di 300 secondi ha una scadenza assoluta persistita, un timer di processo che termina il worker e il riavvio del worker nel supervisore. Il test del callback di timeout del worker è passato; l'esecuzione del test del supervisore è stata bloccata prima di un risultato. Il controllo tra origini non dimostra l'interruzione di una singola inferenza già in corso: né tale interruzione né il riavvio sono dichiarati verificati.
+  - Il budget automatico parte dalla prima presa in carico: scadenza di 300 secondi e istante d'avvio sono persistiti atomicamente nella coda e mantenuti dopo crash/retry. Il tempo in coda non lo consuma.
+  - Il replay di un report già persistito completa la pubblicazione anche dopo la scadenza. Una regressione con crash dopo la pubblicazione della decisione e ripresa oltre il deadline verifica completamento dello stesso tentativo senza nuove inferenze né duplicati di decisioni/eventi.
+  - Il callback di timeout del worker è verificato; il test del supervisore con processi simulati è passato e osserva il riavvio del worker con API attiva. Non è stato osservato un kill OS reale durante una singola inferenza provider già in corso; il controllo tra origini non prova tale interruzione.
   - Osservazione Codex Desktop non disponibile tramite il tool UI; la prova MCP stdio non è una prova UI Desktop.

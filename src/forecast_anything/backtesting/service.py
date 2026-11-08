@@ -239,11 +239,6 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
     if plan.watch_id is not None and plan.candidate_id is not None:
         ledger = runtime.ledger
         watch = ledger.get_watch(plan.watch_id)
-        if (
-            job.payload.get("automatic_requalification")
-            and job.payload.get("snapshot_id") != watch.source_snapshot_ids[-1]
-        ):
-            return result | {"suppressed": "source_snapshot_superseded"}
         event_id = f"backtest/{report.report_id}"
         previous = next(
             (
@@ -274,6 +269,11 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
                 "eligibility": decision["action"],
                 "reason_codes": decision["reason_codes"],
             }
+        if job.payload.get("automatic_requalification") and (
+            not watch.source_snapshot_ids
+            or job.payload.get("snapshot_id") != watch.source_snapshot_ids[-1]
+        ):
+            return result | {"suppressed": "source_snapshot_superseded"}
         candidate = ledger.get_candidate(plan.candidate_id)
         if watch.candidate_id != candidate.candidate_id or watch.candidate_invalidated:
             raise DomainError("watch_candidate_invalidated", {})
