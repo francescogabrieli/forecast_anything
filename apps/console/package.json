@@ -14,9 +14,12 @@
     "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
     "typecheck": "tsc --noEmit",
     "generate:types": "node scripts/generate-types.mjs",
-    "check:types": "node scripts/generate-types.mjs --check"
+    "check:types": "node scripts/generate-types.mjs --check",
+    "build:mcp-app": "vite build --config vite.mcp.config.ts",
+    "check:mcp-app": "node scripts/check-mcp-app.mjs"
   },
   "dependencies": {
+    "@modelcontextprotocol/ext-apps": "2.0.4",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
@@ -32,6 +35,7 @@
     "json-schema-to-typescript": "16.0.0",
     "typescript": "7.0.2",
     "vite": "8.3.5",
+    "vite-plugin-singlefile": "2.3.4",
     "vitest": "4.1.12"
   }
 }
