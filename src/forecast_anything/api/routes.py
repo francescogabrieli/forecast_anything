@@ -1,7 +1,7 @@
 """Thin typed v1 routes over the observatory boundary."""
 
 import asyncio
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import StreamingResponse
@@ -38,6 +38,7 @@ from ..contracts import (
     QuestionRevisionRequest,
     QuestionTitlePatch,
     QuestionView,
+    ResourceIdentity,
     RunRecord,
     ScenarioRequest,
     ScenarioView,
@@ -73,6 +74,14 @@ def router(service):
     @api.get("/workspace", response_model=WorkspaceIdentity)
     def workspace_identity():
         return WorkspaceIdentity(workspace_id=service.ledger.workspace_id())
+
+    @api.get(
+        "/resource-identities/{kind}/{resource_id}", response_model=ResourceIdentity
+    )
+    def resource_identity(kind: Literal["run", "question", "report"], resource_id: str):
+        return ResourceIdentity(
+            kind=kind, resource_id=service.ledger.resource_identity(kind, resource_id)
+        )
 
     @api.post("/sources", response_model=SourceRegistration, status_code=201)
     def register(spec: SourceSpec):

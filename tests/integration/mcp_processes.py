@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ISSUED = "2026-10-23T12:00:00+00:00"
 TOOLS = {
     "get_browser_link",
+    "open_context_view",
     "create_question",
     "list_questions",
     "get_question",
@@ -303,7 +304,9 @@ class LocalWorkspace:
         return response.json()
 
     @asynccontextmanager
-    async def client(self, *, source_ids=(), token=None):
+    async def client(
+        self, *, source_ids=(), token=None, extensions=None, mode="legacy"
+    ):
         from mcp import Client
         from mcp.client.stdio import StdioServerParameters, stdio_client
 
@@ -335,7 +338,8 @@ class LocalWorkspace:
                 # Force initialize negotiation; the direct/in-memory SDK path is never used.
                 async with Client(
                     stdio_client(parameters, errlog=log),
-                    mode="legacy",
+                    mode=mode,
+                    extensions=extensions,
                     read_timeout_seconds=8,
                 ) as client:
                     client.fixture_errors = self.errors

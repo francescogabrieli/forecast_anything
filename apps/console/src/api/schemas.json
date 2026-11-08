@@ -7012,6 +7012,31 @@
     "title": "QuestionView",
     "type": "object"
   },
+  "ResourceIdentity": {
+    "additionalProperties": false,
+    "properties": {
+      "kind": {
+        "enum": [
+          "run",
+          "question",
+          "report"
+        ],
+        "title": "Kind",
+        "type": "string"
+      },
+      "resource_id": {
+        "minLength": 1,
+        "title": "Resource Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "kind",
+      "resource_id"
+    ],
+    "title": "ResourceIdentity",
+    "type": "object"
+  },
   "ResumeJobRequest": {
     "additionalProperties": false,
     "properties": {

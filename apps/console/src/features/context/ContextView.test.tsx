@@ -71,3 +71,12 @@ it("does not infer a comparator when no baseline reference is present", async ()
   expect(await screen.findByText("Non disponibile o non confrontabile")).toBeVisible();
   expect(screen.queryByText("99")).not.toBeInTheDocument();
 });
+
+it("keeps a report readable when origin detail cannot be loaded", async () => {
+  const client = new ApiClient("http://localhost:8000", "token");
+  vi.spyOn(client, "getReportPresentation").mockResolvedValue({ summary: { report_id: "report-1", backtest_id: "backtest-1", status: "completed", selection: { provider: "timestral", horizon: 1 }, interpretation_limit: "Solo dati registrati", partitions: [], final_origin_points: [], assumptions: [], source_id: "sales", source_revision: "r" } } as unknown as Awaited<ReturnType<ApiClient["getReportPresentation"]>>);
+  vi.spyOn(client, "getReportOrigins").mockRejectedValue(new Error("host tool unavailable"));
+  render(<ContextView client={client} workspaceId={"a".repeat(32)} resource={{ kind: "report", id: "report-1" }} />);
+  expect(await screen.findByText("ID report: report-1")).toBeVisible();
+  expect(screen.getByText(/Dettaglio delle origini non disponibile/)).toBeVisible();
+});

@@ -20,6 +20,7 @@ _ROUTES = {
         rf"/v1/(?:capabilities|workspace|sources|events|"
         rf"(?:jobs|candidates|runs|graphs|evaluations)/{_SEGMENT}|"
         rf"snapshots/{_SEGMENT}(?:/(?:summary|series))?|"
+        rf"resource-identities/(?:run|question|report)/{_SEGMENT}|"
         rf"questions(?:/{_SEGMENT}(?:/(?:references|presentation|revisions(?:/{_SEGMENT})?))?)?|"
         rf"operations(?:/{_SEGMENT})?|"
         rf"(?:backtests|reports)/{_SEGMENT}(?:/(?:origins|presentation))?|"

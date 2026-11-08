@@ -140,6 +140,11 @@ class SnapshotSeriesPage(Contract):
     next_offset: Annotated[int, Field(ge=0, strict=True)] | None
 
 
+class ResourceIdentity(Contract):
+    kind: Literal["run", "question", "report"]
+    resource_id: Identifier
+
+
 class WorkspaceIdentity(Contract):
     workspace_id: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{32}$")]
 

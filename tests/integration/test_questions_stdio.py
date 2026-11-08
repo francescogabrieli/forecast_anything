@@ -206,3 +206,71 @@ def test_question_revisions_and_references_survive_mcp_reconnect(tmp_path):
         tmp_path, source_root=Path(__file__).resolve().parents[2]
     ) as workspace:
         asyncio.run(journey(workspace))
+
+
+def test_context_view_resource_and_text_fallback_over_stdio(tmp_path):
+    from mcp.client.extension import advertise
+
+    async def journey(workspace):
+        issued = await baseline_journey(workspace)
+        async with workspace.client(source_ids=["sales"]) as client:
+            tools = await client.list_tools()
+            view_tool = next(
+                tool for tool in tools.tools if tool.name == "open_context_view"
+            )
+            assert (
+                view_tool.meta["ui"]["resourceUri"]
+                == "ui://forecast-anything/context.html"
+            )
+            resources = await client.list_resources()
+            assert any(
+                item.uri == "ui://forecast-anything/context.html"
+                and item.mime_type == "text/html;profile=mcp-app"
+                for item in resources.resources
+            )
+            html = await client.read_resource("ui://forecast-anything/context.html")
+            assert html.contents[0].mime_type == "text/html;profile=mcp-app"
+            result = await client.call_tool(
+                "open_context_view",
+                {
+                    "kind": "run",
+                    "resource_id": issued["run"]["run_id"],
+                    "browser_url": "http://127.0.0.1:4173",
+                },
+            )
+            assert not result.is_error
+            data = result.structured_content["data"]
+            assert data["presentation"]["run_id"] == issued["run"]["run_id"]
+            assert data["browser_link"]["url"] in result.content[0].text
+            assert workspace.token not in result.model_dump_json()
+            assert len(result.model_dump_json(by_alias=True).encode()) <= 65536
+            expected = data
+        for extensions in (
+            [advertise("io.modelcontextprotocol/ui", {"mimeTypes": []})],
+            [
+                advertise(
+                    "io.modelcontextprotocol/ui",
+                    {"mimeTypes": ["text/html;profile=mcp-app"]},
+                )
+            ],
+        ):
+            async with workspace.client(
+                source_ids=["sales"], extensions=extensions, mode="auto"
+            ) as reconnected:
+                assert (
+                    "io.modelcontextprotocol/ui"
+                    in reconnected.server_capabilities.extensions
+                )
+                result = await reconnected.call_tool(
+                    "open_context_view",
+                    {
+                        "kind": "run",
+                        "resource_id": issued["run"]["run_id"],
+                        "browser_url": "http://127.0.0.1:4173",
+                    },
+                )
+                assert result.structured_content["data"] == expected
+                assert expected["browser_link"]["url"] in result.content[0].text
+
+    with LocalWorkspace(tmp_path) as workspace:
+        asyncio.run(journey(workspace))

@@ -38,6 +38,7 @@ def test_installed_wheel_mcp_baseline_outside_checkout(tmp_path):
     with ZipFile(wheel) as archive:
         names = archive.namelist()
         assert "forecast_anything/mcp_adapter/server.py" in names
+        assert "forecast_anything/mcp_adapter/ui_dist/context.html" in names
         for name in names:
             assert not inspector["SECRET_NAME"].search(name), name
             assert Path(name).suffix.lower() not in inspector["WEIGHT_SUFFIXES"], name
@@ -108,6 +109,28 @@ def test_installed_wheel_mcp_baseline_outside_checkout(tmp_path):
                 asyncio.wait_for(baseline_journey(workspace), timeout=45)
             )
             assert issued["run"]["results"]["forecast"]["point"] == [[2.0]]
+
+            async def read_installed_ui():
+                async with workspace.client(source_ids=["sales"]) as client:
+                    resource = await client.read_resource(
+                        "ui://forecast-anything/context.html"
+                    )
+                    assert resource.contents[0].mime_type == "text/html;profile=mcp-app"
+                    result = await client.call_tool(
+                        "open_context_view",
+                        {
+                            "kind": "run",
+                            "resource_id": issued["run"]["run_id"],
+                            "browser_url": "http://127.0.0.1:4173",
+                        },
+                    )
+                    assert not result.is_error
+                    assert (
+                        result.structured_content["data"]["presentation"]["run_id"]
+                        == issued["run"]["run_id"]
+                    )
+
+            asyncio.run(read_installed_ui())
 
         with LocalWorkspace(
             outside / "evidence-workspace", python=python, executable=executable
