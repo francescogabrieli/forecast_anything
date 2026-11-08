@@ -1215,3 +1215,82 @@ def test_workspace_identity_is_authenticated_stable_and_distinct(tmp_path):
         ).status_code
         == 401
     )
+
+
+def test_browser_session_is_scoped_expires_and_is_revocable(tmp_path, monkeypatch):
+    import forecast_anything.api.app as app_module
+
+    ledger = Ledger(tmp_path / "browser-session.db", clock=lambda: T)
+    runtime = Runtime(ledger, {}, {}, lambda: T)
+    origin = "http://127.0.0.1:4173"
+    client = TestClient(
+        create_app(ledger, runtime, "test-token", console_origins=(origin,)),
+        base_url="http://localhost",
+    )
+    now = [1000.0]
+    monkeypatch.setattr(app_module, "_session_now", lambda: now[0])
+    assert (
+        client.post(
+            "/v1/browser-session",
+            headers={
+                "Authorization": "Bearer test-token",
+                "Origin": "http://evil.example",
+            },
+        ).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            "/v1/browser-session",
+            headers={"Authorization": "Bearer wrong", "Origin": origin},
+        ).status_code
+        == 401
+    )
+    linked = client.post(
+        "/v1/browser-session",
+        headers={"Authorization": "Bearer test-token", "Origin": origin},
+    )
+    assert linked.status_code == 201
+    assert "test-token" not in linked.text
+    assert "httponly" in linked.headers["set-cookie"].lower()
+    saved_cookie = linked.headers["set-cookie"].split(";", 1)[0]
+    assert client.get("/v1/workspace", headers={"Origin": origin}).status_code == 200
+    restarted = TestClient(
+        create_app(ledger, runtime, "test-token", console_origins=(origin,)),
+        base_url="http://localhost",
+    )
+    assert (
+        restarted.get(
+            "/v1/workspace", headers={"Origin": origin, "Cookie": saved_cookie}
+        ).status_code
+        == 401
+    )
+    assert client.get("/v1/workspace").status_code == 401
+    assert (
+        client.get(
+            "/v1/workspace", headers={"Origin": "http://evil.example"}
+        ).status_code
+        == 401
+    )
+    assert (
+        client.post(
+            "/v1/browser-session/revoke", headers={"Origin": origin}
+        ).status_code
+        == 200
+    )
+    assert (
+        client.get(
+            "/v1/workspace", headers={"Origin": origin, "Cookie": saved_cookie}
+        ).status_code
+        == 401
+    )
+    assert (
+        client.post(
+            "/v1/browser-session",
+            headers={"Authorization": "Bearer test-token", "Origin": origin},
+        ).status_code
+        == 201
+    )
+    assert client.get("/v1/workspace", headers={"Origin": origin}).status_code == 200
+    now[0] += 8 * 60 * 60 + 1
+    assert client.get("/v1/workspace", headers={"Origin": origin}).status_code == 401

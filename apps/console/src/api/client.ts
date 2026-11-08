@@ -36,12 +36,20 @@ export class ApiError extends Error {
 export class ApiClient {
   private readonly origin: string;
 
-  constructor(baseUrl: string, private readonly token: string) {
+  constructor(baseUrl: string, private readonly token: string = "") {
     const url = new URL(baseUrl);
     if (url.search || url.hash || url.username || url.password) {
       throw new Error("The API address must not contain credentials, a query, or a fragment.");
     }
     this.origin = url.toString().replace(/\/+$/, "");
+  }
+
+  async createBrowserSession(): Promise<void> {
+    await this.request("POST", "/v1/browser-session");
+  }
+
+  async revokeBrowserSession(): Promise<void> {
+    await this.request("POST", "/v1/browser-session/revoke");
   }
 
   getHealth(): Promise<{ status: string; worker: string; worker_model: string | null }> {
@@ -199,7 +207,8 @@ export class ApiClient {
 
   private async readEventStream(cursor: number, onEvent: (event: EventRecord) => void, signal: AbortSignal): Promise<number> {
     const response = await fetch(`${this.origin}/v1/events/stream?after=${cursor}&follow=true`, {
-      headers: { Authorization: `Bearer ${this.token}`, Accept: "text/event-stream" },
+      ...(!this.token ? { credentials: "include" as const } : {}),
+      headers: { ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}), Accept: "text/event-stream" },
       signal,
     });
     if (!response.ok) throw await toApiError(response);
@@ -240,8 +249,9 @@ export class ApiClient {
   private async request<T>(method: "GET" | "POST" | "PATCH", path: string, body?: unknown): Promise<T> {
     const response = await fetch(`${this.origin}${path}`, {
       method,
+      ...(!this.token || path === "/v1/browser-session" ? { credentials: "include" as const } : {}),
       headers: {
-        Authorization: `Bearer ${this.token}`,
+        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),

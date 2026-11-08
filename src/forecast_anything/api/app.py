@@ -1,6 +1,10 @@
 """Application factory; authentication covers documentation and streaming too."""
 
+import hashlib
 import hmac
+import secrets
+import threading
+import time
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -15,6 +19,12 @@ from ..store import Ledger
 from .errors import public_error_details
 from .routes import router
 from .service import Observatory
+
+SESSION_LIFETIME = 8 * 60 * 60
+
+
+def _session_now():
+    return time.monotonic()
 
 
 def create_app(
@@ -45,6 +55,24 @@ def create_app(
         },
     )
     app.state.observatory = Observatory(ledger, runtime)
+    cookie_name = "fa_browser_" + ledger.workspace_id()
+    sessions = {}
+    session_lock = threading.Lock()
+
+    def valid_session(request):
+        origin = request.headers.get("origin")
+        if origin not in console_origins:
+            return False
+        raw = request.cookies.get(cookie_name, "")
+        if not raw or len(raw) > 128:
+            return False
+        digest = hashlib.sha256(raw.encode()).hexdigest()
+        with session_lock:
+            record = sessions.get(digest)
+            if not record or record[1] <= _session_now():
+                sessions.pop(digest, None)
+                return False
+            return hmac.compare_digest(record[0], origin)
 
     @app.middleware("http")
     async def authenticate(request, call_next):
@@ -58,14 +86,18 @@ def create_app(
                     headers={"WWW-Authenticate": "Bearer"},
                 )
             expected = agent_token if agent_route else workspace_token
-            if not hmac.compare_digest(
+            bearer_valid = hmac.compare_digest(
                 supplied.encode(), f"Bearer {expected}".encode()
-            ):
+            )
+            cookie_valid = not supplied and not agent_route and valid_session(request)
+            if not bearer_valid and not cookie_valid:
                 return JSONResponse(
                     {"code": "unauthorized", "details": {}},
                     status_code=401,
                     headers={"WWW-Authenticate": "Bearer"},
                 )
+            if cookie_valid:
+                request.state.browser_session_valid = lambda: valid_session(request)
         return await call_next(request)
 
     # Register after the auth middleware so CORS can answer browser preflight
@@ -74,10 +106,72 @@ def create_app(
         app.add_middleware(
             CORSMiddleware,
             allow_origins=list(console_origins),
-            allow_credentials=False,
+            allow_credentials=True,
             allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
             allow_headers=["Authorization", "Content-Type", "Accept", "Last-Event-ID"],
         )
+
+    @app.post("/v1/browser-session", status_code=201)
+    def create_browser_session(request: Request):
+        origin = request.headers.get("origin")
+        if origin not in console_origins or (
+            request.url.scheme != "https"
+            and request.url.hostname not in {"localhost", "127.0.0.1", "::1"}
+        ):
+            return JSONResponse({"code": "forbidden", "details": {}}, status_code=403)
+        if not hmac.compare_digest(
+            request.headers.get("authorization", "").encode(),
+            f"Bearer {workspace_token}".encode(),
+        ):
+            return JSONResponse(
+                {"code": "unauthorized", "details": {}}, status_code=401
+            )
+        raw = secrets.token_urlsafe(32)
+        digest = hashlib.sha256(raw.encode()).hexdigest()
+        now = _session_now()
+        with session_lock:
+            for key in [key for key, value in sessions.items() if value[1] <= now]:
+                sessions.pop(key, None)
+            previous = request.cookies.get(cookie_name, "")
+            if previous and len(previous) <= 128:
+                sessions.pop(hashlib.sha256(previous.encode()).hexdigest(), None)
+            sessions[digest] = (origin, now + SESSION_LIFETIME)
+        response = JSONResponse(
+            {"expires_in": SESSION_LIFETIME},
+            status_code=201,
+            headers={"Cache-Control": "no-store"},
+        )
+        response.set_cookie(
+            cookie_name,
+            raw,
+            max_age=SESSION_LIFETIME,
+            httponly=True,
+            secure=request.url.scheme == "https",
+            samesite="strict",
+            path="/",
+        )
+        return response
+
+    @app.post("/v1/browser-session/revoke")
+    def revoke_browser_session(request: Request):
+        if not valid_session(request):
+            return JSONResponse(
+                {"code": "unauthorized", "details": {}}, status_code=401
+            )
+        digest = hashlib.sha256(request.cookies[cookie_name].encode()).hexdigest()
+        with session_lock:
+            sessions.pop(digest, None)
+        response = JSONResponse(
+            {"revoked": True}, headers={"Cache-Control": "no-store"}
+        )
+        response.delete_cookie(
+            cookie_name,
+            path="/",
+            httponly=True,
+            secure=request.url.scheme == "https",
+            samesite="strict",
+        )
+        return response
 
     @app.exception_handler(DomainError)
     async def domain_error(request, error):

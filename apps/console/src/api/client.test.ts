@@ -8,6 +8,12 @@ afterEach(() => {
 });
 
 describe("ApiClient", () => {
+  it("uses the browser cookie without sending a workspace bearer", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ workspace_id: "a".repeat(32) }) });
+    globalThis.fetch = fetchMock;
+    await new ApiClient("http://localhost:8000").getWorkspace();
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/v1/workspace", expect.objectContaining({ credentials: "include", headers: {} }));
+  });
   it("sends the workspace token in the authorization header, not the URL", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

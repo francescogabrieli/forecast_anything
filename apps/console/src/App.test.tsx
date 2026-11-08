@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
-import { ApiClient } from "./api/client";
+import { ApiClient, ApiError } from "./api/client";
 import { makeRun } from "./test/fixtures";
 afterEach(() => vi.restoreAllMocks());
 beforeEach(() => {
@@ -15,6 +15,7 @@ beforeEach(() => {
   });
   window.location.hash = "home";
   vi.spyOn(ApiClient.prototype, "getHealth").mockResolvedValue({ status: "ok", worker: "running", worker_model: "loaded" });
+  vi.spyOn(ApiClient.prototype, "createBrowserSession").mockResolvedValue();
 });
 describe("product navigation", () => {
   it("opens setup from home and responds to browser hash navigation", () => {
@@ -110,14 +111,19 @@ it("does not declare the workspace connected when the credential is rejected", a
   vi.unstubAllGlobals();
 });
 
-it("allows a saved session to be revoked when the workspace cannot be reached", async () => {
-  localStorage.setItem("forecast-anything.workspace-session.v1", JSON.stringify({ url: "http://localhost:8000", token: "saved" }));
+it("does not claim revocation while the service is unreachable", async () => {
+  localStorage.setItem("forecast-anything.workspace-session.v2", JSON.stringify({ url: "http://localhost:8000", workspaceId: "a".repeat(32) }));
   vi.spyOn(ApiClient.prototype, "getCapabilities").mockRejectedValue(new Error("offline"));
+  const revoke = vi.spyOn(ApiClient.prototype, "revokeBrowserSession").mockRejectedValueOnce(new Error("offline")).mockRejectedValueOnce(new ApiError(401, "unauthorized", {}));
   window.location.hash = "workspace";
   render(<App />);
   const disconnect = await screen.findByRole("button", { name: "Scollega questo browser" });
   fireEvent.click(disconnect);
-  expect(localStorage.getItem("forecast-anything.workspace-session.v1")).toBeNull();
+  expect(await screen.findByText(/Impossibile revocare/)).toBeVisible();
+  expect(localStorage.getItem("forecast-anything.workspace-session.v2")).not.toBeNull();
+  fireEvent.click(disconnect);
+  await waitFor(() => expect(localStorage.getItem("forecast-anything.workspace-session.v2")).toBeNull());
+  expect(revoke).toHaveBeenCalledTimes(2);
 });
 
 it("ignores a rejected connection attempt after a newer connection succeeded", async () => {

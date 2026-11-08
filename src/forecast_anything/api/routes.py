@@ -375,8 +375,13 @@ def router(service):
         async def replay():
             nonlocal position
             while True:
+                check_session = getattr(request.state, "browser_session_valid", None)
+                if check_session is not None and not check_session():
+                    break
                 batch = await asyncio.to_thread(service.events, position)
                 for event in batch:
+                    if check_session is not None and not check_session():
+                        return
                     yield f"id: {event.cursor}\nevent: {event.kind}\ndata: {event.model_dump_json()}\n\n"
                     position = event.cursor
                 if not follow:

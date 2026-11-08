@@ -27,7 +27,8 @@ function readResource(hash: string): Resource | undefined {
     return { workspaceId: match[1], kind: match[2] as Resource["kind"], id, extended: Boolean(match[4]) };
   } catch { return undefined; }
 }
-const SESSION_KEY = "forecast-anything.workspace-session.v1";
+const LEGACY_SESSION_KEY = "forecast-anything.workspace-session.v1";
+const SESSION_KEY = "forecast-anything.workspace-session.v2";
 function isEvidenceHash(value: string) { return value.startsWith("snapshot-") || value.startsWith("evaluation-") || value === "run-details-title"; }
 function readPage(): Page { const value = window.location.hash.slice(1); return readResource(value) || isEvidenceHash(value) ? "observatory" : pages.some((page) => page.id === value) ? value as Page : "home"; }
 function Brand() { return <a className="wordmark" href="#home" aria-label="Forecast Anything home"><img width="28" height="28" src="./mark.svg" alt=""/><span>Forecast Anything</span></a>; }
@@ -35,7 +36,7 @@ export function App() {
   const [page, setPage] = useState<Page>(readPage);
   const [routeHash, setRouteHash] = useState(() => window.location.hash.slice(1));
   const [menuOpen, setMenuOpen] = useState(false);
-  const [apiUrl, setApiUrl] = useState("http://localhost:8000");
+  const [apiUrl, setApiUrl] = useState(() => `http://${window.location.hostname || "localhost"}:8000`);
   const [token, setToken] = useState("");
   const [sourceId, setSourceId] = useState("sales");
   const [workspace, setWorkspace] = useState<{ client: ApiClient; id: number; url: string; workspaceId: string }>();
@@ -80,14 +81,17 @@ export function App() {
     const attempt = ++connectionAttempt.current;
     async function restore() {
       try {
+        localStorage.removeItem(LEGACY_SESSION_KEY);
+        sessionStorage.removeItem(LEGACY_SESSION_KEY);
         const stored = localStorage.getItem(SESSION_KEY);
         if (active && attempt === connectionAttempt.current) setHasStoredSession(stored !== null);
-        const saved = JSON.parse(stored || "null") as { url?: unknown; token?: unknown } | null;
-        if (!saved || typeof saved.url !== "string" || typeof saved.token !== "string") return;
-        const client = new ApiClient(saved.url, saved.token);
+        const saved = JSON.parse(stored || "null") as { url?: unknown; workspaceId?: unknown } | null;
+        if (!saved || typeof saved.url !== "string" || typeof saved.workspaceId !== "string") return;
+        const client = new ApiClient(saved.url);
         const capabilities = await client.getCapabilities();
         const [identity, state] = await Promise.all([client.getWorkspace(), client.getHealth()]);
         if (!active || attempt !== connectionAttempt.current) return;
+        if (saved.workspaceId !== identity.workspace_id) throw new Error("workspace identity mismatch");
         const target = readResource(window.location.hash.slice(1));
         if (target && target.workspaceId !== identity.workspace_id) {
           setError("Il link appartiene a un workspace diverso.");
@@ -112,8 +116,17 @@ export function App() {
     window.addEventListener("storage", sessionChanged);
     return () => window.removeEventListener("storage", sessionChanged);
   }, []);
-  function disconnect() {
+  async function disconnect() {
     connectionAttempt.current += 1;
+    try {
+      const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || "null") as { url?: unknown } | null;
+      if (saved && typeof saved.url === "string") await new ApiClient(saved.url).revokeBrowserSession();
+    } catch (reason) {
+      if (!(reason instanceof ApiError && reason.status === 401)) {
+        setError("Impossibile revocare la sessione sul servizio. Riprova quando è disponibile.");
+        return;
+      }
+    }
     localStorage.removeItem(SESSION_KEY);
     setHasStoredSession(false);
     setWorkspace(undefined); setHealth(undefined); setModelStatus(undefined); setToken(""); setError(undefined);
@@ -135,11 +148,16 @@ export function App() {
         setError("Il link appartiene a un workspace diverso.");
         return;
       }
+      await client.createBrowserSession();
+      const sessionClient = new ApiClient(url.toString());
+      const verified = await sessionClient.getWorkspace();
+      if (attempt !== connectionAttempt.current) return;
+      if (verified.workspace_id !== identity.workspace_id) throw new Error("workspace identity mismatch");
       setHealth(state);
       setModelStatus(capabilities.model_status?.status ?? (capabilities.required_provider ? "sconosciuto" : "non richiesto"));
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ url: url.toString().replace(/\/+$/, ""), token }));
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ url: url.toString().replace(/\/+$/, ""), workspaceId: identity.workspace_id }));
       setHasStoredSession(true);
-      setWorkspace((current) => ({ client, id: (current?.id ?? 0) + 1, url: url.origin, workspaceId: identity.workspace_id }));
+      setWorkspace((current) => ({ client: sessionClient, id: (current?.id ?? 0) + 1, url: url.origin, workspaceId: identity.workspace_id }));
       setToken("");
       if (!target) window.location.hash = "sources";
     } catch (reason) { if (attempt !== connectionAttempt.current) return; setError(reason instanceof ApiError && reason.status === 401 ? "Token workspace non valido." : "Impossibile verificare la connessione al workspace."); }
