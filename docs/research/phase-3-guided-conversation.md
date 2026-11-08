@@ -47,4 +47,17 @@ PYTHONPATH=src:tests/integration uv run --locked --extra dev --extra mcp pytest 
 
 MCP source grants are loaded at process start. Revoking a grant does not stop the worker or already scheduled reads. Muting a watch and pausing a question also do not stop those reads. There is no per-watch stop control in this phase; stopping the service stops all scheduled reads. Qualification and notification delivery are unchanged. The 64 MiB and 100,000-row limits apply to the new guided path, not all legacy source APIs.
 
-Desktop acceptance is **not observed**: computer control was denied access to Codex itself. A separate synthetic workspace and MCP registration were prepared for the owner to exercise in Desktop. The SDK evidence above cannot establish that an assistant actually asks the right questions, that a Desktop host reloads the connection, or that a user understands the evidence. No client attachment-transfer or embedded-view support is claimed.
+## Codex Desktop observation and reopen status
+
+In the Desktop chat, the assistant inspected the synthetic CSV via `forecast-phase3-review`, presented a complete mapping, cutoff and one-step horizon, and asked the user for confirmation. The user supplied the mapping. The first turn was interrupted after source capture was submitted; the subsequent turn recovered the same completed capture, created the question, completed a Timestral forecast and generic backtest, and linked both results to the question. The observed primary point was 23.03101348876953 and the baseline was 22, for 8 November 2026; the last source observation was 7 November. Final-partition historical MAE over 10 matched cases was 0.021102523803710936 for Timestral and 1.5 for the baseline. This is a synthetic fixture, not evidence of future accuracy. No recurring watch was created in this Desktop journey.
+
+Recorded identities from that first Desktop journey:
+
+- Question: `2bd4277c4278154be54a4b314d9492d9c4c6ebd261870907947c6f093238c6fb`
+- Run: `0474ab84d03f9f209f4a398eee5ed5103af01c5290d1d9969c65be9e11ad6e01`
+- Backtest: `3403f69a73026edaec1f4c238d83672a51bf265554e53dbd2c8aedc93bfba3fb`
+- Report: `4bc02d3773efb60129904b5c07d7436277363ca5508a1b3e574477a09f7971d7`
+
+After the owner reported closing Codex with `⌘Q` and reopening it on 8 November 2026, the existing MCP connection initially returned `network_error`: the foreground workspace service was no longer reachable. The assistant restarted the existing workspace service with `up --verify-model`, then read the question presentation, its revision-bound references, the stored forecast presentation and the stored backtest presentation through `forecast-phase3-review`. The question ID, run ID, backtest ID and report ID all matched the first Desktop journey above. The forecast still reported Timestral 23.03101348876953 and baseline 22; the final backtest MAEs remained 0.021102523803710936 and 1.5. These were reads of existing records: no question was created and no forecast or backtest was submitted again.
+
+Computer control denied access to `com.openai.codex`, so the `⌘Q` and reopening are owner-reported; the subsequent MCP reads and their results were observed in the reopened chat. The SDK reconnect evidence above is separate. This check required restarting the service and does not prove that it survives an application restart, nor does it establish client attachment-transfer or embedded-view support.
