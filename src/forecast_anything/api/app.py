@@ -87,6 +87,7 @@ def create_app(
             else 409
             if error.code
             in {
+                "source_content_changed",
                 "idempotency_conflict",
                 "immutable_identity",
                 "stale_question_revision",

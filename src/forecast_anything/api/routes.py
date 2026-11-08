@@ -12,6 +12,10 @@ from ..contracts import (
     Candidate,
     CandidateRequest,
     CapabilitiesView,
+    CsvConfirmation,
+    CsvConfirmationResult,
+    CsvPreview,
+    CsvPreviewRequest,
     DomainError,
     EvaluationRecord,
     EventRecord,
@@ -57,7 +61,7 @@ from ..presentations import (
     ForecastPresentation,
     QuestionPresentation,
 )
-from ..sources.profiling import inspect_source
+from ..sources.profiling import inspect_source, preview_csv
 from .scenarios import create_scenario
 
 
@@ -71,6 +75,16 @@ def router(service):
     @api.post("/sources/preview", response_model=SourceProfile)
     def preview_source(spec: SourceSpec):
         return inspect_source(spec)
+
+    @api.post("/sources/csv-preview", response_model=CsvPreview)
+    def preview_csv_source(request: CsvPreviewRequest):
+        return preview_csv(request.spec, request.as_of)
+
+    @api.post(
+        "/sources/csv-confirm", response_model=CsvConfirmationResult, status_code=201
+    )
+    def confirm_csv_source(request: CsvConfirmation):
+        return service.confirm_csv_source(request)
 
     @api.get("/sources", response_model=list[SourceView])
     def sources():

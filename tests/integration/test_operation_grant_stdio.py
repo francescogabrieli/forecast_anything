@@ -12,9 +12,16 @@ from mcp_processes import LocalWorkspace, call, poll_job, source_spec
 def test_queued_backtest_requires_current_grant_to_resume(tmp_path):
     async def journey(workspace):
         async with workspace.client(source_ids=["sales"]) as client:
-            registered = await call(
-                client, "register_csv_source", spec=source_spec(workspace)
-            )
+            spec = source_spec(workspace)
+            as_of = "2026-10-23T12:00:00Z"
+            preview = await call(client, "preview_csv_source", spec=spec, as_of=as_of)
+            confirm = {
+                "spec": spec,
+                "as_of": as_of,
+                "proposal_version": preview["proposal_version"],
+                "key": "grant-capture",
+            }
+            registered = await call(client, "confirm_csv_source", **confirm)
             await poll_job(client, registered["job_id"])
             workspace.stop_worker()
             operation = await call(
@@ -42,6 +49,8 @@ def test_queued_backtest_requires_current_grant_to_resume(tmp_path):
             assert (await call(client, "get_job", job_id=job_id))["state"] == "pending"
 
         async with workspace.client(source_ids=[]) as revoked:
+            replay = await call(revoked, "confirm_csv_source", **confirm)
+            assert replay["job_id"] == registered["job_id"]
             assert (await call(revoked, "get_operation", operation_id=operation_id))[
                 "job_id"
             ] == job_id

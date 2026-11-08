@@ -144,7 +144,24 @@ async def journey(root: Path, report_path: Path):
                     },
                 },
             }
-            registration = await call(mcp, "register_csv_source", spec=spec)
+            cutoff = datetime.now(timezone.utc).isoformat()
+            initial_preview = await call(
+                mcp, "preview_csv_source", spec={**spec, "mapping": {}}, as_of=cutoff
+            )
+            assert "timezone" in initial_preview["profile"]["unresolved"]
+            preview = await call(mcp, "preview_csv_source", spec=spec, as_of=cutoff)
+            confirmation = {
+                "spec": spec,
+                "proposal_version": preview["proposal_version"],
+                "as_of": cutoff,
+                "key": "guided-real-capture",
+            }
+            registration = await call(mcp, "confirm_csv_source", **confirmation)
+            evidence["guided_preview"] = {
+                "proposal_version": preview["proposal_version"],
+                "content_digest": preview["content_digest"],
+                "job_id": registration["job_id"],
+            }
             discovery = await poll(mcp, registration["job_id"])
             candidate_id = discovery["candidate_ids"][0]
             candidate = await call(mcp, "get_candidate", candidate_id=candidate_id)
@@ -155,6 +172,15 @@ async def journey(root: Path, report_path: Path):
                 == "timestral"
             )
             snapshot_id = discovery["source_snapshot_ids"][0]
+            snapshot_summary = await call(
+                mcp, "summarize_snapshot", snapshot_id=snapshot_id
+            )
+            assert snapshot_summary["observation_count"] == 360
+            assert (
+                f"csv_content_sha256={preview['content_digest']}"
+                in snapshot_summary["assumptions"]
+            )
+            evidence["snapshot_summary"] = snapshot_summary
             selection = {
                 "provider": "timestral",
                 "options": {},
@@ -167,9 +193,33 @@ async def journey(root: Path, report_path: Path):
                 "selection": selection,
                 "key": "real-configured",
             }
-            configured = await call(
-                mcp, "submit_configured_forecast", **configured_request
+            question = await call(
+                mcp,
+                "create_question",
+                key="real-question",
+                title="Synthetic sales outlook",
+                meaning="Forecast daily synthetic sales one day ahead",
+                source_ids=[spec["source_id"]],
+                selection=selection,
             )
+            operation = await call(
+                mcp,
+                "create_operation",
+                key="real-operation",
+                question_id=question["question_id"],
+                question_revision=question["current_revision"],
+                phase="ready",
+                missing_data=[],
+            )
+            configured = await call(
+                mcp,
+                "submit_operation",
+                operation_id=operation["operation_id"],
+                expected_version=operation["version"],
+                request={"kind": "configured_run", **configured_request},
+            )
+            evidence["question_id"] = question["question_id"]
+            evidence["operation_id"] = operation["operation_id"]
             configured_run = await call(
                 mcp, "get_run", run_id=(await poll(mcp, configured["job_id"]))["run_id"]
             )
@@ -183,6 +233,20 @@ async def journey(root: Path, report_path: Path):
                 configured_run["results"]["baseline"]["provider_id"] == "seasonal_naive"
             )
             evidence["configured_run"] = configured_run
+            forecast_view = await call(
+                mcp, "get_forecast_presentation", run_id=configured_run["run_id"]
+            )
+            assert forecast_view["primary_node_id"] == "model"
+            evidence["forecast_presentation"] = forecast_view
+            await call(
+                mcp,
+                "link_question_reference",
+                question_id=question["question_id"],
+                key="link-run",
+                revision=question["current_revision"],
+                target_type="run",
+                target_id=configured_run["run_id"],
+            )
             before = await call(
                 mcp,
                 "submit_forecast",
@@ -246,6 +310,24 @@ async def journey(root: Path, report_path: Path):
                 next_due_at=due.isoformat(),
             )
             watch_id = watch["watch_id"]
+            await call(
+                mcp,
+                "link_question_reference",
+                question_id=question["question_id"],
+                key="link-watch",
+                revision=question["current_revision"],
+                target_type="watch",
+                target_id=watch_id,
+            )
+            await call(
+                mcp,
+                "link_question_reference",
+                question_id=question["question_id"],
+                key="link-candidate",
+                revision=question["current_revision"],
+                target_type="candidate",
+                target_id=candidate_id,
+            )
             request = dict(
                 source_id=spec["source_id"],
                 selection=selection,
@@ -256,6 +338,15 @@ async def journey(root: Path, report_path: Path):
             accepted = await call(mcp, "submit_backtest", **request)
             result = await poll(mcp, accepted["job_id"])
             report = await call(mcp, "get_backtest", backtest_id=result["backtest_id"])
+            await call(
+                mcp,
+                "link_question_reference",
+                question_id=question["question_id"],
+                key="link-backtest",
+                revision=question["current_revision"],
+                target_type="backtest",
+                target_id=result["backtest_id"],
+            )
             summary = await call(
                 mcp,
                 "summarize_backtest",
@@ -263,6 +354,14 @@ async def journey(root: Path, report_path: Path):
                 watch_id=watch_id,
             )
             assert summary["partitions"] == report["partitions"]
+            backtest_view = await call(
+                mcp,
+                "get_backtest_presentation",
+                backtest_id=result["backtest_id"],
+                watch_id=watch_id,
+            )
+            assert backtest_view["summary"] == summary
+            evidence["backtest_presentation"] = backtest_view
             assert summary["watch"]["linked_to_backtest"]
             assert (await call(mcp, "submit_backtest", **request))[
                 "job_id"
@@ -320,7 +419,13 @@ async def journey(root: Path, report_path: Path):
             await asyncio.sleep(0.25)
         assert successor, "No automatic successor after real deadline"
         async with client() as mcp:
-            replay = await call(mcp, "submit_configured_forecast", **configured_request)
+            recovered_question = await call(
+                mcp, "get_question_presentation", question_id=question["question_id"]
+            )
+            assert recovered_question
+            replay = await call(
+                mcp, "resume_operation", operation_id=operation["operation_id"]
+            )
             assert replay["job_id"] == configured["job_id"]
             replay_run_id = (await poll(mcp, replay["job_id"]))["run_id"]
             assert replay_run_id == configured_run["run_id"]

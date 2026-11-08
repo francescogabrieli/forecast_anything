@@ -79,8 +79,18 @@ class JobQueue:
         return json.loads(row[0])
 
     def enqueue(
-        self, key: str, payload: dict, *, lease_guard: LeaseGuard | None = None
+        self,
+        key: str,
+        payload: dict,
+        *,
+        lease_guard: LeaseGuard | None = None,
+        connection=None,
     ) -> Job:
+        if connection is None:
+            with self.ledger._transaction(lease_guard) as own:
+                return self.enqueue(key, payload, connection=own)
+        if lease_guard is not None:
+            raise DomainError("invalid_job", {})
         if not isinstance(key, str) or not key.strip() or not isinstance(payload, dict):
             raise DomainError("invalid_job", {})
         content = _json(payload)
@@ -90,20 +100,22 @@ class JobQueue:
             else 0
         )
         job_id = sha256(key.encode()).hexdigest()
-        with self.ledger._transaction(lease_guard) as connection:
-            row = connection.execute(
-                "SELECT job_id, original_payload FROM jobs WHERE logical_key = ?",
-                (key,),
-            ).fetchone()
-            if row is not None:
-                if row[1] != content:
-                    raise DomainError("idempotency_conflict", {"key": key})
-            else:
-                connection.execute(
-                    "INSERT INTO jobs VALUES (?, ?, ?, ?, 1, 'pending', NULL, NULL, NULL, ?, NULL)",
-                    (job_id, key, content, content, due),
-                )
-        return self.get(job_id)
+        row = connection.execute(
+            "SELECT job_id, original_payload FROM jobs WHERE logical_key = ?", (key,)
+        ).fetchone()
+        if row is not None:
+            if row[1] != content:
+                raise DomainError("idempotency_conflict", {"key": key})
+        else:
+            connection.execute(
+                "INSERT INTO jobs VALUES (?, ?, ?, ?, 1, 'pending', NULL, NULL, NULL, ?, NULL)",
+                (job_id, key, content, content, due),
+            )
+        row = connection.execute(
+            "SELECT job_id, logical_key, payload, attempt, state, lease_token, lease_until FROM jobs WHERE job_id = ?",
+            (job_id,),
+        ).fetchone()
+        return self._decode(row)
 
     def claim(self, owner: str, now: datetime, ttl_seconds: int) -> Job | None:
         stamp = _time(now)

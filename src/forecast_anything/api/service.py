@@ -11,6 +11,7 @@ from ..contracts import (
     BacktestJobRequest,
     CandidateRequest,
     ConfiguredRunJobRequest,
+    CsvConfirmationResult,
     DiscoveryBudget,
     DiscoveryEpoch,
     DomainError,
@@ -53,7 +54,7 @@ from ..jobs import JobQueue
 from ..providers.base import frequency_step, observation_grid
 from ..runtime import _digest
 from ..sources.catalog import SourceCatalog
-from ..sources.profiling import inspect_source
+from ..sources.profiling import capture_confirmed_csv, inspect_source
 from ..store import _json
 from ..watches import create_watch, summarize_watch_change
 from ..worker import Worker
@@ -255,6 +256,89 @@ class Observatory:
             profile=profile,
             epoch_id=epoch_id,
             job_id=job_id,
+        )
+
+    def confirm_csv_source(self, request):
+        logical_key = f"guided-csv/{_digest({'key': request.key})}"
+        job_id = sha256(logical_key.encode()).hexdigest()
+        intent = _digest(request.model_dump(mode="json", exclude={"adapter_session"}))
+        try:
+            job = self.queue.get(job_id)
+        except DomainError as error:
+            if error.code != "not_found":
+                raise
+        else:
+            original = self.queue.original_payload(job_id)
+            if original.get("confirmation_intent") != intent:
+                raise DomainError("idempotency_conflict", {})
+            registered = self.catalog.get(original["source_id"], original["revision"])
+            return CsvConfirmationResult(
+                **self.source_view(registered).model_dump(),
+                profile=SourceProfile.model_validate(original["profile"]),
+                epoch_id=original["epoch_id"],
+                job_id=job.job_id,
+                replayed=True,
+                session_grant=request.adapter_session is not None
+                and request.adapter_session == original.get("adapter_session"),
+            )
+        profile, snap = capture_confirmed_csv(
+            request.spec, request.proposal_version, request.as_of
+        )
+        context = provider_epoch_context(self.runtime)
+        epoch_id = _digest(
+            {
+                "profile": profile.model_dump(mode="json"),
+                "snapshot_id": snap.snapshot_id,
+                **context,
+            }
+        )
+        with self.ledger._transaction() as connection:
+            # Check again under the shared write lock: another request may have
+            # reserved this key while this one captured the file.
+            try:
+                current = self.queue.get(job_id)
+            except DomainError as error:
+                if error.code != "not_found":
+                    raise
+            else:
+                original = self.queue.original_payload(job_id)
+                if original.get("confirmation_intent") != intent:
+                    raise DomainError("idempotency_conflict", {})
+                registered = self.catalog.get(
+                    original["source_id"], original["revision"]
+                )
+                return CsvConfirmationResult(
+                    **self.source_view(registered).model_dump(),
+                    profile=SourceProfile.model_validate(original["profile"]),
+                    epoch_id=original["epoch_id"],
+                    job_id=current.job_id,
+                    replayed=True,
+                    session_grant=request.adapter_session is not None
+                    and request.adapter_session == original.get("adapter_session"),
+                )
+            registered = self.catalog.append(request.spec, connection=connection)
+            job = self.queue.enqueue(
+                logical_key,
+                {
+                    "kind": "discovery_templates",
+                    **({"provider_context": context} if context else {}),
+                    "source_id": request.spec.source_id,
+                    "revision": registered.revision,
+                    "epoch_id": epoch_id,
+                    "profile": profile.model_dump(mode="json"),
+                    "frozen_snapshot": snap.model_dump(mode="json"),
+                    "confirmed_capture": True,
+                    "confirmation_intent": intent,
+                    "adapter_session": request.adapter_session,
+                },
+                connection=connection,
+            )
+        return CsvConfirmationResult(
+            **self.source_view(registered).model_dump(),
+            profile=profile,
+            epoch_id=epoch_id,
+            job_id=job.job_id,
+            replayed=False,
         )
 
     def refresh_source(self, source_id: str, request: SourceRefreshRequest):

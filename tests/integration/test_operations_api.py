@@ -214,3 +214,182 @@ def test_resume_recovers_each_reserved_enqueue_interruption(
     assert recovered.json()["job_id"] == reserved["job_id"]
     replayed = client.post(f"/v1/operations/{operation_id}/resume")
     assert replayed.json()["job_id"] == recovered.json()["job_id"]
+
+
+def test_guided_confirmation_rolls_back_source_when_enqueue_fails(
+    tmp_path, monkeypatch
+):
+    ledger, client, _, _ = _setup(tmp_path)
+    service = client.app.state.observatory
+    original = service.catalog.get("sales").revision
+    spec = service.catalog.get("sales").spec.model_dump(mode="json")
+    spec["mapping"]["unit"] = {"constant": "different"}
+    as_of = T.isoformat()
+    preview = client.post(
+        "/v1/sources/csv-preview", json={"spec": spec, "as_of": as_of}
+    ).json()
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("injected enqueue failure")
+
+    monkeypatch.setattr(service.queue, "enqueue", fail)
+    with pytest.raises(RuntimeError, match="injected enqueue failure"):
+        client.post(
+            "/v1/sources/csv-confirm",
+            json={
+                "spec": spec,
+                "as_of": as_of,
+                "proposal_version": preview["proposal_version"],
+                "key": "atomic-capture",
+            },
+        )
+    assert service.catalog.get("sales").revision == original
+
+
+def test_guided_confirmation_concurrent_conflict_cannot_supersede_winner(
+    tmp_path, monkeypatch
+):
+    from threading import Barrier
+
+    from forecast_anything.api import service as service_module
+
+    _, client, _, _ = _setup(tmp_path)
+    service = client.app.state.observatory
+    original = service.catalog.get("sales").spec.model_dump(mode="json")
+    requests = []
+    for unit in ("one", "two"):
+        spec = {
+            **original,
+            "mapping": {**original["mapping"], "unit": {"constant": unit}},
+        }
+        as_of = T.isoformat()
+        preview = client.post(
+            "/v1/sources/csv-preview", json={"spec": spec, "as_of": as_of}
+        ).json()
+        requests.append(
+            {
+                "spec": spec,
+                "as_of": as_of,
+                "proposal_version": preview["proposal_version"],
+                "key": "concurrent-capture",
+            }
+        )
+    gate = Barrier(2)
+    capture = service_module.capture_confirmed_csv
+
+    def synchronized(*args, **kwargs):
+        result = capture(*args, **kwargs)
+        gate.wait(timeout=10)
+        return result
+
+    monkeypatch.setattr(service_module, "capture_confirmed_csv", synchronized)
+
+    def submit(body):
+        return TestClient(client.app, headers=AUTH).post(
+            "/v1/sources/csv-confirm", json=body
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(pool.map(submit, requests))
+    assert sorted(response.status_code for response in responses) == [201, 409]
+    winner = next(
+        response.json() for response in responses if response.status_code == 201
+    )
+    assert service.catalog.get("sales").revision == winner["revision"]
+    Worker(service.runtime, service.queue).run_due(T)
+    assert client.get("/v1/jobs/" + winner["job_id"]).json()["state"] == "completed"
+
+
+def test_guided_replay_grant_is_bound_to_original_adapter_session(tmp_path):
+    _, client, _, _ = _setup(tmp_path)
+    spec = client.app.state.observatory.catalog.get("sales").spec.model_dump(
+        mode="json"
+    )
+    as_of = T.isoformat()
+    preview = client.post(
+        "/v1/sources/csv-preview", json={"spec": spec, "as_of": as_of}
+    ).json()
+    request = {
+        "spec": spec,
+        "as_of": as_of,
+        "proposal_version": preview["proposal_version"],
+        "key": "session-capture",
+        "adapter_session": "a" * 32,
+    }
+    first = client.post("/v1/sources/csv-confirm", json=request).json()
+    same = client.post("/v1/sources/csv-confirm", json=request).json()
+    other = client.post(
+        "/v1/sources/csv-confirm", json={**request, "adapter_session": "b" * 32}
+    ).json()
+    assert not first["replayed"]
+    assert same["replayed"] and same["session_grant"]
+    assert other["replayed"] and not other["session_grant"]
+    assert first["job_id"] == same["job_id"] == other["job_id"]
+
+
+def test_guided_commit_with_lost_http_response_keeps_session_grant(
+    tmp_path, monkeypatch
+):
+    import asyncio
+
+    import httpx
+    from mcp import Client
+
+    from forecast_anything.mcp_adapter import server as server_module
+    from forecast_anything.mcp_adapter.client import CoreClient
+    from forecast_anything.mcp_adapter.config import McpConfig
+
+    _, client, _, _ = _setup(tmp_path)
+    spec = client.app.state.observatory.catalog.get("sales").spec.model_dump(
+        mode="json"
+    )
+    dropped = False
+
+    class DropFirstConfirmation(httpx.AsyncBaseTransport):
+        def __init__(self):
+            self.inner = httpx.ASGITransport(app=client.app)
+
+        async def handle_async_request(self, request):
+            nonlocal dropped
+            response = await self.inner.handle_async_request(request)
+            if request.url.path == "/v1/sources/csv-confirm" and not dropped:
+                dropped = True
+                await response.aclose()
+                raise httpx.ReadError("simulated lost response", request=request)
+            return response
+
+    monkeypatch.setattr(
+        server_module,
+        "CoreClient",
+        lambda cfg: CoreClient(cfg, transport=DropFirstConfirmation()),
+    )
+    config = McpConfig(workspace_token="operations-token", csv_roots=(tmp_path,))
+
+    async def journey():
+        async with Client(server_module.create_server(config)) as mcp:
+            preview = (
+                await mcp.call_tool(
+                    "preview_csv_source", {"spec": spec, "as_of": T.isoformat()}
+                )
+            ).structured_content["data"]
+            args = {
+                "spec": spec,
+                "as_of": T.isoformat(),
+                "proposal_version": preview["proposal_version"],
+                "key": "lost-after-commit",
+            }
+            failed = await mcp.call_tool("confirm_csv_source", args)
+            assert failed.structured_content["code"] == "network_error"
+            replay = await mcp.call_tool("confirm_csv_source", args)
+            assert replay.structured_content["data"]["replayed"]
+            assert (
+                await mcp.call_tool("get_source_profile", {"source_id": "sales"})
+            ).structured_content["ok"]
+        async with Client(server_module.create_server(config)) as mcp:
+            replay = await mcp.call_tool("confirm_csv_source", args)
+            assert replay.structured_content["data"]["replayed"]
+            assert (
+                await mcp.call_tool("get_source_profile", {"source_id": "sales"})
+            ).structured_content["code"] == "source_forbidden"
+
+    asyncio.run(journey())

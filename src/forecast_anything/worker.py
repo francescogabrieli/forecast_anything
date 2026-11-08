@@ -593,9 +593,14 @@ class Worker:
         registered = self.catalog.get(payload["source_id"])
         if registered.revision != payload["revision"]:
             raise DomainError("source_revision_changed", {})
-        profile = inspect_source(registered.spec, secret_resolver=self.secret_resolver)
-        if profile != SourceProfile.model_validate(payload["profile"]):
-            raise DomainError("source_profile_changed", {})
+        if payload.get("confirmed_capture"):
+            profile = SourceProfile.model_validate(payload["profile"])
+        else:
+            profile = inspect_source(
+                registered.spec, secret_resolver=self.secret_resolver
+            )
+            if profile != SourceProfile.model_validate(payload["profile"]):
+                raise DomainError("source_profile_changed", {})
         if "frozen_snapshot" not in payload:
             snap = (
                 None

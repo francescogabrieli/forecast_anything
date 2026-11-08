@@ -5,6 +5,7 @@ other field is inferred. Additional/duplicate columns and ragged rows fail.
 """
 
 import csv
+import io
 from itertools import islice
 from pathlib import Path
 
@@ -57,24 +58,33 @@ def load_csv_rows(
     Unlike load_csv, this accepts arbitrary columns for explicit source mapping.
     Errors deliberately omit paths, headers and values: these may hold secrets.
     """
-    rows = []
     try:
         with Path(path).open(encoding="utf-8-sig", newline="") as stream:
-            reader = csv.DictReader(stream, strict=True)
-            header = reader.fieldnames or []
-            if (
-                not header
-                or len(header) != len(set(header))
-                or any(not h for h in header)
-            ):
-                raise DomainError(
-                    "invalid_source_data", {"reason": "invalid_csv_header"}
-                )
-            bounded = reader if limit is None else islice(reader, limit)
-            for row_number, row in enumerate(bounded, start=2):
-                if None in row or any(value is None for value in row.values()):
-                    raise DomainError("invalid_source_row", {"row": row_number})
-                rows.append(row)
+            return _parse_csv_stream(stream, limit=limit)
     except (OSError, UnicodeError, csv.Error):
         raise DomainError("source_unavailable", {"reason": "csv_read_failed"}) from None
+
+
+def parse_csv_rows(
+    data: bytes, *, limit: int | None = None
+) -> tuple[dict[str, str], ...]:
+    """Parse an immutable byte capture using the normal source CSV rules."""
+    try:
+        with io.StringIO(data.decode("utf-8-sig"), newline="") as stream:
+            return _parse_csv_stream(stream, limit=limit)
+    except (UnicodeError, csv.Error):
+        raise DomainError("source_unavailable", {"reason": "csv_read_failed"}) from None
+
+
+def _parse_csv_stream(stream, *, limit):
+    rows = []
+    reader = csv.DictReader(stream, strict=True)
+    header = reader.fieldnames or []
+    if not header or len(header) != len(set(header)) or any(not h for h in header):
+        raise DomainError("invalid_source_data", {"reason": "invalid_csv_header"})
+    bounded = reader if limit is None else islice(reader, limit)
+    for row_number, row in enumerate(bounded, start=2):
+        if None in row or any(value is None for value in row.values()):
+            raise DomainError("invalid_source_row", {"row": row_number})
+        rows.append(row)
     return tuple(rows)

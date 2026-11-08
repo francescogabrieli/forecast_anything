@@ -39,6 +39,18 @@ class RegisterArguments(Contract):
     spec: SourceSpec
 
 
+class PreviewCsvArguments(Contract):
+    spec: SourceSpec
+    as_of: AwareDatetime
+
+
+class ConfirmCsvArguments(Contract):
+    key: ToolIdentifier
+    spec: SourceSpec
+    proposal_version: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    as_of: AwareDatetime
+
+
 class SourceArguments(Contract):
     source_id: ToolIdentifier
 

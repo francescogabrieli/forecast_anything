@@ -108,3 +108,37 @@ class McpConfig:
             return spec.model_copy(update={"location": str(resolved)})
         except (ValueError, TypeError, OSError):
             raise McpConfigError("source_forbidden") from None
+
+    def validate_guided_csv(
+        self, spec: SourceSpec, *, allow_missing: bool = False
+    ) -> SourceSpec:
+        """Distinguish a missing file inside an approved root from denied paths."""
+        try:
+            path = Path(spec.location)
+            if not path.is_absolute() or path.resolve(strict=False) != Path(
+                os.path.normpath(str(path))
+            ):
+                raise McpConfigError("source_forbidden")
+        except (OSError, ValueError):
+            raise McpConfigError("source_forbidden") from None
+        try:
+            return self.validate_csv(spec)
+        except McpConfigError:
+            try:
+                path = Path(spec.location)
+                if (
+                    spec.kind == "csv"
+                    and spec.secret_ref is None
+                    and path.is_absolute()
+                ):
+                    resolved = path.resolve(strict=False)
+                    if (
+                        any(resolved.is_relative_to(root) for root in self.csv_roots)
+                        and not resolved.exists()
+                    ):
+                        if allow_missing:
+                            return spec.model_copy(update={"location": str(resolved)})
+                        raise McpConfigError("source_unavailable") from None
+            except (OSError, ValueError):
+                pass
+            raise

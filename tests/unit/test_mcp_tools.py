@@ -42,6 +42,8 @@ NAMES = {
     "get_capabilities",
     "get_diagnostics",
     "list_sources",
+    "preview_csv_source",
+    "confirm_csv_source",
     "register_csv_source",
     "get_source_profile",
     "refresh_source",
@@ -68,6 +70,7 @@ NAMES = {
     "summarize_watch_change",
 }
 MUTATIONS = {
+    "confirm_csv_source",
     "register_csv_source",
     "get_source_profile",
     "refresh_source",
@@ -1521,5 +1524,65 @@ def test_evidence_reads_keep_http_megabyte_bound(monkeypatch, name):
                 "ok": False,
                 "code": "response_too_large",
             }
+
+    asyncio.run(check())
+
+
+def test_guided_confirmation_lost_response_recovers_grant_only_in_original_session(
+    monkeypatch, tmp_path
+):
+    path = tmp_path / "source.csv"
+    path.write_text("date,value\n2026-01-01,1\n")
+    first_session = None
+    requests = 0
+
+    def respond(request):
+        nonlocal first_session, requests
+        if request.url.path == "/v1/sources/csv-confirm":
+            data = json.loads(request.content)
+            requests += 1
+            if requests == 1:
+                first_session = data["adapter_session"]
+                raise httpx.ReadError("lost response", request=request)
+            return httpx.Response(
+                201,
+                json={
+                    **REGISTRATION,
+                    "replayed": True,
+                    "session_grant": data["adapter_session"] == first_session,
+                },
+            )
+        return httpx.Response(200, json=PROFILE)
+
+    async def check():
+        config = McpConfig(workspace_token="t", csv_roots=(tmp_path,))
+        args = {
+            "spec": {
+                "source_id": "sales",
+                "kind": "csv",
+                "location": str(path),
+                "refresh_seconds": 60,
+            },
+            "key": "one",
+            "proposal_version": "a" * 64,
+            "as_of": "2026-10-23T12:00:00Z",
+        }
+        async with connected(monkeypatch, respond, config=config) as client:
+            assert (
+                payload(await client.call_tool("confirm_csv_source", args))["code"]
+                == "network_error"
+            )
+            assert payload(await client.call_tool("confirm_csv_source", args))["ok"]
+            assert payload(
+                await client.call_tool("get_source_profile", {"source_id": "sales"})
+            )["ok"]
+        async with connected(monkeypatch, respond, config=config) as client:
+            assert payload(await client.call_tool("confirm_csv_source", args))["ok"]
+            assert (
+                payload(
+                    await client.call_tool("get_source_profile", {"source_id": "sales"})
+                )["code"]
+                == "source_forbidden"
+            )
 
     asyncio.run(check())
