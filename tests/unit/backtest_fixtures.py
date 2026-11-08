@@ -56,6 +56,7 @@ def prepare(
     source=None,
     captured_at=None,
     contracts=None,
+    origin_target_after=None,
 ):
     from forecast_anything.backtesting.planning import prepare_backtest
 
@@ -71,6 +72,7 @@ def prepare(
         captured_at or START + timedelta(days=15),
         provider_contracts=contracts
         or {"seasonal_naive": SeasonalNaiveProvider(9).capabilities()},
+        origin_target_after=origin_target_after,
     )
 
 

@@ -4146,6 +4146,274 @@
     "title": "GraphSpec",
     "type": "object"
   },
+  "InboxEvent": {
+    "additionalProperties": false,
+    "properties": {
+      "decision_id": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Decision Id"
+      },
+      "delivery_states": {
+        "default": [],
+        "items": {
+          "enum": [
+            "pending",
+            "delivering",
+            "delivered",
+            "delivery_failed",
+            "delivery_suppressed_muted"
+          ],
+          "type": "string"
+        },
+        "title": "Delivery States",
+        "type": "array"
+      },
+      "event_id": {
+        "minLength": 1,
+        "title": "Event Id",
+        "type": "string"
+      },
+      "event_kind": {
+        "minLength": 1,
+        "title": "Event Kind",
+        "type": "string"
+      },
+      "muted": {
+        "default": false,
+        "title": "Muted",
+        "type": "boolean"
+      },
+      "occurred_at": {
+        "format": "date-time",
+        "title": "Occurred At",
+        "type": "string"
+      },
+      "payload": {
+        "additionalProperties": true,
+        "title": "Payload",
+        "type": "object"
+      },
+      "question_id": {
+        "minLength": 1,
+        "title": "Question Id",
+        "type": "string"
+      },
+      "revision": {
+        "minimum": 1,
+        "title": "Revision",
+        "type": "integer"
+      },
+      "run_id": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Run Id"
+      },
+      "summary": {
+        "title": "Summary",
+        "type": "string"
+      },
+      "transition_id": {
+        "minLength": 1,
+        "title": "Transition Id",
+        "type": "string"
+      },
+      "watch_id": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Watch Id"
+      }
+    },
+    "required": [
+      "event_id",
+      "question_id",
+      "revision",
+      "event_kind",
+      "transition_id",
+      "occurred_at",
+      "summary",
+      "payload"
+    ],
+    "title": "InboxEvent",
+    "type": "object"
+  },
+  "InboxPage": {
+    "$defs": {
+      "InboxEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "decision_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Decision Id"
+          },
+          "delivery_states": {
+            "default": [],
+            "items": {
+              "enum": [
+                "pending",
+                "delivering",
+                "delivered",
+                "delivery_failed",
+                "delivery_suppressed_muted"
+              ],
+              "type": "string"
+            },
+            "title": "Delivery States",
+            "type": "array"
+          },
+          "event_id": {
+            "minLength": 1,
+            "title": "Event Id",
+            "type": "string"
+          },
+          "event_kind": {
+            "minLength": 1,
+            "title": "Event Kind",
+            "type": "string"
+          },
+          "muted": {
+            "default": false,
+            "title": "Muted",
+            "type": "boolean"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "question_id": {
+            "minLength": 1,
+            "title": "Question Id",
+            "type": "string"
+          },
+          "revision": {
+            "minimum": 1,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "transition_id": {
+            "minLength": 1,
+            "title": "Transition Id",
+            "type": "string"
+          },
+          "watch_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Watch Id"
+          }
+        },
+        "required": [
+          "event_id",
+          "question_id",
+          "revision",
+          "event_kind",
+          "transition_id",
+          "occurred_at",
+          "summary",
+          "payload"
+        ],
+        "title": "InboxEvent",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "events": {
+        "items": {
+          "$ref": "#/$defs/InboxEvent"
+        },
+        "title": "Events",
+        "type": "array"
+      },
+      "next_offset": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Next Offset"
+      },
+      "total_count": {
+        "minimum": 0,
+        "title": "Total Count",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "events",
+      "total_count"
+    ],
+    "title": "InboxPage",
+    "type": "object"
+  },
   "JobView": {
     "additionalProperties": false,
     "properties": {
@@ -5898,6 +6166,18 @@
             "title": "Current Revision",
             "type": "integer"
           },
+          "muted": {
+            "default": false,
+            "title": "Muted",
+            "type": "boolean"
+          },
+          "priority": {
+            "default": 3,
+            "maximum": 5,
+            "minimum": 0,
+            "title": "Priority",
+            "type": "integer"
+          },
           "question_id": {
             "minLength": 1,
             "title": "Question Id",
@@ -5982,6 +6262,121 @@
   },
   "QuestionPresentation": {
     "$defs": {
+      "InboxEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "decision_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Decision Id"
+          },
+          "delivery_states": {
+            "default": [],
+            "items": {
+              "enum": [
+                "pending",
+                "delivering",
+                "delivered",
+                "delivery_failed",
+                "delivery_suppressed_muted"
+              ],
+              "type": "string"
+            },
+            "title": "Delivery States",
+            "type": "array"
+          },
+          "event_id": {
+            "minLength": 1,
+            "title": "Event Id",
+            "type": "string"
+          },
+          "event_kind": {
+            "minLength": 1,
+            "title": "Event Kind",
+            "type": "string"
+          },
+          "muted": {
+            "default": false,
+            "title": "Muted",
+            "type": "boolean"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "question_id": {
+            "minLength": 1,
+            "title": "Question Id",
+            "type": "string"
+          },
+          "revision": {
+            "minimum": 1,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "transition_id": {
+            "minLength": 1,
+            "title": "Transition Id",
+            "type": "string"
+          },
+          "watch_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Watch Id"
+          }
+        },
+        "required": [
+          "event_id",
+          "question_id",
+          "revision",
+          "event_kind",
+          "transition_id",
+          "occurred_at",
+          "summary",
+          "payload"
+        ],
+        "title": "InboxEvent",
+        "type": "object"
+      },
       "JsonValue": {},
       "QuestionForecastSelection": {
         "additionalProperties": false,
@@ -6158,6 +6553,18 @@
             "title": "Current Revision",
             "type": "integer"
           },
+          "muted": {
+            "default": false,
+            "title": "Muted",
+            "type": "boolean"
+          },
+          "priority": {
+            "default": 3,
+            "maximum": 5,
+            "minimum": 0,
+            "title": "Priority",
+            "type": "integer"
+          },
           "question_id": {
             "minLength": 1,
             "title": "Question Id",
@@ -6213,6 +6620,19 @@
     },
     "additionalProperties": false,
     "properties": {
+      "inbox_events": {
+        "items": {
+          "$ref": "#/$defs/InboxEvent"
+        },
+        "maxItems": 10,
+        "title": "Inbox Events",
+        "type": "array"
+      },
+      "inbox_total_count": {
+        "minimum": 0,
+        "title": "Inbox Total Count",
+        "type": "integer"
+      },
       "next_offset": {
         "anyOf": [
           {
@@ -6252,7 +6672,9 @@
     "required": [
       "question",
       "references",
-      "next_offset"
+      "next_offset",
+      "inbox_events",
+      "inbox_total_count"
     ],
     "title": "QuestionPresentation",
     "type": "object"
@@ -6824,6 +7246,32 @@
   "QuestionTitlePatch": {
     "additionalProperties": false,
     "properties": {
+      "muted": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Muted"
+      },
+      "priority": {
+        "anyOf": [
+          {
+            "maximum": 5,
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Priority"
+      },
       "status": {
         "anyOf": [
           {
@@ -6958,6 +7406,18 @@
       "current_revision": {
         "minimum": 1,
         "title": "Current Revision",
+        "type": "integer"
+      },
+      "muted": {
+        "default": false,
+        "title": "Muted",
+        "type": "boolean"
+      },
+      "priority": {
+        "default": 3,
+        "maximum": 5,
+        "minimum": 0,
+        "title": "Priority",
         "type": "integer"
       },
       "question_id": {
@@ -8636,6 +9096,114 @@
     "title": "SourceSpec",
     "type": "object"
   },
+  "SourceSubscription": {
+    "additionalProperties": false,
+    "properties": {
+      "active": {
+        "default": true,
+        "title": "Active",
+        "type": "boolean"
+      },
+      "created_at": {
+        "format": "date-time",
+        "title": "Created At",
+        "type": "string"
+      },
+      "source_id": {
+        "minLength": 1,
+        "title": "Source Id",
+        "type": "string"
+      },
+      "updated_at": {
+        "format": "date-time",
+        "title": "Updated At",
+        "type": "string"
+      }
+    },
+    "required": [
+      "source_id",
+      "created_at",
+      "updated_at"
+    ],
+    "title": "SourceSubscription",
+    "type": "object"
+  },
+  "SourceSubscriptionPage": {
+    "$defs": {
+      "SourceSubscription": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "default": true,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "source_id": {
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SourceSubscription",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "next_offset": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Next Offset"
+      },
+      "subscriptions": {
+        "items": {
+          "$ref": "#/$defs/SourceSubscription"
+        },
+        "title": "Subscriptions",
+        "type": "array"
+      }
+    },
+    "required": [
+      "subscriptions"
+    ],
+    "title": "SourceSubscriptionPage",
+    "type": "object"
+  },
+  "SourceSubscriptionRequest": {
+    "additionalProperties": false,
+    "properties": {
+      "active": {
+        "default": true,
+        "title": "Active",
+        "type": "boolean"
+      }
+    },
+    "title": "SourceSubscriptionRequest",
+    "type": "object"
+  },
   "SourceView": {
     "additionalProperties": false,
     "properties": {
@@ -9195,6 +9763,19 @@
         "title": "Evidence Applicable",
         "type": "boolean"
       },
+      "forecast_horizon_end": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Forecast Horizon End"
+      },
       "graph_id": {
         "minLength": 1,
         "title": "Graph Id",
@@ -9212,6 +9793,19 @@
         },
         "title": "Invalidated Evaluation Ids",
         "type": "array"
+      },
+      "last_run_id": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Last Run Id"
       },
       "lifecycle": {
         "enum": [
@@ -9258,6 +9852,19 @@
         "title": "Priority",
         "type": "integer"
       },
+      "qualification_snapshot_id": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Qualification Snapshot Id"
+      },
       "quality": {
         "enum": [
           "provisional",
@@ -9268,10 +9875,55 @@
         "title": "Quality",
         "type": "string"
       },
+      "quality_reason": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Quality Reason"
+      },
       "reevaluation_required": {
         "default": true,
         "title": "Reevaluation Required",
         "type": "boolean"
+      },
+      "requalification_due_at": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Requalification Due At"
+      },
+      "requalification_new_origins": {
+        "default": 0,
+        "minimum": 0,
+        "title": "Requalification New Origins",
+        "type": "integer"
+      },
+      "requalification_reason": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Requalification Reason"
       },
       "source_snapshot_ids": {
         "default": [],
@@ -9926,6 +10578,19 @@
             "title": "Evidence Applicable",
             "type": "boolean"
           },
+          "forecast_horizon_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Forecast Horizon End"
+          },
           "graph_id": {
             "minLength": 1,
             "title": "Graph Id",
@@ -9943,6 +10608,19 @@
             },
             "title": "Invalidated Evaluation Ids",
             "type": "array"
+          },
+          "last_run_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Last Run Id"
           },
           "lifecycle": {
             "enum": [
@@ -9994,6 +10672,19 @@
             "title": "Priority",
             "type": "integer"
           },
+          "qualification_snapshot_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Qualification Snapshot Id"
+          },
           "quality": {
             "enum": [
               "provisional",
@@ -10004,10 +10695,55 @@
             "title": "Quality",
             "type": "string"
           },
+          "quality_reason": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Quality Reason"
+          },
           "reevaluation_required": {
             "default": true,
             "title": "Reevaluation Required",
             "type": "boolean"
+          },
+          "requalification_due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Requalification Due At"
+          },
+          "requalification_new_origins": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Requalification New Origins",
+            "type": "integer"
+          },
+          "requalification_reason": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Requalification Reason"
           },
           "source_snapshot_ids": {
             "default": [],
@@ -10610,6 +11346,19 @@
             "title": "Evidence Applicable",
             "type": "boolean"
           },
+          "forecast_horizon_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Forecast Horizon End"
+          },
           "graph_id": {
             "minLength": 1,
             "title": "Graph Id",
@@ -10627,6 +11376,19 @@
             },
             "title": "Invalidated Evaluation Ids",
             "type": "array"
+          },
+          "last_run_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Last Run Id"
           },
           "lifecycle": {
             "enum": [
@@ -10678,6 +11440,19 @@
             "title": "Priority",
             "type": "integer"
           },
+          "qualification_snapshot_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Qualification Snapshot Id"
+          },
           "quality": {
             "enum": [
               "provisional",
@@ -10688,10 +11463,55 @@
             "title": "Quality",
             "type": "string"
           },
+          "quality_reason": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Quality Reason"
+          },
           "reevaluation_required": {
             "default": true,
             "title": "Reevaluation Required",
             "type": "boolean"
+          },
+          "requalification_due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Requalification Due At"
+          },
+          "requalification_new_origins": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Requalification New Origins",
+            "type": "integer"
+          },
+          "requalification_reason": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Requalification Reason"
           },
           "source_snapshot_ids": {
             "default": [],
@@ -11304,6 +12124,19 @@
         "title": "Evidence Applicable",
         "type": "boolean"
       },
+      "forecast_horizon_end": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Forecast Horizon End"
+      },
       "graph_id": {
         "minLength": 1,
         "title": "Graph Id",
@@ -11321,6 +12154,19 @@
         },
         "title": "Invalidated Evaluation Ids",
         "type": "array"
+      },
+      "last_run_id": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Last Run Id"
       },
       "lifecycle": {
         "enum": [
@@ -11372,6 +12218,19 @@
         "title": "Priority",
         "type": "integer"
       },
+      "qualification_snapshot_id": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Qualification Snapshot Id"
+      },
       "quality": {
         "enum": [
           "provisional",
@@ -11382,10 +12241,55 @@
         "title": "Quality",
         "type": "string"
       },
+      "quality_reason": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Quality Reason"
+      },
       "reevaluation_required": {
         "default": true,
         "title": "Reevaluation Required",
         "type": "boolean"
+      },
+      "requalification_due_at": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Requalification Due At"
+      },
+      "requalification_new_origins": {
+        "default": 0,
+        "minimum": 0,
+        "title": "Requalification New Origins",
+        "type": "integer"
+      },
+      "requalification_reason": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Requalification Reason"
       },
       "source_snapshot_ids": {
         "default": [],
@@ -11428,6 +12332,339 @@
       "operational"
     ],
     "title": "WatchView",
+    "type": "object"
+  },
+  "WebhookDelivery": {
+    "additionalProperties": false,
+    "properties": {
+      "attempts": {
+        "default": 0,
+        "minimum": 0,
+        "title": "Attempts",
+        "type": "integer"
+      },
+      "created_at": {
+        "format": "date-time",
+        "title": "Created At",
+        "type": "string"
+      },
+      "delivery_id": {
+        "minLength": 1,
+        "title": "Delivery Id",
+        "type": "string"
+      },
+      "event_id": {
+        "minLength": 1,
+        "title": "Event Id",
+        "type": "string"
+      },
+      "last_error": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Last Error"
+      },
+      "max_attempts": {
+        "default": 3,
+        "minimum": 1,
+        "title": "Max Attempts",
+        "type": "integer"
+      },
+      "next_attempt_at": {
+        "format": "date-time",
+        "title": "Next Attempt At",
+        "type": "string"
+      },
+      "state": {
+        "enum": [
+          "pending",
+          "delivering",
+          "delivered",
+          "delivery_failed",
+          "delivery_suppressed_muted"
+        ],
+        "title": "State",
+        "type": "string"
+      },
+      "subscription_id": {
+        "minLength": 1,
+        "title": "Subscription Id",
+        "type": "string"
+      },
+      "updated_at": {
+        "format": "date-time",
+        "title": "Updated At",
+        "type": "string"
+      }
+    },
+    "required": [
+      "delivery_id",
+      "subscription_id",
+      "event_id",
+      "state",
+      "next_attempt_at",
+      "created_at",
+      "updated_at"
+    ],
+    "title": "WebhookDelivery",
+    "type": "object"
+  },
+  "WebhookDeliveryPage": {
+    "$defs": {
+      "WebhookDelivery": {
+        "additionalProperties": false,
+        "properties": {
+          "attempts": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "delivery_id": {
+            "minLength": 1,
+            "title": "Delivery Id",
+            "type": "string"
+          },
+          "event_id": {
+            "minLength": 1,
+            "title": "Event Id",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Last Error"
+          },
+          "max_attempts": {
+            "default": 3,
+            "minimum": 1,
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "next_attempt_at": {
+            "format": "date-time",
+            "title": "Next Attempt At",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "delivering",
+              "delivered",
+              "delivery_failed",
+              "delivery_suppressed_muted"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "subscription_id": {
+            "minLength": 1,
+            "title": "Subscription Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "delivery_id",
+          "subscription_id",
+          "event_id",
+          "state",
+          "next_attempt_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WebhookDelivery",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "deliveries": {
+        "items": {
+          "$ref": "#/$defs/WebhookDelivery"
+        },
+        "title": "Deliveries",
+        "type": "array"
+      },
+      "next_offset": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Next Offset"
+      }
+    },
+    "required": [
+      "deliveries"
+    ],
+    "title": "WebhookDeliveryPage",
+    "type": "object"
+  },
+  "WebhookSubscription": {
+    "additionalProperties": false,
+    "properties": {
+      "active": {
+        "default": true,
+        "title": "Active",
+        "type": "boolean"
+      },
+      "created_at": {
+        "format": "date-time",
+        "title": "Created At",
+        "type": "string"
+      },
+      "subscription_id": {
+        "minLength": 1,
+        "title": "Subscription Id",
+        "type": "string"
+      },
+      "target_url": {
+        "title": "Target Url",
+        "type": "string"
+      }
+    },
+    "required": [
+      "subscription_id",
+      "target_url",
+      "created_at"
+    ],
+    "title": "WebhookSubscription",
+    "type": "object"
+  },
+  "WebhookSubscriptionPage": {
+    "$defs": {
+      "WebhookSubscription": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "default": true,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "subscription_id": {
+            "minLength": 1,
+            "title": "Subscription Id",
+            "type": "string"
+          },
+          "target_url": {
+            "title": "Target Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subscription_id",
+          "target_url",
+          "created_at"
+        ],
+        "title": "WebhookSubscription",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "next_offset": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Next Offset"
+      },
+      "subscriptions": {
+        "items": {
+          "$ref": "#/$defs/WebhookSubscription"
+        },
+        "title": "Subscriptions",
+        "type": "array"
+      }
+    },
+    "required": [
+      "subscriptions"
+    ],
+    "title": "WebhookSubscriptionPage",
+    "type": "object"
+  },
+  "WebhookSubscriptionPatch": {
+    "additionalProperties": false,
+    "properties": {
+      "active": {
+        "title": "Active",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "active"
+    ],
+    "title": "WebhookSubscriptionPatch",
+    "type": "object"
+  },
+  "WebhookSubscriptionRequest": {
+    "additionalProperties": false,
+    "properties": {
+      "active": {
+        "default": true,
+        "title": "Active",
+        "type": "boolean"
+      },
+      "secret": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Secret"
+      },
+      "target_url": {
+        "title": "Target Url",
+        "type": "string"
+      }
+    },
+    "required": [
+      "target_url"
+    ],
+    "title": "WebhookSubscriptionRequest",
     "type": "object"
   },
   "WorkspaceIdentity": {

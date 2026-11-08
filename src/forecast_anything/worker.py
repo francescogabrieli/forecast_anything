@@ -2,25 +2,36 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+from hashlib import sha256
 from threading import Event, Thread
+from urllib.error import HTTPError, URLError
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 from uuid import uuid4
 
+from .backtesting.planning import prepare_backtest
+from .backtesting.service import _provider_contracts, backtest_payload
 from .backtesting.service import execute_job as execute_backtest_job
 from .connectors.http_json import SecretResolver
+from .continuity import classify_snapshot_change
 from .contracts import (
+    BacktestJobRequest,
+    BacktestSettings,
     Candidate,
     DiscoveryBudget,
     DiscoveryEpoch,
     DomainError,
     EvaluationContext,
     GraphSpec,
+    QuestionReferenceRequest,
     Snapshot,
     SourceProfile,
 )
 from .discovery.candidates import TEMPLATES, CandidateProposal, compile_proposal
+from .discovery.policy import candidate_backtest_selection
 from .evaluation.records import evaluate_run
 from .forecast_policy import provider_epoch_context
 from .jobs import Job, JobQueue
@@ -28,6 +39,11 @@ from .runtime import Runtime, _digest
 from .sources.catalog import SourceCatalog, source_revision
 from .sources.profiling import ingest_source, inspect_source
 from .watches import create_watch
+
+
+class _NoWebhookRedirect(HTTPRedirectHandler):
+    def redirect_request(self, request, response, code, message, headers, new_url):
+        return None
 
 
 class Worker:
@@ -108,6 +124,7 @@ class Worker:
             raise DomainError("invalid_limit", {})
         self._sync_watches(self._now(now))
         self._schedule_sources(self._now(now))
+        self._schedule_requalifications(self._now(now))
         completed = []
         for _ in range(limit):
             job = self.queue.claim(self.owner, self._now(now), self.lease_seconds)
@@ -126,6 +143,10 @@ class Worker:
                         }
                     )
                     try:
+                        automatic_requalification = bool(
+                            job.payload.get("automatic_requalification")
+                        )
+                        webhook_delivery = job.payload.get("kind") == "webhook_delivery"
                         migration = details["code"] in {
                             "required_forecast_provider",
                             "ambiguous_primary_output",
@@ -140,7 +161,14 @@ class Worker:
                             job,
                             self._now(now),
                             details,
-                            max_attempts=1
+                            retry_seconds=(
+                                details.get("details", {}).get("retry_after", 30)
+                                if webhook_delivery
+                                else 30
+                            ),
+                            max_attempts=1000000
+                            if webhook_delivery
+                            else 1
                             if migration
                             or details["code"]
                             in {
@@ -148,8 +176,11 @@ class Worker:
                                 "required_model_unavailable",
                                 "required_provider_migration",
                             }
+                            or automatic_requalification
                             else 3,
                         )
+                        if automatic_requalification:
+                            self._record_requalification_failure(job, self._now(now))
                     except DomainError as lost:
                         if lost.code != "lease_lost":
                             raise
@@ -159,6 +190,7 @@ class Worker:
                         # It must never turn a published emission into a new attempt.
                         self.queue.complete(job, self._now(now), result)
             completed.append(job.job_id)
+            self._schedule_requalifications(self._now(now))
         return tuple(completed)
 
     def _execute(self, job: Job, now: datetime) -> dict | None:
@@ -174,6 +206,13 @@ class Worker:
                 {"provider": self.runtime.required_provider},
             )
         if payload.get("kind") == "backtest":
+            if payload.get("automatic_requalification") and payload.get("watch_id"):
+                watch = self.runtime.ledger.get_watch(payload["watch_id"])
+                if watch.lifecycle in {"paused", "unsupported"}:
+                    return {
+                        "suppressed": "watch_not_active",
+                        "watch_id": watch.watch_id,
+                    }
             return execute_backtest_job(
                 self.runtime,
                 self.catalog,
@@ -181,7 +220,14 @@ class Worker:
                 now,
                 secret_resolver=self.secret_resolver,
             )
+        if payload.get("kind") == "webhook_delivery":
+            return self._deliver_webhook(job, now)
         if payload.get("kind") in {"run", "configured_run"}:
+            watch_id = payload.get("watch_id")
+            if watch_id is not None:
+                watch = self.runtime.ledger.get_watch(watch_id)
+                if watch.lifecycle in {"paused", "unsupported"}:
+                    return {"suppressed": "watch_not_active", "watch_id": watch_id}
             run = self.runtime.run(
                 GraphSpec.model_validate(payload["graph"]),
                 {
@@ -197,6 +243,8 @@ class Worker:
             )
             if run.state == "failed":
                 raise DomainError("run_failed", {"run_id": run.run_id})
+            if watch_id is not None:
+                self._publish_watch_run(run, payload, job)
             return {"run_id": run.run_id}
         if payload.get("kind") == "evaluation":
             ledger = self.runtime.ledger
@@ -235,6 +283,137 @@ class Worker:
             return {"watch_id": watch.watch_id}
         raise DomainError("unknown_job_kind", {"kind": payload.get("kind")})
 
+    def _deliver_webhook(self, job: Job, now: datetime) -> dict:
+        ledger = self.runtime.ledger
+        attempt = ledger.begin_webhook_delivery(
+            job.payload["delivery_id"], now, lease_guard=job.guard
+        )
+        if attempt["state"] != "delivering":
+            return {
+                "delivery_id": job.payload["delivery_id"],
+                "state": attempt["state"],
+            }
+        body = json.dumps(
+            attempt["body"],
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+        headers = {
+            "Content-Type": "application/json",
+            "X-Forecast-Event-Id": attempt["body"]["event_id"],
+            "User-Agent": "ForecastAnything/1.0",
+        }
+        if attempt["secret"] is not None:
+            signature = hmac.new(
+                attempt["secret"].encode("utf-8"), body, sha256
+            ).hexdigest()
+            headers["X-Forecast-Signature"] = f"sha256={signature}"
+        request = Request(
+            attempt["target_url"], data=body, headers=headers, method="POST"
+        )
+        opener = build_opener(ProxyHandler({}), _NoWebhookRedirect())
+        error_code = None
+        try:
+            with opener.open(request, timeout=10) as response:
+                if not 200 <= response.status < 300:
+                    error_code = f"http_status_{response.status}"
+        except HTTPError as error:
+            error_code = f"http_status_{error.code}"
+        except (URLError, TimeoutError, OSError, ValueError):
+            error_code = "delivery_request_failed"
+        delivery = ledger.finish_webhook_delivery(
+            job.payload["delivery_id"],
+            now,
+            error_code=error_code,
+            lease_guard=job.guard,
+        )
+        if error_code is not None and delivery.state == "pending":
+            retry_after = 30 if delivery.attempts == 1 else 120
+            raise DomainError(
+                "webhook_delivery_failed",
+                {"retry_after": retry_after, "attempts": delivery.attempts},
+            )
+        return {
+            "delivery_id": delivery.delivery_id,
+            "state": delivery.state,
+            "attempts": delivery.attempts,
+        }
+
+    def _question_links_for_watch(self, watch_id: str) -> tuple[dict, ...]:
+        return tuple(
+            {
+                "question_id": link["question_id"],
+                "revision": link["revision"],
+                "priority": link["priority"],
+            }
+            for link in self.runtime.ledger.question_links_for_watch(watch_id)
+            if link["status"] == "open"
+        )
+
+    def _publish_watch_run(self, run, payload: dict, job: Job) -> None:
+        ledger = self.runtime.ledger
+        watch = ledger.get_watch(payload["watch_id"])
+        horizon_end = max(
+            (
+                timestamp
+                for result in run.results.values()
+                for timestamp in result.timestamps
+            ),
+            default=run.as_of,
+        )
+        watch = ledger.advance_watch(
+            watch.watch_id,
+            {
+                "kind": "run_issued",
+                "run_id": run.run_id,
+                "forecast_horizon_end": horizon_end,
+                "snapshot_ids": tuple(run.snapshot_ids),
+            },
+            self._now(run.as_of),
+            event_id=f"run/{run.run_id}",
+            lease_guard=job.guard,
+        )
+        for link in payload.get("question_links", ()):
+            question_id, revision = link["question_id"], link["revision"]
+            ledger.link_question_reference(
+                question_id,
+                QuestionReferenceRequest(
+                    key=f"worker-run-{run.run_id}",
+                    revision=revision,
+                    target_type="run",
+                    target_id=run.run_id,
+                    note="Background forecast update",
+                ),
+                lease_guard=job.guard,
+            )
+            question = ledger.get_question(question_id)
+            if question.status != "open" or question.current_revision != revision:
+                continue
+            provisional = (
+                not watch.evidence_applicable or watch.quality == "provisional"
+            )
+            summary = (
+                "Previsione aggiornata sui nuovi dati. Lo stato resta provvisorio in attesa della riqualifica scientifica su nuove origini."
+                if provisional
+                else "Nuova previsione disponibile; la qualifica scientifica corrente resta applicabile."
+            )
+            ledger.record_inbox_event(
+                question_id=question_id,
+                revision=revision,
+                event_kind="forecast_issued",
+                transition_id=run.run_id,
+                run_id=run.run_id,
+                watch_id=watch.watch_id,
+                summary=summary,
+                payload={
+                    "quality": watch.quality,
+                    "evidence_applicable": watch.evidence_applicable,
+                },
+                lease_guard=job.guard,
+            )
+
     def _sync_watches(self, now: datetime, *, lease_guard=None):
         """Apply expiry and registered mapping revisions before reading operational."""
         now = self._now(now)
@@ -270,6 +449,33 @@ class Worker:
                     event_id=f"expiry/{watch.next_due_at.isoformat()}",
                     lease_guard=lease_guard,
                 )
+            if (
+                watch.forecast_horizon_end is not None
+                and watch.forecast_horizon_end < now
+                and watch.quality_reason != "horizon_expired"
+            ):
+                current = ledger.advance_watch(
+                    watch.watch_id,
+                    {"kind": "horizon_expired"},
+                    now,
+                    event_id=f"horizon/{watch.last_run_id or watch.watch_id}",
+                    lease_guard=lease_guard,
+                )
+                for link in self._question_links_for_watch(watch.watch_id):
+                    ledger.record_inbox_event(
+                        question_id=link["question_id"],
+                        revision=link["revision"],
+                        event_kind="horizon_expired",
+                        transition_id=watch.last_run_id or watch.watch_id,
+                        run_id=watch.last_run_id,
+                        watch_id=watch.watch_id,
+                        summary="L'orizzonte della previsione registrata è trascorso. Le evidenze storiche restano consultabili; non ci sono date future coperte.",
+                        payload={
+                            "quality": current.quality,
+                            "reason": "horizon_expired",
+                        },
+                        lease_guard=lease_guard,
+                    )
             for profile in watch.candidate.source_profiles:
                 try:
                     registered = self.catalog.get(profile.source_id)
@@ -307,6 +513,20 @@ class Worker:
     def _schedule_sources(self, now: datetime):
         watches = self.runtime.ledger.list_watches()
         superseded = {w.supersedes_watch_id for w in watches}
+        with self.runtime.ledger._transaction() as connection:
+            for watch in watches:
+                for source_id in watch.candidate.source_ids:
+                    connection.execute(
+                        """INSERT OR IGNORE INTO source_subscriptions
+                        (source_id, active, created_at, updated_at) VALUES (?, 1, ?, ?)""",
+                        (source_id, now.isoformat(), now.isoformat()),
+                    )
+            subscriptions = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT source_id FROM source_subscriptions WHERE active = 1"
+                ).fetchall()
+            }
         due = {}
         for watch in watches:
             if (
@@ -317,10 +537,14 @@ class Worker:
             ):
                 continue
             for source_id in watch.candidate.source_ids:
-                due[source_id] = min(
-                    due.get(source_id, watch.next_due_at), watch.next_due_at
+                if source_id not in subscriptions:
+                    continue
+                prior = due.get(source_id, (watch.next_due_at, watch.priority))
+                due[source_id] = (
+                    min(prior[0], watch.next_due_at),
+                    min(prior[1], watch.priority),
                 )
-        for source_id, deadline in due.items():
+        for source_id, (deadline, priority) in due.items():
             try:
                 registered = self.catalog.get(source_id)
             except DomainError:
@@ -331,14 +555,20 @@ class Worker:
                     (source_id,),
                 ).fetchone()
                 existing = connection.execute(
-                    "SELECT payload FROM jobs WHERE state IN ('pending', 'running')"
+                    "SELECT job_id, payload FROM jobs WHERE state IN ('pending', 'running')"
                 ).fetchall()
-            if any(
-                (p := json.loads(row[0])).get("kind") == "source_refresh"
-                and p.get("source_id") == source_id
-                and p.get("revision") == registered.revision
-                for row in existing
-            ):
+            existing_source_job = next(
+                (
+                    (row[0], p)
+                    for row in existing
+                    if (p := json.loads(row[1])).get("kind") == "source_refresh"
+                    and p.get("source_id") == source_id
+                    and p.get("revision") == registered.revision
+                ),
+                None,
+            )
+            if existing_source_job is not None:
+                self.queue.update_priority(existing_source_job[0], priority)
                 continue
             if polling and polling[0] == registered.revision:
                 if polling[1] > now.timestamp():
@@ -351,7 +581,238 @@ class Worker:
                     "source_id": source_id,
                     "revision": registered.revision,
                     "as_of": deadline.isoformat(),
+                    "priority": priority,
                 },
+            )
+
+    def _wait_for_requalification(
+        self, watch, links, now: datetime, *, reason: str, new_origins: int, due_at
+    ) -> None:
+        ledger = self.runtime.ledger
+        if due_at <= now:
+            due_at = now + timedelta(seconds=60)
+        transition = f"{watch.source_snapshot_ids[-1] if watch.source_snapshot_ids else 'none'}/{reason}"
+        current = ledger.advance_watch(
+            watch.watch_id,
+            {
+                "kind": "requalification_waiting",
+                "reason": reason,
+                "new_origins": new_origins,
+                "requalification_due_at": due_at,
+            },
+            now,
+            event_id=(
+                f"requalification-wait/{watch.watch_id}/{transition}/{due_at.isoformat()}"
+            ),
+        )
+        for link in links:
+            summary = (
+                "La previsione resta provvisoria: la riqualifica attende 30 origini finali indipendenti. "
+                f"Disponibili: {new_origins}."
+                if reason == "insufficient_new_final_origins"
+                else "La previsione resta provvisoria: il budget automatico di riqualifica è in cooldown."
+                if reason == "automatic_requalification_budget_exhausted"
+                else "La previsione resta provvisoria: i prerequisiti per riqualificare non sono ancora disponibili."
+            )
+            ledger.record_inbox_event(
+                question_id=link["question_id"],
+                revision=link["revision"],
+                event_kind="requalification_waiting",
+                transition_id=transition,
+                watch_id=watch.watch_id,
+                summary=summary,
+                payload={
+                    "reason": reason,
+                    "new_final_origins": new_origins,
+                    "requalification_due_at": due_at.isoformat(),
+                    "quality": current.quality,
+                },
+            )
+
+    def _schedule_requalifications(self, now: datetime) -> None:
+        ledger = self.runtime.ledger
+        for watch in ledger.list_watches():
+            if (
+                watch.lifecycle in {"paused", "unsupported"}
+                or watch.candidate_invalidated
+                or watch.quality != "provisional"
+                or watch.requalification_due_at is None
+                or watch.requalification_due_at > now
+                or not watch.source_snapshot_ids
+                or watch.qualification_snapshot_id is None
+            ):
+                continue
+            links = self._question_links_for_watch(watch.watch_id)
+            if not links:
+                continue
+            try:
+                if len(watch.candidate.source_ids) != 1:
+                    raise DomainError("unsupported_watch_backtest", {})
+                source_id = watch.candidate.source_ids[0]
+                revision = self.catalog.get(source_id)
+                qualification_snapshot = ledger.get_snapshot(
+                    watch.qualification_snapshot_id
+                )
+                latest_snapshot = ledger.get_snapshot(watch.source_snapshot_ids[-1])
+                origin_floor = max(
+                    (
+                        row.event_time
+                        for row in qualification_snapshot.observations
+                        if row.available_at <= qualification_snapshot.as_of
+                    ),
+                    default=None,
+                )
+                if origin_floor is None:
+                    raise DomainError("insufficient_qualification_history", {})
+                selection = candidate_backtest_selection(watch.candidate)
+                settings = BacktestSettings(max_origins_per_partition=50)
+                contracts = _provider_contracts(self.runtime, selection)
+                preview = prepare_backtest(
+                    "requalification-preview",
+                    revision,
+                    latest_snapshot.observations,
+                    selection,
+                    settings,
+                    latest_snapshot.as_of,
+                    provider_contracts=contracts,
+                    watch_id=watch.watch_id,
+                    candidate_id=watch.candidate_id,
+                    origin_target_after=origin_floor,
+                )
+            except (DomainError, ValueError):
+                self._wait_for_requalification(
+                    watch,
+                    links,
+                    now,
+                    reason="insufficient_new_final_origins",
+                    new_origins=0,
+                    due_at=max(watch.next_due_at, now + timedelta(seconds=60)),
+                )
+                continue
+            new_origins = sum(origin.partition == "final" for origin in preview.origins)
+            if new_origins < 30:
+                self._wait_for_requalification(
+                    watch,
+                    links,
+                    now,
+                    reason="insufficient_new_final_origins",
+                    new_origins=new_origins,
+                    due_at=max(watch.next_due_at, now + timedelta(seconds=60)),
+                )
+                continue
+
+            cutoff = (now - timedelta(hours=24)).timestamp()
+            eligible, blocked_until = [], []
+            with ledger._connection() as connection:
+                for link in links:
+                    row = connection.execute(
+                        "SELECT MIN(scheduled_at) FROM requalification_budgets WHERE question_id = ? AND scheduled_at > ?",
+                        (link["question_id"], cutoff),
+                    ).fetchone()
+                    if row is None or row[0] is None:
+                        eligible.append(link)
+                    else:
+                        blocked_until.append(
+                            datetime.fromtimestamp(row[0] + 86400, now.tzinfo)
+                        )
+            if not eligible:
+                self._wait_for_requalification(
+                    watch,
+                    links,
+                    now,
+                    reason="automatic_requalification_budget_exhausted",
+                    new_origins=new_origins,
+                    due_at=min(blocked_until, default=now + timedelta(hours=24)),
+                )
+                continue
+
+            request_key = "auto-requalification/" + _digest(
+                {
+                    "watch_id": watch.watch_id,
+                    "qualification_snapshot_id": watch.qualification_snapshot_id,
+                    "source_snapshot_id": latest_snapshot.snapshot_id,
+                    "questions": [link["question_id"] for link in eligible],
+                }
+            )
+            request = BacktestJobRequest(
+                kind="backtest",
+                key=request_key,
+                source_id=source_id,
+                selection=selection,
+                settings=settings,
+                watch_id=watch.watch_id,
+            )
+            payload = backtest_payload(self.runtime, self.catalog, request)
+            payload.update(
+                {
+                    "automatic_requalification": True,
+                    "origin_target_after": origin_floor.isoformat(),
+                    "qualification_snapshot_id": watch.qualification_snapshot_id,
+                    "snapshot_id": latest_snapshot.snapshot_id,
+                    "question_links": eligible,
+                    "priority": min(
+                        ledger.get_question(link["question_id"]).priority
+                        for link in eligible
+                    ),
+                    "execution_budget_seconds": 300,
+                }
+            )
+            with ledger._transaction() as connection:
+                job = self.queue.enqueue(request_key, payload, connection=connection)
+                for link in eligible:
+                    connection.execute(
+                        """INSERT OR IGNORE INTO requalification_budgets
+                        (question_id, watch_id, job_id, scheduled_at) VALUES (?, ?, ?, ?)""",
+                        (
+                            link["question_id"],
+                            watch.watch_id,
+                            job.job_id,
+                            now.timestamp(),
+                        ),
+                    )
+            ledger.advance_watch(
+                watch.watch_id,
+                {"kind": "requalification_scheduled", "new_origins": new_origins},
+                now,
+                event_id=f"requalification-scheduled/{job.job_id}",
+            )
+            for link in eligible:
+                ledger.record_inbox_event(
+                    question_id=link["question_id"],
+                    revision=link["revision"],
+                    event_kind="requalification_started",
+                    transition_id=job.job_id,
+                    watch_id=watch.watch_id,
+                    summary="La riqualifica automatica è stata avviata con almeno 30 nuove origini finali indipendenti.",
+                    payload={"new_final_origins": new_origins, "job_id": job.job_id},
+                )
+
+    def _record_requalification_failure(self, job: Job, now: datetime) -> None:
+        watch_id = job.payload.get("watch_id")
+        if not watch_id:
+            return
+        try:
+            watch = self.runtime.ledger.get_watch(watch_id)
+        except DomainError:
+            return
+        links = tuple(job.payload.get("question_links", ()))
+        self._wait_for_requalification(
+            watch,
+            links,
+            now,
+            reason="automatic_requalification_failed",
+            new_origins=max(30, watch.requalification_new_origins),
+            due_at=now + timedelta(hours=24),
+        )
+        for link in links:
+            self.runtime.ledger.record_inbox_event(
+                question_id=link["question_id"],
+                revision=link["revision"],
+                event_kind="requalification_failed",
+                transition_id=job.job_id,
+                watch_id=watch_id,
+                summary="La riqualifica automatica non è riuscita. La previsione resta provvisoria e potrà riprovare dopo il cooldown.",
+                payload={"reason": "automatic_requalification_failed"},
             )
 
     def _source_status(
@@ -380,6 +841,16 @@ class Worker:
 
     def _refresh_source(self, job: Job, now: datetime) -> dict:
         payload = job.payload
+        try:
+            subscription = self.runtime.ledger.get_source_subscription(
+                payload["source_id"]
+            )
+        except DomainError as error:
+            if error.code != "not_found":
+                raise
+            return {"suppressed": "source_subscription_missing"}
+        if not subscription.active:
+            return {"suppressed": "source_subscription_revoked"}
         registered = self.catalog.get(payload["source_id"], payload["revision"])
         # Superseded configuration cannot invalidate watches or become the latest input.
         if self.catalog.get(payload["source_id"]).revision != registered.revision:
@@ -427,17 +898,140 @@ class Worker:
                 watch.watch_id in superseded
                 or payload["source_id"] not in watch.candidate.source_ids
                 or snap.snapshot_id in watch.source_snapshot_ids
+                or watch.lifecycle == "unsupported"
             ):
                 continue
+            previous = (
+                self.runtime.ledger.get_snapshot(watch.source_snapshot_ids[-1])
+                if watch.source_snapshot_ids
+                else None
+            )
+            old_profile = next(
+                (
+                    item
+                    for item in watch.candidate.source_profiles
+                    if item.source_id == payload["source_id"]
+                ),
+                None,
+            )
+            profile = SourceProfile.model_validate(payload["profile"])
+            change = (
+                classify_snapshot_change(
+                    previous,
+                    snap,
+                    now,
+                    mapping_unchanged=(
+                        old_profile is not None
+                        and old_profile.source_revision == profile.source_revision
+                        and old_profile.proposed_mapping == profile.proposed_mapping
+                    ),
+                )
+                if previous is not None
+                else None
+            )
+            next_due_at = now + timedelta(seconds=registered.spec.refresh_seconds)
+            if change is not None and change.kind == "unchanged":
+                was_horizon_expired = (
+                    watch.forecast_horizon_end is not None
+                    and now > watch.forecast_horizon_end
+                    and watch.quality_reason != "horizon_expired"
+                )
+                current = self.runtime.ledger.advance_watch(
+                    watch.watch_id,
+                    {
+                        "kind": "source_unchanged",
+                        "next_due_at": next_due_at,
+                    },
+                    now,
+                    event_id=f"unchanged/{snap.snapshot_id}/{next_due_at.isoformat()}",
+                    lease_guard=job.guard,
+                )
+                if was_horizon_expired:
+                    for link in self._question_links_for_watch(current.watch_id):
+                        self.runtime.ledger.record_inbox_event(
+                            question_id=link["question_id"],
+                            revision=link["revision"],
+                            event_kind="horizon_expired",
+                            transition_id=f"horizon/{watch.last_run_id}",
+                            run_id=watch.last_run_id,
+                            watch_id=watch.watch_id,
+                            summary="Dati invariati, ma l'orizzonte dell'ultima previsione è trascorso nel passato. Nessuna previsione attiva per date future.",
+                            payload={"quality": "stale", "reason": "horizon_expired"},
+                            lease_guard=job.guard,
+                        )
+                continue
+
+            if (
+                change is not None
+                and change.kind == "append"
+                and not watch.candidate_invalidated
+            ):
+                if len(watch.candidate.source_ids) == 1:
+                    self.runtime.ledger.advance_watch(
+                        watch.watch_id,
+                        {
+                            "kind": "data_appended",
+                            "source_id": payload["source_id"],
+                            "snapshot_id": snap.snapshot_id,
+                            "next_due_at": next_due_at,
+                            "requalification_due_at": now,
+                        },
+                        now,
+                        event_id=f"append/{snap.snapshot_id}",
+                        lease_guard=job.guard,
+                    )
+                    if watch.lifecycle != "paused":
+                        links = self._question_links_for_watch(watch.watch_id)
+                        self.queue.enqueue(
+                            f"watch-run/{watch.watch_id}/{snap.snapshot_id}",
+                            {
+                                "kind": "run",
+                                "watch_id": watch.watch_id,
+                                "graph": watch.candidate.graph.model_dump(mode="json"),
+                                "snapshots": {
+                                    payload["source_id"]: snap.model_dump(mode="json")
+                                },
+                                "as_of": snap.as_of.isoformat(),
+                                "previous_run_id": watch.last_run_id,
+                                "snapshot_id": snap.snapshot_id,
+                                "question_links": links,
+                                "priority": min(
+                                    [
+                                        watch.priority,
+                                        *(link["priority"] for link in links),
+                                    ]
+                                )
+                                if links
+                                else watch.priority,
+                            },
+                            lease_guard=job.guard,
+                        )
+                    continue
+
+            if change is None:
+                event_kind = "source_revised"
+                transition_reason = "mapping_changed"
+            elif change.kind == "historical_availability_altered":
+                event_kind = "historical_availability_altered"
+                transition_reason = change.kind
+            elif change.kind in {
+                "historical_correction",
+                "historical_deletion",
+                "invalid_append",
+            }:
+                event_kind = change.kind
+                transition_reason = change.kind
+            else:
+                event_kind = "source_revised"
+                transition_reason = change.kind
+            event = {"kind": event_kind, "source_id": payload["source_id"]}
+            if event_kind == "source_revised":
+                event["revision"] = snap.snapshot_id
             self.runtime.ledger.advance_watch(
                 watch.watch_id,
-                {
-                    "kind": "source_revised",
-                    "source_id": payload["source_id"],
-                    "revision": snap.snapshot_id,
-                },
+                event,
                 now,
-                event_id=f"snapshot/{snap.snapshot_id}",
+                event_id=f"snapshot/{transition_reason}/{snap.snapshot_id}",
                 lease_guard=job.guard,
             )
             self.queue.enqueue(
@@ -463,6 +1057,16 @@ class Worker:
     def _discover_refresh(self, job: Job, now: datetime) -> dict:
         ledger = self.runtime.ledger
         old = ledger.get_watch(job.payload["watch_id"])
+        try:
+            subscription = ledger.get_source_subscription(
+                job.payload["profile"]["source_id"]
+            )
+        except DomainError as error:
+            if error.code == "not_found":
+                return {"suppressed": "source_subscription_missing"}
+            raise
+        if not subscription.active or old.lifecycle == "unsupported":
+            return {"suppressed": "watch_or_source_inactive"}
         profile = SourceProfile.model_validate(job.payload["profile"])
         snap = ledger.get_snapshot(job.payload["snapshot_id"])
         epoch_id = _digest(

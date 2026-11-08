@@ -17,7 +17,7 @@ _TIMEOUT_SECONDS = 15.0
 _SEGMENT = r"(?!\.{1,2}(?:/|$))(?:[A-Za-z0-9_.~-]|%[0-9A-Fa-f]{2})+"
 _ROUTES = {
     "GET": re.compile(
-        rf"/v1/(?:capabilities|workspace|sources|events|"
+        rf"/v1/(?:capabilities|workspace|sources|events|inbox|source-subscriptions|webhook-subscriptions(?:/{_SEGMENT}/deliveries)?|"
         rf"(?:jobs|candidates|runs|graphs|evaluations)/{_SEGMENT}|"
         rf"snapshots/{_SEGMENT}(?:/(?:summary|series))?|"
         rf"resource-identities/(?:run|question|report)/{_SEGMENT}|"
@@ -29,10 +29,13 @@ _ROUTES = {
     ),
     "POST": re.compile(
         rf"/v1/(?:sources|sources/csv-preview|sources/csv-confirm|jobs|watches|questions|sources/{_SEGMENT}/refresh|"
-        rf"questions/{_SEGMENT}/(?:revisions|references)|"
+        rf"questions/{_SEGMENT}/(?:revisions|references)|webhook-subscriptions|"
         rf"operations|operations/{_SEGMENT}/(?:submit|resume))"
     ),
-    "PATCH": re.compile(rf"/v1/(?:watches|questions|operations)/{_SEGMENT}"),
+    "PUT": re.compile(rf"/v1/source-subscriptions/{_SEGMENT}"),
+    "PATCH": re.compile(
+        rf"/v1/(?:watches|questions|operations|webhook-subscriptions)/{_SEGMENT}"
+    ),
 }
 _STATUS_CODES = {
     401: "unauthorized",

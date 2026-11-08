@@ -39,12 +39,19 @@ from ..contracts import (
     SourceRefreshRequest,
     SourceRegistration,
     SourceSpec,
+    SourceSubscription,
+    SourceSubscriptionPage,
     SourceView,
     WatchHistoryEntry,
     WatchHistoryPage,
     WatchPatch,
     WatchRequest,
     WatchView,
+    WebhookDeliveryPage,
+    WebhookSubscription,
+    WebhookSubscriptionPage,
+    WebhookSubscriptionPatch,
+    WebhookSubscriptionRequest,
 )
 from ..discovery.agent_gateway import AgentOperationRequest, AgentOperationResponse
 from ..discovery.candidates import CandidateProposal, compile_proposal
@@ -437,7 +444,111 @@ class Observatory:
     def patch_question(
         self, question_id: str, patch: QuestionTitlePatch
     ) -> QuestionView:
-        return self.ledger.patch_question(question_id, patch)
+        updated = self.ledger.patch_question(question_id, patch)
+        references = self.ledger.list_question_references(
+            question_id, revision=updated.current_revision, limit=100
+        )
+        for reference in references.references:
+            if reference.target_type != "watch":
+                continue
+            watch = self.ledger.get_watch(reference.target_id)
+            if "status" in patch.model_fields_set:
+                if updated.status != "open":
+                    other_active = any(
+                        link["status"] == "open" and link["question_id"] != question_id
+                        for link in self.ledger.question_links_for_watch(watch.watch_id)
+                    )
+                    if (
+                        not other_active
+                        and watch.lifecycle != "unsupported"
+                        and watch.lifecycle != "paused"
+                    ):
+                        self.ledger.advance_watch(
+                            watch.watch_id,
+                            {"kind": "paused"},
+                            self.now(),
+                            event_id=f"question-pause/{question_id}/{uuid4().hex}",
+                        )
+                elif watch.lifecycle == "paused":
+                    self.ledger.advance_watch(
+                        watch.watch_id,
+                        {"kind": "resumed"},
+                        self.now(),
+                        event_id=f"question-resume/{question_id}/{uuid4().hex}",
+                    )
+            if "priority" in patch.model_fields_set:
+                priorities = [
+                    link["priority"]
+                    for link in self.ledger.question_links_for_watch(watch.watch_id)
+                    if link["status"] == "open"
+                ]
+                priority = min(priorities, default=updated.priority)
+                if watch.priority != priority:
+                    self.ledger.advance_watch(
+                        watch.watch_id,
+                        {"kind": "priority_changed", "priority": priority},
+                        self.now(),
+                        event_id=f"question-priority/{watch.watch_id}/{uuid4().hex}",
+                    )
+                self.queue.reprioritize_pending_watch(watch.watch_id, priority)
+        return updated
+
+    def source_subscriptions(
+        self, *, offset: int, limit: int
+    ) -> SourceSubscriptionPage:
+        return self.ledger.list_source_subscriptions(offset=offset, limit=limit)
+
+    def set_source_subscription(
+        self, source_id: str, *, active: bool
+    ) -> SourceSubscription:
+        self.catalog.get(source_id)
+        subscription = self.ledger.set_source_subscription(source_id, active=active)
+        for watch in self.ledger.list_watches():
+            if source_id not in watch.candidate.source_ids:
+                continue
+            kind = (
+                "source_subscription_activated"
+                if active
+                else "source_subscription_revoked"
+            )
+            self.ledger.advance_watch(
+                watch.watch_id,
+                {"kind": kind},
+                self.now(),
+                event_id=f"{kind}/{source_id}/{uuid4().hex}",
+            )
+        if active:
+            self.worker._schedule_sources(self.now())
+        return subscription
+
+    def create_webhook_subscription(
+        self, request: WebhookSubscriptionRequest
+    ) -> WebhookSubscription:
+        return self.ledger.create_webhook_subscription(request)
+
+    def webhook_subscriptions(
+        self, *, offset: int, limit: int
+    ) -> WebhookSubscriptionPage:
+        return self.ledger.list_webhook_subscriptions(offset=offset, limit=limit)
+
+    def patch_webhook_subscription(
+        self, subscription_id: str, patch: WebhookSubscriptionPatch
+    ) -> WebhookSubscription:
+        return self.ledger.set_webhook_subscription_active(
+            subscription_id, active=patch.active
+        )
+
+    def webhook_deliveries(
+        self, subscription_id: str, *, offset: int, limit: int
+    ) -> WebhookDeliveryPage:
+        return self.ledger.list_webhook_deliveries(
+            subscription_id, offset=offset, limit=limit
+        )
+
+    def inbox_events(self, *, question_id: str | None, offset: int, limit: int):
+        return self.ledger.list_inbox_events(
+            question_id=question_id, offset=offset, limit=limit
+        )
 
     def revise_question(
         self, question_id: str, request: QuestionRevisionRequest
@@ -526,7 +637,14 @@ class Observatory:
         page = self.ledger.list_question_references(
             question_id, offset=offset, limit=limit
         )
-        return present_question(question, page.references, next_offset=page.next_offset)
+        inbox = self.ledger.list_inbox_events(question_id=question_id, limit=10)
+        return present_question(
+            question,
+            page.references,
+            next_offset=page.next_offset,
+            inbox_events=inbox.events,
+            inbox_total_count=inbox.total_count,
+        )
 
     def create_operation(self, request: OperationCreateRequest) -> OperationView:
         return self.ledger.create_operation(request)

@@ -33,6 +33,13 @@ TOOLS = {
     "get_question_revision",
     "link_question_reference",
     "list_question_references",
+    "list_inbox_events",
+    "list_source_subscriptions",
+    "set_source_subscription",
+    "create_webhook_subscription",
+    "list_webhook_subscriptions",
+    "update_webhook_subscription",
+    "list_webhook_deliveries",
     "get_capabilities",
     "get_diagnostics",
     "create_operation",
@@ -128,9 +135,21 @@ class LocalWorkspace:
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.python = str(python or sys.executable)
-        self.executable = str(
-            executable or Path(sys.executable).parent / "forecast-anything"
-        )
+        self.source_root = None
+        if executable is None:
+            self.source_root = ROOT
+            self.executable = str(self.root / "forecast-anything")
+            launcher = Path(self.executable)
+            launcher.write_text(
+                f"#!{sys.executable}\n"
+                "import sys\n"
+                f"sys.path.insert(0, {str(ROOT / 'src')!r})\n"
+                "from forecast_anything.cli import main\n"
+                "raise SystemExit(main())\n"
+            )
+            launcher.chmod(0o755)
+        else:
+            self.executable = str(executable)
         if source_root is None and executable is None:
             source_root = ROOT
         self.source_root = Path(source_root).resolve() if source_root else None
@@ -152,6 +171,8 @@ class LocalWorkspace:
             for key in ("PATH", "HOME", "SYSTEMROOT")
             if key in os.environ
         }
+        if self.source_root is not None:
+            self.env["FORECAST_ANYTHING_TEST_SOURCE_ROOT"] = str(self.source_root)
         self.http = httpx.Client(
             base_url=self.url,
             headers={"Authorization": f"Bearer {self.token}"},
@@ -463,6 +484,9 @@ def fixture_main():
 
     mode, directory, port = sys.argv[1:]
     root = Path(directory)
+    source_root = os.environ.get("FORECAST_ANYTHING_TEST_SOURCE_ROOT")
+    if source_root is not None:
+        sys.path.insert(0, str(Path(source_root) / "src"))
 
     def clock():
         return datetime.fromisoformat((root / "clock.txt").read_text())

@@ -16,6 +16,7 @@ from ..contracts import (
     QuestionSourceId,
     QuestionTitle,
     SourceSpec,
+    WebhookSubscriptionRequest,
 )
 
 # Unlike contract Identifiers, tool arguments never silently trim a replay key
@@ -209,13 +210,47 @@ class QuestionIdArguments(Contract):
 class QuestionPatchArguments(QuestionIdArguments):
     title: QuestionTitle | None = None
     status: Literal["open", "paused", "resolved"] | None = None
+    muted: Annotated[bool, Field(strict=True)] | None = None
+    priority: Annotated[int, Field(ge=0, le=5, strict=True)] | None = None
 
     @model_validator(mode="after")
     def require_update(self):
-        controls = self.model_fields_set & {"title", "status"}
+        controls = self.model_fields_set & {"title", "status", "muted", "priority"}
         if not controls or any(getattr(self, field) is None for field in controls):
             raise ValueError("at least one non-null question field is required")
         return self
+
+
+class InboxListArguments(Contract):
+    question_id: ToolIdentifier | None = None
+    offset: NonNegative = 0
+    limit: Annotated[int, Field(ge=1, le=100, strict=True)] = 25
+
+
+class SourceSubscriptionSetArguments(Contract):
+    source_id: ToolIdentifier
+    active: Annotated[bool, Field(strict=True)]
+
+
+class WebhookSubscriptionListArguments(Contract):
+    offset: NonNegative = 0
+    limit: Annotated[int, Field(ge=1, le=100, strict=True)] = 25
+
+
+class WebhookSubscriptionCreateArguments(WebhookSubscriptionRequest):
+    secret: Annotated[str, StringConstraints(max_length=1024)] | None = None
+    active: Annotated[bool, Field(strict=True)] = True
+
+
+class WebhookSubscriptionPatchArguments(Contract):
+    subscription_id: ToolIdentifier
+    active: Annotated[bool, Field(strict=True)]
+
+
+class WebhookDeliveryListArguments(Contract):
+    subscription_id: ToolIdentifier
+    offset: NonNegative = 0
+    limit: Annotated[int, Field(ge=1, le=100, strict=True)] = 25
 
 
 class QuestionReviseArguments(Contract):

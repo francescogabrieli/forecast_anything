@@ -17,8 +17,9 @@
   - Spostamento di `continuity-v1` a proposta futura.
   - Matrice controlli (in coda, in esecuzione, chained) e semantica fonti condivise.
   - Limiti e regole del budget di riqualifica (< 30 origini, budget esaurito) e gestione webhook (crash, deduplicazione, 3 tentativi con 2 attese).
-- [ ] **6B: Implementazione aggiornamenti, controlli, inbox e webhook** (in attesa di revisione e approvazione finale del contratto 6A)
+- [x] **6B: Implementazione aggiornamenti, controlli, inbox e webhook** (implementazione e acceptance consegnate per revisione; nessun push)
   - Modelli ledger e migrazioni per Inbox, Outbox webhook, campo `requalification_due_at` e sottoscrizioni fonti.
   - Implementazione aggiornamenti post-append con stato provvisorio e scheduling riqualifica.
   - Endpoint e tool MCP per gestione controlli (Pausa, Mute, Priorità), consultazione Inbox e configurazione Webhook.
-  - Esecuzione suite di test (deterministica su 11 scenari, Timestral reale, crash webhook con deduplicazione, E2E assistente chiuso).
+  - Verificati scenari deterministici, retry/crash webhook, Timestral reale e journey end-to-end con assistente chiuso, receiver locale e recupero della stessa domanda.
+  - Limite da sottoporre alla revisione: il budget di 300 secondi è cooperativo tra origini e non interrompe un'inferenza provider già in esecuzione; il contratto 6A lo definisce invece timeout rigido. Osservazione Codex Desktop non disponibile tramite il tool UI.

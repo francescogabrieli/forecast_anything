@@ -391,8 +391,10 @@ def test_stdio_missing_targets_and_unavailable_revision_keep_planned_origins(tmp
 
 
 def test_stdio_diagnostics_stays_available_with_api_down(tmp_path):
+    import os
     import socket
     import sys
+    from pathlib import Path
 
     from mcp import Client
     from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -408,6 +410,10 @@ def test_stdio_diagnostics_stays_available_with_api_down(tmp_path):
             params = StdioServerParameters(
                 command=sys.executable,
                 args=["-m", "forecast_anything.cli", "mcp", "--config", str(config)],
+                env={
+                    **os.environ,
+                    "PYTHONPATH": str(Path(__file__).resolve().parents[2] / "src"),
+                },
             )
             async with Client(stdio_client(params), mode="legacy") as client:
                 report = await call(client, "get_diagnostics")

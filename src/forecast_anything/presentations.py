@@ -12,6 +12,7 @@ from .contracts import (
     Contract,
     ForecastSelection,
     Identifier,
+    InboxEvent,
     QuestionReference,
     QuestionView,
     RunRecord,
@@ -134,6 +135,8 @@ class QuestionPresentation(Contract):
         tuple[QuestionPresentationReference, ...], Field(max_length=3)
     ]
     next_offset: Annotated[int, Field(ge=0, strict=True)] | None
+    inbox_events: Annotated[tuple[InboxEvent, ...], Field(max_length=10)]
+    inbox_total_count: Annotated[int, Field(ge=0, strict=True)]
 
 
 def _bounded_samples(
@@ -447,6 +450,8 @@ def present_question(
     references: tuple[QuestionReference, ...],
     *,
     next_offset: int | None,
+    inbox_events: tuple[InboxEvent, ...] = (),
+    inbox_total_count: int = 0,
 ) -> QuestionPresentation:
     return QuestionPresentation(
         question=question,
@@ -460,4 +465,6 @@ def present_question(
             for reference in references
         ),
         next_offset=next_offset,
+        inbox_events=inbox_events,
+        inbox_total_count=inbox_total_count,
     )

@@ -126,6 +126,9 @@ class BacktestPlan(FrozenContract):
     archive: ObservationArchive = Field(repr=False)
     selection: ForecastSelection
     settings: BacktestSettings = Field(default_factory=BacktestSettings)
+    origin_target_after: AwareDatetime | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     provider_contracts: dict[Identifier, Capabilities]
     frequency: Identifier
     calendar: tuple[UTCDatetime, ...]

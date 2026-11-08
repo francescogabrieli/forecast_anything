@@ -34,6 +34,13 @@ NAMES = {
     "get_question_presentation",
     "create_question",
     "list_questions",
+    "list_inbox_events",
+    "list_source_subscriptions",
+    "set_source_subscription",
+    "create_webhook_subscription",
+    "list_webhook_subscriptions",
+    "update_webhook_subscription",
+    "list_webhook_deliveries",
     "get_question",
     "update_question",
     "revise_question",
@@ -82,6 +89,10 @@ MUTATIONS = {
     "submit_evaluation",
     "create_watch",
     "update_watch",
+    "update_question",
+    "set_source_subscription",
+    "create_webhook_subscription",
+    "update_webhook_subscription",
     "create_question",
     "update_question",
     "revise_question",
@@ -250,6 +261,9 @@ def test_discovery_has_typed_schemas_and_honest_annotations(monkeypatch):
                     "submit_configured_forecast",
                     "submit_backtest",
                     "create_watch",
+                    "set_source_subscription",
+                    "create_webhook_subscription",
+                    "update_webhook_subscription",
                     "submit_operation",
                     "resume_operation",
                 }
@@ -275,6 +289,22 @@ def test_discovery_has_typed_schemas_and_honest_annotations(monkeypatch):
             "next_due_at",
         }
         assert set(catalog["update_watch"].input_schema["required"]) == {"watch_id"}
+        assert set(catalog["update_question"].input_schema["properties"]) == {
+            "question_id",
+            "title",
+            "status",
+            "muted",
+            "priority",
+        }
+        assert (
+            catalog["create_webhook_subscription"].annotations.read_only_hint is False
+        )
+        assert (
+            "secret"
+            not in catalog["list_webhook_subscriptions"].output_schema["$defs"][
+                "WebhookSubscription"
+            ]["properties"]
+        )
         assert "WatchHistoryPage" in catalog["get_watch_history"].output_schema["$defs"]
         assert catalog["create_watch"].annotations.open_world_hint is True
         assert (
@@ -297,6 +327,11 @@ def test_discovery_has_typed_schemas_and_honest_annotations(monkeypatch):
         ("create_watch", {"candidate_id": "c", "next_due_at": "2026-10-24"}),
         ("update_watch", {"watch_id": "w"}),
         ("update_watch", {"watch_id": "w", "muted": None}),
+        ("list_inbox_events", {"limit": 101}),
+        ("list_webhook_deliveries", {"subscription_id": "s", "limit": 0}),
+        ("set_source_subscription", {"source_id": "sales", "active": "false"}),
+        ("update_question", {"question_id": "q", "priority": 6}),
+        ("update_question", {"question_id": "q", "muted": None}),
         ("get_graph", {"graph_id": "x", "version": 0}),
         ("get_graph", {"graph_id": "x", "version": True}),
         ("submit_forecast", {**FORECAST, "as_of": "2026-10-24"}),
@@ -622,6 +657,106 @@ def test_list_sources_is_stable_bounded_metadata_pagination(monkeypatch):
             assert [s["source_id"] for s in last["sources"]] == ["z"]
 
     asyncio.run(check())
+
+
+def test_continuity_tools_delegate_without_exposing_webhook_secrets(monkeypatch):
+    calls = []
+    subscription = {
+        "subscription_id": "sub-1",
+        "target_url": "https://hooks.example.test/forecast",
+        "active": True,
+        "created_at": "2026-11-08T00:00:00Z",
+    }
+
+    def respond(request):
+        calls.append(request)
+        path = request.url.path
+        if path == "/v1/inbox":
+            assert request.url.params["question_id"] == "q-1"
+            return httpx.Response(
+                200, json={"events": [], "next_offset": None, "total_count": 0}
+            )
+        if path == "/v1/source-subscriptions":
+            return httpx.Response(200, json={"subscriptions": [], "next_offset": None})
+        if path == "/v1/source-subscriptions/sales":
+            assert request.method == "PUT"
+            assert json.loads(request.content) == {"active": False}
+            return httpx.Response(
+                200,
+                json={
+                    "source_id": "sales",
+                    "active": False,
+                    "created_at": "2026-11-08T00:00:00Z",
+                    "updated_at": "2026-11-08T00:00:00Z",
+                },
+            )
+        if path == "/v1/webhook-subscriptions" and request.method == "POST":
+            assert json.loads(request.content)["secret"] == "write-only"
+            return httpx.Response(201, json=subscription)
+        if path == "/v1/webhook-subscriptions":
+            return httpx.Response(
+                200, json={"subscriptions": [subscription], "next_offset": None}
+            )
+        if path == "/v1/webhook-subscriptions/sub-1":
+            assert request.method == "PATCH"
+            assert json.loads(request.content) == {"active": False}
+            return httpx.Response(200, json={**subscription, "active": False})
+        if path == "/v1/webhook-subscriptions/sub-1/deliveries":
+            return httpx.Response(200, json={"deliveries": [], "next_offset": None})
+        raise AssertionError(f"unexpected request: {request.method} {path}")
+
+    async def check():
+        async with connected(monkeypatch, respond) as client:
+            inbox_result = payload(
+                await client.call_tool("list_inbox_events", {"question_id": "q-1"})
+            )
+            assert inbox_result["ok"], inbox_result
+            assert inbox_result["data"]["total_count"] == 0
+            assert (
+                payload(await client.call_tool("list_source_subscriptions", {}))[
+                    "data"
+                ]["subscriptions"]
+                == []
+            )
+            assert (
+                payload(
+                    await client.call_tool(
+                        "set_source_subscription",
+                        {"source_id": "sales", "active": False},
+                    )
+                )["data"]["active"]
+                is False
+            )
+            created = payload(
+                await client.call_tool(
+                    "create_webhook_subscription",
+                    {"target_url": subscription["target_url"], "secret": "write-only"},
+                )
+            )
+            assert "secret" not in created["data"]
+            assert payload(await client.call_tool("list_webhook_subscriptions", {}))[
+                "data"
+            ]["subscriptions"] == [subscription]
+            assert (
+                payload(
+                    await client.call_tool(
+                        "update_webhook_subscription",
+                        {"subscription_id": "sub-1", "active": False},
+                    )
+                )["data"]["active"]
+                is False
+            )
+            assert (
+                payload(
+                    await client.call_tool(
+                        "list_webhook_deliveries", {"subscription_id": "sub-1"}
+                    )
+                )["data"]["deliveries"]
+                == []
+            )
+
+    asyncio.run(check())
+    assert len(calls) == 7
 
 
 def test_watch_tools_preserve_ids_controls_pages_and_run_lineage(monkeypatch):

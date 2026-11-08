@@ -38,6 +38,23 @@ def test_plan_preserves_missing_cell_and_earliest_nonoverlapping_partition_membe
     ]
 
 
+def test_requalification_plan_keeps_final_targets_strictly_after_qualification_floor():
+    floor = START + timedelta(days=12)
+    plan = prepare(
+        tuple(
+            r.model_copy(update={"event_time": START + timedelta(days=i)})
+            for i, r in enumerate(rows(40))
+        ),
+        captured_at=START + timedelta(days=39),
+        origin_target_after=floor,
+    )
+
+    final = [origin for origin in plan.origins if origin.partition == "final"]
+    assert plan.origin_target_after == floor
+    assert final
+    assert all(origin.target_start > floor for origin in final)
+
+
 def test_known_future_and_unavailable_rows_do_not_change_bounds_or_metadata():
     foreign = rows()[0].model_copy(
         update={
