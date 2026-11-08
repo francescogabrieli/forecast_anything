@@ -2207,6 +2207,32 @@ export type QuestionRevisionRequest = QuestionRevisionRequestGenerated.QuestionR
 export const questionTitlePatchSchema = {
   "additionalProperties": false,
   "properties": {
+    "muted": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Muted"
+    },
+    "priority": {
+      "anyOf": [
+        {
+          "maximum": 5,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Priority"
+    },
     "status": {
       "anyOf": [
         {
@@ -2244,10 +2270,14 @@ export const questionTitlePatchSchema = {
 } as const;
 
 export namespace QuestionTitlePatchGenerated {
+  export type Muted = boolean | null;
+  export type Priority = number | null;
   export type Status = ("open" | "paused" | "resolved") | null;
   export type Title = string | null;
 
   export interface QuestionTitlePatch {
+    muted?: Muted;
+    priority?: Priority;
     status?: Status;
     title?: Title;
   }
@@ -2528,6 +2558,18 @@ export const questionViewSchema = {
       "title": "Current Revision",
       "type": "integer"
     },
+    "muted": {
+      "default": false,
+      "title": "Muted",
+      "type": "boolean"
+    },
+    "priority": {
+      "default": 3,
+      "maximum": 5,
+      "minimum": 0,
+      "title": "Priority",
+      "type": "integer"
+    },
     "question_id": {
       "minLength": 1,
       "title": "Question Id",
@@ -2584,6 +2626,8 @@ export const questionViewSchema = {
 export namespace QuestionViewGenerated {
   export type CreatedAt = string;
   export type CurrentRevision = number;
+  export type Muted = boolean;
+  export type Priority = number;
   export type QuestionId = string;
   export type ReferenceCount = number;
   export type CreatedAt1 = string;
@@ -2656,6 +2700,8 @@ export namespace QuestionViewGenerated {
   export interface QuestionView {
     created_at: CreatedAt;
     current_revision: CurrentRevision;
+    muted?: Muted;
+    priority?: Priority;
     question_id: QuestionId;
     reference_count: ReferenceCount;
     revision: QuestionRevision;
@@ -2931,6 +2977,18 @@ export const questionPageSchema = {
           "title": "Current Revision",
           "type": "integer"
         },
+        "muted": {
+          "default": false,
+          "title": "Muted",
+          "type": "boolean"
+        },
+        "priority": {
+          "default": 3,
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Priority",
+          "type": "integer"
+        },
         "question_id": {
           "minLength": 1,
           "title": "Question Id",
@@ -3018,6 +3076,8 @@ export namespace QuestionPageGenerated {
   export type NextOffset = number | null;
   export type CreatedAt = string;
   export type CurrentRevision = number;
+  export type Muted = boolean;
+  export type Priority = number;
   export type QuestionId = string;
   export type ReferenceCount = number;
   export type CreatedAt1 = string;
@@ -3095,6 +3155,8 @@ export namespace QuestionPageGenerated {
   export interface QuestionView {
     created_at: CreatedAt;
     current_revision: CurrentRevision;
+    muted?: Muted;
+    priority?: Priority;
     question_id: QuestionId;
     reference_count: ReferenceCount;
     revision: QuestionRevision;
@@ -7209,6 +7271,121 @@ export type BacktestSummary = BacktestSummaryGenerated.BacktestSummary;
 
 export const questionPresentationSchema = {
   "$defs": {
+    "InboxEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decision Id"
+        },
+        "delivery_states": {
+          "default": [],
+          "items": {
+            "enum": [
+              "pending",
+              "delivering",
+              "delivered",
+              "delivery_failed",
+              "delivery_suppressed_muted"
+            ],
+            "type": "string"
+          },
+          "title": "Delivery States",
+          "type": "array"
+        },
+        "event_id": {
+          "minLength": 1,
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_kind": {
+          "minLength": 1,
+          "title": "Event Kind",
+          "type": "string"
+        },
+        "muted": {
+          "default": false,
+          "title": "Muted",
+          "type": "boolean"
+        },
+        "occurred_at": {
+          "format": "date-time",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "question_id": {
+          "minLength": 1,
+          "title": "Question Id",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "transition_id": {
+          "minLength": 1,
+          "title": "Transition Id",
+          "type": "string"
+        },
+        "watch_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Watch Id"
+        }
+      },
+      "required": [
+        "event_id",
+        "question_id",
+        "revision",
+        "event_kind",
+        "transition_id",
+        "occurred_at",
+        "summary",
+        "payload"
+      ],
+      "title": "InboxEvent",
+      "type": "object"
+    },
     "JsonValue": {},
     "QuestionForecastSelection": {
       "additionalProperties": false,
@@ -7385,6 +7562,18 @@ export const questionPresentationSchema = {
           "title": "Current Revision",
           "type": "integer"
         },
+        "muted": {
+          "default": false,
+          "title": "Muted",
+          "type": "boolean"
+        },
+        "priority": {
+          "default": 3,
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Priority",
+          "type": "integer"
+        },
         "question_id": {
           "minLength": 1,
           "title": "Question Id",
@@ -7440,6 +7629,19 @@ export const questionPresentationSchema = {
   },
   "additionalProperties": false,
   "properties": {
+    "inbox_events": {
+      "items": {
+        "$ref": "#/$defs/InboxEvent"
+      },
+      "maxItems": 10,
+      "title": "Inbox Events",
+      "type": "array"
+    },
+    "inbox_total_count": {
+      "minimum": 0,
+      "title": "Inbox Total Count",
+      "type": "integer"
+    },
     "next_offset": {
       "anyOf": [
         {
@@ -7479,22 +7681,67 @@ export const questionPresentationSchema = {
   "required": [
     "question",
     "references",
-    "next_offset"
+    "next_offset",
+    "inbox_events",
+    "inbox_total_count"
   ],
   "title": "QuestionPresentation",
   "type": "object"
 } as const;
 
 export namespace QuestionPresentationGenerated {
+  /**
+   * @maxItems 10
+   */
+  export type InboxEvents =
+    | []
+    | [InboxEvent]
+    | [InboxEvent, InboxEvent]
+    | [InboxEvent, InboxEvent, InboxEvent]
+    | [InboxEvent, InboxEvent, InboxEvent, InboxEvent]
+    | [InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent]
+    | [InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent]
+    | [InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent]
+    | [InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent]
+    | [InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent]
+    | [
+        InboxEvent,
+        InboxEvent,
+        InboxEvent,
+        InboxEvent,
+        InboxEvent,
+        InboxEvent,
+        InboxEvent,
+        InboxEvent,
+        InboxEvent,
+        InboxEvent
+      ];
+  export type DecisionId = string | null;
+  export type DeliveryStates = (
+    "pending" | "delivering" | "delivered" | "delivery_failed" | "delivery_suppressed_muted"
+  )[];
+  export type EventId = string;
+  export type EventKind = string;
+  export type Muted = boolean;
+  export type OccurredAt = string;
+  export type QuestionId = string;
+  export type Revision = number;
+  export type RunId = string | null;
+  export type Summary = string;
+  export type TransitionId = string;
+  export type WatchId = string | null;
+  export type InboxTotalCount = number;
   export type NextOffset = number | null;
   export type CreatedAt = string;
   export type CurrentRevision = number;
-  export type QuestionId = string;
+  export type Muted1 = boolean;
+  export type Priority = number;
+  export type QuestionId1 = string;
   export type ReferenceCount = number;
   export type CreatedAt1 = string;
   export type Meaning = string;
-  export type QuestionId1 = string;
-  export type Revision = number;
+  export type QuestionId2 = string;
+  export type Revision1 = number;
   export type BaselinePeriod = number;
   export type Horizon = number;
   export type JsonValue = unknown;
@@ -7568,25 +7815,47 @@ export namespace QuestionPresentationGenerated {
   export type AppliesToCurrentRevision = boolean;
   export type CreatedAt2 = string;
   export type Note = string;
-  export type QuestionId2 = string;
+  export type QuestionId3 = string;
   export type ReferenceId = string;
-  export type Revision1 = number;
+  export type Revision2 = number;
   export type TargetId = string;
   export type TargetType = "candidate" | "run" | "backtest" | "watch" | "evaluation" | "operation";
   export type SchemaVersion = "question-presentation-v1";
   export type VisualDestination = "question_timeline";
 
   export interface QuestionPresentation {
+    inbox_events: InboxEvents;
+    inbox_total_count: InboxTotalCount;
     next_offset: NextOffset;
     question: QuestionView;
     references: References;
     schema_version?: SchemaVersion;
     visual_destination?: VisualDestination;
   }
+  export interface InboxEvent {
+    decision_id?: DecisionId;
+    delivery_states?: DeliveryStates;
+    event_id: EventId;
+    event_kind: EventKind;
+    muted?: Muted;
+    occurred_at: OccurredAt;
+    payload: Payload;
+    question_id: QuestionId;
+    revision: Revision;
+    run_id?: RunId;
+    summary: Summary;
+    transition_id: TransitionId;
+    watch_id?: WatchId;
+  }
+  export interface Payload {
+    [k: string]: unknown;
+  }
   export interface QuestionView {
     created_at: CreatedAt;
     current_revision: CurrentRevision;
-    question_id: QuestionId;
+    muted?: Muted1;
+    priority?: Priority;
+    question_id: QuestionId1;
     reference_count: ReferenceCount;
     revision: QuestionRevision;
     revision_count: RevisionCount;
@@ -7597,8 +7866,8 @@ export namespace QuestionPresentationGenerated {
   export interface QuestionRevision {
     created_at: CreatedAt1;
     meaning: Meaning;
-    question_id: QuestionId1;
-    revision: Revision;
+    question_id: QuestionId2;
+    revision: Revision1;
     selection: QuestionForecastSelection;
     source_ids: SourceIds;
   }
@@ -7618,9 +7887,9 @@ export namespace QuestionPresentationGenerated {
   export interface QuestionReference {
     created_at: CreatedAt2;
     note: Note;
-    question_id: QuestionId2;
+    question_id: QuestionId3;
     reference_id: ReferenceId;
-    revision: Revision1;
+    revision: Revision2;
     target_id: TargetId;
     target_type: TargetType;
   }
