@@ -59,3 +59,9 @@ The acceptance script opened provenance and relayed the exact browser destinatio
 Verification: Python **949 passed, 2 skipped**; console **99 passed**, typecheck, generated-type checks, deterministic MCP App bundle check and production build passed. The phase 4 browser regression suite passed **6 tests, 1 optional Timestral test skipped**. The installed-wheel test verified the UI HTML is packaged and served outside the checkout. Ruff, formatting and existing generated core-contract checks passed. The reference-host script passed all three rendered records and UI-load failure fallback on a fresh fixture.
 
 After adding the modern extension capability announcement, 98 focused MCP and installed-wheel tests passed, and the three-record reference-host acceptance plus UI-load failure was repeated successfully. The full 949-test run preceded that final announcement change.
+
+## Fallback correction after cc5bef7
+
+`get_browser_link` now verifies the exact run, question or report through authenticated `GET /v1/resource-identities/{kind}/{resource_id}`. The ledger checks only the indexed ID and does not deserialize the record or presentation; missing IDs return 404. The link remains bound to the separately verified workspace ID. If the presentation exceeds the API client’s 1 MiB limit, `open_context_view` returns the verified browser link with `unavailable_reason=response_too_large`; if the MCP result would exceed 64 KiB, it retains the same link with `unavailable_reason=result_too_large`. Other API errors remain errors and do not produce an unverified link.
+
+Targeted regressions exercise both limits with the exact workspace and run ID, reject missing IDs, and check authenticated lightweight identity lookups for all three resource kinds. Core OpenAPI/schema snapshots and both generated clients were refreshed.

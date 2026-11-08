@@ -175,7 +175,7 @@ class ContextViewResult(Contract):
     presentation: (
         ForecastPresentation | QuestionPresentation | BacktestPresentation | None
     )
-    unavailable_reason: Literal["result_too_large"] | None = None
+    unavailable_reason: Literal["result_too_large", "response_too_large"] | None = None
 
 
 VIEW_URI = "ui://forecast-anything/context.html"
@@ -663,9 +663,20 @@ async def _delegate(
         path = {"run": "runs", "question": "questions", "report": "reports"}[
             arguments.kind
         ]
-        value = await client.request(
-            "GET", f"/v1/{path}/{encode_identifier(arguments.resource_id)}/presentation"
-        )
+        try:
+            value = await client.request(
+                "GET",
+                f"/v1/{path}/{encode_identifier(arguments.resource_id)}/presentation",
+            )
+        except CoreRequestError as error:
+            if error.code != "response_too_large":
+                raise
+            return ContextViewResult(
+                kind=arguments.kind,
+                browser_link=link,
+                presentation=None,
+                unavailable_reason="response_too_large",
+            )
         model = {
             "run": ForecastPresentation,
             "question": QuestionPresentation,
@@ -712,20 +723,11 @@ async def _delegate(
             or any(c not in "0123456789abcdef" for c in workspace_id)
         ):
             raise CoreRequestError("invalid_response")
-        resource = {"run": "runs", "question": "questions", "report": "reports"}[
-            arguments.kind
-        ]
         item = await client.request(
-            "GET", f"/v1/{resource}/{encode_identifier(resource_id)}/presentation"
+            "GET",
+            f"/v1/resource-identities/{arguments.kind}/{encode_identifier(resource_id)}",
         )
-        actual = (
-            item.get("run_id")
-            if arguments.kind == "run"
-            else item.get("question", {}).get("question_id")
-            if arguments.kind == "question"
-            else item.get("summary", {}).get("report_id")
-        )
-        if actual != resource_id:
+        if item.get("kind") != arguments.kind or item.get("resource_id") != resource_id:
             raise CoreRequestError("invalid_response")
         root = arguments.browser_url.rstrip("/")
         return BrowserLink(
@@ -1114,6 +1116,9 @@ def create_server(config: McpConfig) -> MCPServer:
             }
             if tool.name == "open_context_view":
                 presentation = data.presentation
+                if presentation is None:
+                    text = f"Presentazione troppo grande per MCP. Apri il record nel browser: {data.browser_link.url}"
+                    return _result(result, text)
                 if data.kind == "run" and isinstance(
                     presentation, ForecastPresentation
                 ):

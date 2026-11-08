@@ -86,6 +86,21 @@ class Ledger(QuestionStorageMixin, AgentStorageMixin):
                 "SELECT workspace_id FROM workspace_identity WHERE singleton = 1"
             ).fetchone()[0]
 
+    def resource_identity(self, kind: str, resource_id: str) -> str:
+        """Check a stored identity without loading its potentially large content."""
+        table, column = {
+            "run": ("runs", "run_id"),
+            "question": ("questions", "question_id"),
+            "report": ("backtest_reports", "report_id"),
+        }[kind]
+        with self._connection() as connection:
+            row = connection.execute(
+                f"SELECT {column} FROM {table} WHERE {column} = ?", (resource_id,)
+            ).fetchone()
+        if row is None:
+            raise DomainError("not_found", {})
+        return row[0]
+
     def update_worker_heartbeat(
         self, worker_id: str, now: datetime, *, model_status: str | None = None
     ) -> None:

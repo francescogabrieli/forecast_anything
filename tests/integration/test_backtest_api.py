@@ -87,6 +87,10 @@ def test_backtest_job_publishes_manual_scores_and_bounded_immutable_reads(tmp_pa
     assert report.status_code == 200, report.text
     value = report.json()
     report_id = value["report_id"]
+    assert client.get(f"/v1/resource-identities/report/{report_id}").json() == {
+        "kind": "report",
+        "resource_id": report_id,
+    }
     by_report = client.get(f"/v1/reports/{report_id}/presentation")
     assert by_report.status_code == 200
     assert by_report.json() == client.get(f"/v1/backtests/{job_id}/presentation").json()

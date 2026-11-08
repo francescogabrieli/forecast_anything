@@ -1294,3 +1294,26 @@ def test_browser_session_is_scoped_expires_and_is_revocable(tmp_path, monkeypatc
     assert client.get("/v1/workspace", headers={"Origin": origin}).status_code == 200
     now[0] += 8 * 60 * 60 + 1
     assert client.get("/v1/workspace", headers={"Origin": origin}).status_code == 401
+
+
+def test_resource_identity_is_small_authenticated_and_rejects_missing(tmp_path):
+    _, _, client, run = base_run(tmp_path)
+    question = client.post(
+        "/v1/questions",
+        json={
+            "key": "identity-question",
+            "title": "Sales",
+            "meaning": "Forecast sales",
+            "source_ids": ["sales"],
+            "selection": {"provider": "seasonal_naive", "horizon": 1},
+        },
+    ).json()
+    for kind, identifier in [
+        ("run", run["run_id"]),
+        ("question", question["question_id"]),
+    ]:
+        url = f"/v1/resource-identities/{kind}/{identifier}"
+        assert client.get(url).json() == {"kind": kind, "resource_id": identifier}
+        assert client.get(url, headers={"Authorization": ""}).status_code == 401
+    for kind in ("run", "question", "report"):
+        assert client.get(f"/v1/resource-identities/{kind}/missing").status_code == 404
