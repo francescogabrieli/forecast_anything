@@ -1,0 +1,1426 @@
+{
+  "synthetic": true,
+  "model": "mistralai/Timestral-28M",
+  "weights_revision": "49b26409ac87b5935539a5d8ffe7f397b720db47",
+  "code_revision": "a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
+  "capabilities": {
+    "required_provider": "timestral",
+    "model_status": {
+      "provider_id": "timestral",
+      "checkpoint": "mistralai/Timestral-28M",
+      "revision": "49b26409ac87b5935539a5d8ffe7f397b720db47",
+      "code_revision": "a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
+      "device": "cpu",
+      "dtype": "float32",
+      "status": "cached",
+      "cached": true,
+      "ready": false,
+      "prepare_command": "forecast-anything model prepare",
+      "install_command": "uv sync --locked --extra dev --extra mcp",
+      "weights_license": "Modified MIT; global consolidated monthly revenue above USD 20 million requires a separate license",
+      "weights_license_url": "https://huggingface.co/mistralai/Timestral-28M/blob/49b26409ac87b5935539a5d8ffe7f397b720db47/LICENSE"
+    },
+    "providers": {
+      "timestral": {
+        "provider_id": "timestral",
+        "provider_revision": "mistralai/Timestral-28M@49b26409ac87b5935539a5d8ffe7f397b720db47;code=a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
+        "representations": [
+          "point",
+          "marginal_quantiles"
+        ],
+        "supports_known_future": true
+      },
+      "seasonal_naive": {
+        "provider_id": "seasonal_naive",
+        "provider_revision": "1",
+        "representations": [
+          "point"
+        ],
+        "supports_known_future": false
+      }
+    },
+    "operators": {
+      "sum_aligned": {
+        "name": "sum_aligned",
+        "required_representation": "point",
+        "units_rule": "same",
+        "accepted_representations": [
+          "point",
+          "joint_paths"
+        ],
+        "output_representation": "preserve"
+      },
+      "cumulative_balance": {
+        "name": "cumulative_balance",
+        "required_representation": "point",
+        "units_rule": "same",
+        "accepted_representations": [
+          "point",
+          "joint_paths"
+        ],
+        "output_representation": "preserve"
+      },
+      "any_exceed": {
+        "name": "any_exceed",
+        "required_representation": "joint_paths",
+        "units_rule": "probability",
+        "accepted_representations": [
+          "joint_paths"
+        ],
+        "output_representation": "point"
+      }
+    },
+    "templates": [
+      "expected_deviation",
+      "forecast_change",
+      "declared_limit"
+    ]
+  },
+  "guided_preview": {
+    "proposal_version": "e8d81faec363706fa40e1922947aa78195f222ea628754faaea1eef644bb55b7",
+    "content_digest": "dabab3084df0ec634669f114d74b2a2c10ec6c05212a60b2ac9d9cd8e54e7ead",
+    "job_id": "ffbae999956e8597eff5cf5c16f2e0e0076176741c9c1667a0fc6ebbc78124a8"
+  },
+  "snapshot_summary": {
+    "snapshot_id": "22edcbd2c7a28f67d85f9665c60d88a48fc539f6c7d1560dbef254eed8827d01",
+    "as_of": "2026-11-08T00:50:32.396657Z",
+    "observation_count": 360,
+    "series_count": 1,
+    "missing_count": 0,
+    "revision_count": 1,
+    "event_time_start": "2025-11-14T00:00:00Z",
+    "event_time_end": "2026-11-08T00:00:00Z",
+    "available_at_start": "2025-11-14T00:00:00Z",
+    "available_at_end": "2026-11-08T00:00:00Z",
+    "assumption_count": 3,
+    "assumptions": [
+      "Explicit source mapping and time semantics.",
+      "csv_content_sha256=dabab3084df0ec634669f114d74b2a2c10ec6c05212a60b2ac9d9cd8e54e7ead",
+      "source_revision=674e9abbdab1cb9687f22d2117d6f9f133e2ab03a32a42f38d6cc381a9d67a33"
+    ],
+    "assumptions_truncated": false
+  },
+  "question_id": "f919221c83dc84590e3fc0f51d561f437c317743577b8d7bb56a88bc9a7b2f8e",
+  "operation_id": "eea3af1572552ec21d3ad1a5480c76deab495970f47d2999056b0e997a8775bb",
+  "configured_run": {
+    "primary_node_id": "model",
+    "run_id": "ebf3541dfc6669c8bf37c4373ca958b24a90a155947f523250a66f87929d3f3f",
+    "graph_id": "configured-44dc4c8643fd7e907c7a82fc9ff2b8f6c219c8cc9aa16e09a3a66b7d86931b89",
+    "graph_version": 1,
+    "as_of": "2026-11-08T00:50:32.396657Z",
+    "snapshot_ids": [
+      "22edcbd2c7a28f67d85f9665c60d88a48fc539f6c7d1560dbef254eed8827d01"
+    ],
+    "requested_provider": {
+      "baseline": "seasonal_naive",
+      "model": "timestral"
+    },
+    "actual_provider": {
+      "baseline": "seasonal_naive",
+      "model": "timestral"
+    },
+    "state": "completed",
+    "results": {
+      "baseline": {
+        "provider_id": "seasonal_naive",
+        "provider_revision": "1",
+        "series_ids": [
+          "sales"
+        ],
+        "timestamps": [
+          "2026-11-09T00:00:00Z"
+        ],
+        "units": [
+          "count"
+        ],
+        "point": [
+          [
+            3.0
+          ]
+        ],
+        "quantiles": null,
+        "paths": null,
+        "sample_group_id": null,
+        "assumptions": [
+          "source_revision=674e9abbdab1cb9687f22d2117d6f9f133e2ab03a32a42f38d6cc381a9d67a33",
+          "csv_content_sha256=dabab3084df0ec634669f114d74b2a2c10ec6c05212a60b2ac9d9cd8e54e7ead",
+          "Explicit source mapping and time semantics.",
+          "seasonal_naive period=1; fixed UTC calendar; no imputation"
+        ]
+      },
+      "model": {
+        "provider_id": "timestral",
+        "provider_revision": "mistralai/Timestral-28M@49b26409ac87b5935539a5d8ffe7f397b720db47;code=a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
+        "series_ids": [
+          "sales"
+        ],
+        "timestamps": [
+          "2026-11-09T00:00:00Z"
+        ],
+        "units": [
+          "count"
+        ],
+        "point": [
+          [
+            1.0119681358337402
+          ]
+        ],
+        "quantiles": {
+          "0.01": [
+            [
+              0.9663081765174866
+            ]
+          ],
+          "0.05": [
+            [
+              0.9798603057861328
+            ]
+          ],
+          "0.1": [
+            [
+              0.9877587556838989
+            ]
+          ],
+          "0.15": [
+            [
+              0.9930305480957031
+            ]
+          ],
+          "0.2": [
+            [
+              0.9962446689605713
+            ]
+          ],
+          "0.25": [
+            [
+              1.0008111000061035
+            ]
+          ],
+          "0.3": [
+            [
+              1.0031485557556152
+            ]
+          ],
+          "0.35": [
+            [
+              1.0051472187042236
+            ]
+          ],
+          "0.4": [
+            [
+              1.0071821212768555
+            ]
+          ],
+          "0.45": [
+            [
+              1.0086442232131958
+            ]
+          ],
+          "0.5": [
+            [
+              1.0119681358337402
+            ]
+          ],
+          "0.55": [
+            [
+              1.0133585929870605
+            ]
+          ],
+          "0.6": [
+            [
+              1.0159480571746826
+            ]
+          ],
+          "0.65": [
+            [
+              1.0199793577194214
+            ]
+          ],
+          "0.7": [
+            [
+              1.0223960876464844
+            ]
+          ],
+          "0.75": [
+            [
+              1.023369312286377
+            ]
+          ],
+          "0.8": [
+            [
+              1.0284377336502075
+            ]
+          ],
+          "0.85": [
+            [
+              1.029895544052124
+            ]
+          ],
+          "0.9": [
+            [
+              1.0342117547988892
+            ]
+          ],
+          "0.95": [
+            [
+              1.0395764112472534
+            ]
+          ],
+          "0.99": [
+            [
+              1.0619332790374756
+            ]
+          ]
+        },
+        "paths": null,
+        "sample_group_id": null,
+        "assumptions": [
+          "source_revision=674e9abbdab1cb9687f22d2117d6f9f133e2ab03a32a42f38d6cc381a9d67a33",
+          "csv_content_sha256=dabab3084df0ec634669f114d74b2a2c10ec6c05212a60b2ac9d9cd8e54e7ead",
+          "Explicit source mapping and time semantics.",
+          "Timestral checkpoint=mistralai/Timestral-28M@49b26409ac87b5935539a5d8ffe7f397b720db47; code=a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff; CPU fp32; official defaults; missing values remain NaN; marginal quantiles only"
+        ]
+      }
+    },
+    "evidence_ids": [],
+    "scenario_id": null,
+    "parent_run_id": null
+  },
+  "forecast_presentation": {
+    "schema_version": "forecast-presentation-v1",
+    "visual_destination": "time_series",
+    "run_id": "ebf3541dfc6669c8bf37c4373ca958b24a90a155947f523250a66f87929d3f3f",
+    "primary_node_id": "model",
+    "graph_id": "configured-44dc4c8643fd7e907c7a82fc9ff2b8f6c219c8cc9aa16e09a3a66b7d86931b89",
+    "graph_version": 1,
+    "as_of": "2026-11-08T00:50:32.396657Z",
+    "state": "completed",
+    "snapshot_ids": [
+      "22edcbd2c7a28f67d85f9665c60d88a48fc539f6c7d1560dbef254eed8827d01"
+    ],
+    "snapshot_ids_truncated": false,
+    "providers": [
+      {
+        "node_id": "baseline",
+        "requested_provider": "seasonal_naive",
+        "actual_provider": "seasonal_naive"
+      },
+      {
+        "node_id": "model",
+        "requested_provider": "timestral",
+        "actual_provider": "timestral"
+      }
+    ],
+    "providers_truncated": false,
+    "points": [
+      {
+        "node_id": "model",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00Z",
+        "unit": "count",
+        "representation": "marginal_quantiles",
+        "point": 1.0119681358337402,
+        "quantiles": {
+          "0.01": 0.9663081765174866,
+          "0.05": 0.9798603057861328,
+          "0.1": 0.9877587556838989
+        },
+        "quantiles_truncated": true,
+        "sample_count": 0
+      },
+      {
+        "node_id": "baseline",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00Z",
+        "unit": "count",
+        "representation": "point",
+        "point": 3.0,
+        "quantiles": {},
+        "quantiles_truncated": false,
+        "sample_count": 0
+      }
+    ],
+    "total_point_count": 2,
+    "truncated": false
+  },
+  "losing_comparison": {
+    "backtest_id": "c8e043a6e98f96f1c0e87cfe5a12a983905de138dff6e1beb5075af4c1454bac",
+    "final": {
+      "partition": "final",
+      "planned": 2,
+      "evaluated": 2,
+      "excluded": 0,
+      "failed": 0,
+      "insufficient": 0,
+      "matched_count": 2,
+      "model_mae": 0.01735818386077881,
+      "baseline_mae": 0.0,
+      "relative_mae": null,
+      "relative_mae_reason": "zero_baseline_mae"
+    }
+  },
+  "backtest_presentation": {
+    "schema_version": "backtest-presentation-v1",
+    "visual_destination": "comparison",
+    "summary": {
+      "backtest_id": "0343b5e4bd42eb55aa7390f746deef032c76901dc112d216e319319b8ea26eed",
+      "report_id": "62a0603492d0562403fd366a984752260cf16a7b0739e9e666847b5d043294d0",
+      "source_id": "timestral-synthetic",
+      "source_revision": "674e9abbdab1cb9687f22d2117d6f9f133e2ab03a32a42f38d6cc381a9d67a33",
+      "captured_at": "2026-11-08T00:50:37.861795Z",
+      "status": "completed",
+      "selection": {
+        "provider": "timestral",
+        "options": {},
+        "horizon": 1,
+        "baseline_period": 1
+      },
+      "frequency": "1d",
+      "partitions": [
+        {
+          "partition": "exploration",
+          "planned": 30,
+          "evaluated": 30,
+          "excluded": 0,
+          "failed": 0,
+          "insufficient": 0,
+          "matched_count": 30,
+          "model_mae": 0.26940266688664755,
+          "baseline_mae": 2.0,
+          "relative_mae": 0.13470133344332377,
+          "relative_mae_reason": null
+        },
+        {
+          "partition": "selection",
+          "planned": 30,
+          "evaluated": 30,
+          "excluded": 0,
+          "failed": 0,
+          "insufficient": 0,
+          "matched_count": 30,
+          "model_mae": 0.008823672930399576,
+          "baseline_mae": 2.0,
+          "relative_mae": 0.004411836465199788,
+          "relative_mae_reason": null
+        },
+        {
+          "partition": "final",
+          "planned": 30,
+          "evaluated": 30,
+          "excluded": 0,
+          "failed": 0,
+          "insufficient": 0,
+          "matched_count": 30,
+          "model_mae": 0.01022263765335083,
+          "baseline_mae": 2.0,
+          "relative_mae": 0.005111318826675415,
+          "relative_mae_reason": null
+        }
+      ],
+      "final_comparison": "model_lower_mae",
+      "relative_mae": 0.005111318826675415,
+      "relative_mae_reason": null,
+      "metric_definition": "MAE is mean absolute error on matched evaluated cells; lower is better. relative_mae is model_mae / baseline_mae.",
+      "interpretation_limit": "These scores describe only the recorded matched cells; they do not establish future accuracy or statistical significance.",
+      "final_origin_points": [
+        {
+          "ordinal": 60,
+          "target_start": "2026-08-11T00:00:00Z",
+          "target_end": "2026-08-11T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.0097123384475708,
+          "baseline_mae": 2.0,
+          "evaluation_id": "e79f9492ee5a23c92d8cb63601de025d752917650a90e8520bd27b5b1b742cd8",
+          "reason_code": null
+        },
+        {
+          "ordinal": 61,
+          "target_start": "2026-08-12T00:00:00Z",
+          "target_end": "2026-08-12T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.007645845413208008,
+          "baseline_mae": 2.0,
+          "evaluation_id": "382c8ee20e26722fce7c0e531fec2d79da4ce4043bc05e4474da68c46e1213f1",
+          "reason_code": null
+        },
+        {
+          "ordinal": 62,
+          "target_start": "2026-08-13T00:00:00Z",
+          "target_end": "2026-08-13T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.007013797760009766,
+          "baseline_mae": 2.0,
+          "evaluation_id": "d0d487e66e40bfc3f57569043c3f22cd1f8014eba08b18818bcb78da2328bf62",
+          "reason_code": null
+        },
+        {
+          "ordinal": 63,
+          "target_start": "2026-08-14T00:00:00Z",
+          "target_end": "2026-08-14T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.00731658935546875,
+          "baseline_mae": 2.0,
+          "evaluation_id": "a2c65c020cd8968fb8a91884109d23f9667052dd50de53ff0de63265ffa169a7",
+          "reason_code": null
+        },
+        {
+          "ordinal": 64,
+          "target_start": "2026-08-15T00:00:00Z",
+          "target_end": "2026-08-15T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.0069484710693359375,
+          "baseline_mae": 2.0,
+          "evaluation_id": "fb86d039be10d15a26d0b2b0e71b53f30603569fe02090cee8d8b39bf36d5759",
+          "reason_code": null
+        },
+        {
+          "ordinal": 65,
+          "target_start": "2026-08-16T00:00:00Z",
+          "target_end": "2026-08-16T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.007751941680908203,
+          "baseline_mae": 2.0,
+          "evaluation_id": "84ecdb1d8b3bceac178daaa48d59e706fa7f8d219213db3a14192dcffda31f39",
+          "reason_code": null
+        },
+        {
+          "ordinal": 66,
+          "target_start": "2026-08-17T00:00:00Z",
+          "target_end": "2026-08-17T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.0085221529006958,
+          "baseline_mae": 2.0,
+          "evaluation_id": "85461fbeed9a7c545129cb449463192147a8ad18bdeb28adc16a1a89db1c62f0",
+          "reason_code": null
+        },
+        {
+          "ordinal": 67,
+          "target_start": "2026-08-18T00:00:00Z",
+          "target_end": "2026-08-18T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.007885217666625977,
+          "baseline_mae": 2.0,
+          "evaluation_id": "4e07025de4cd24fcb406c39dc6cc6b844f5fcf057c34d73247bc46839b736be2",
+          "reason_code": null
+        },
+        {
+          "ordinal": 68,
+          "target_start": "2026-08-19T00:00:00Z",
+          "target_end": "2026-08-19T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.009941577911376953,
+          "baseline_mae": 2.0,
+          "evaluation_id": "2836d07a868a5e88a5e221f603d3426ff2c1d9d78b74850ce2ea500299c2e088",
+          "reason_code": null
+        },
+        {
+          "ordinal": 69,
+          "target_start": "2026-08-20T00:00:00Z",
+          "target_end": "2026-08-20T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.008566856384277344,
+          "baseline_mae": 2.0,
+          "evaluation_id": "3a8d253163f1bfb24fb0722a76feda47a466e7ef446a55e1135cbabbf47cfec0",
+          "reason_code": null
+        },
+        {
+          "ordinal": 70,
+          "target_start": "2026-08-21T00:00:00Z",
+          "target_end": "2026-08-21T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.00839090347290039,
+          "baseline_mae": 2.0,
+          "evaluation_id": "4614815d43d4aec797ba552bb39384fc30f552efdb83837943a2edd01d7c0a12",
+          "reason_code": null
+        },
+        {
+          "ordinal": 71,
+          "target_start": "2026-08-22T00:00:00Z",
+          "target_end": "2026-08-22T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.008615970611572266,
+          "baseline_mae": 2.0,
+          "evaluation_id": "eede18493f386c811eaaa0f7ec7562614a2378ad1883110ca739dbf620726cca",
+          "reason_code": null
+        },
+        {
+          "ordinal": 72,
+          "target_start": "2026-08-23T00:00:00Z",
+          "target_end": "2026-08-23T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.0083695650100708,
+          "baseline_mae": 2.0,
+          "evaluation_id": "086a2ec6fa5f4210a558bbd4d1629abcf3cd17381326bf427934fcfd577a825e",
+          "reason_code": null
+        },
+        {
+          "ordinal": 73,
+          "target_start": "2026-08-24T00:00:00Z",
+          "target_end": "2026-08-24T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.009270668029785156,
+          "baseline_mae": 2.0,
+          "evaluation_id": "77e07ea09b6c36ab9169b5feefc6c7bde32e43f184a94db87f694c5ff4ab0d57",
+          "reason_code": null
+        },
+        {
+          "ordinal": 74,
+          "target_start": "2026-08-25T00:00:00Z",
+          "target_end": "2026-08-25T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.010146260261535645,
+          "baseline_mae": 2.0,
+          "evaluation_id": "2352767da392f7e8fa01ef089f5dc345261c0eb1b1acb071521c02688f0dfb60",
+          "reason_code": null
+        },
+        {
+          "ordinal": 75,
+          "target_start": "2026-08-26T00:00:00Z",
+          "target_end": "2026-08-26T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.010516643524169922,
+          "baseline_mae": 2.0,
+          "evaluation_id": "63aa3ec1b0eddb4530bc4f1ea6cf06c717ef68bf4b08a975ae4e931b7a168d73",
+          "reason_code": null
+        },
+        {
+          "ordinal": 76,
+          "target_start": "2026-08-27T00:00:00Z",
+          "target_end": "2026-08-27T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.010866045951843262,
+          "baseline_mae": 2.0,
+          "evaluation_id": "c52b9ef5c194057e89a99a4c3763c4cc3982f787a08414c5f7c2486522ae5c9d",
+          "reason_code": null
+        },
+        {
+          "ordinal": 77,
+          "target_start": "2026-08-28T00:00:00Z",
+          "target_end": "2026-08-28T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.01227259635925293,
+          "baseline_mae": 2.0,
+          "evaluation_id": "3b20c485ca9a97a25c6a8b14a4a217cd59be649289dbc2b3013c25a52f3f72da",
+          "reason_code": null
+        },
+        {
+          "ordinal": 78,
+          "target_start": "2026-08-29T00:00:00Z",
+          "target_end": "2026-08-29T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.011448383331298828,
+          "baseline_mae": 2.0,
+          "evaluation_id": "390f1aa3841cd0c16778df94e5ea070fa9eb494216313b17d9ed41dfa6cd4876",
+          "reason_code": null
+        },
+        {
+          "ordinal": 79,
+          "target_start": "2026-08-30T00:00:00Z",
+          "target_end": "2026-08-30T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.011194229125976562,
+          "baseline_mae": 2.0,
+          "evaluation_id": "01ba2ef4d75caa412c1856400375f8623218efd46d776541b796d978246773f3",
+          "reason_code": null
+        },
+        {
+          "ordinal": 80,
+          "target_start": "2026-08-31T00:00:00Z",
+          "target_end": "2026-08-31T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.013374090194702148,
+          "baseline_mae": 2.0,
+          "evaluation_id": "40b6648dc65ab382e97a319914ed37935daae058b2865f70c827ed7988a35170",
+          "reason_code": null
+        },
+        {
+          "ordinal": 81,
+          "target_start": "2026-09-01T00:00:00Z",
+          "target_end": "2026-09-01T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.010718584060668945,
+          "baseline_mae": 2.0,
+          "evaluation_id": "7c2dbc5fc15f5a0770dc7ed0fb30fbdfff38f126d28f163f744732cfba6d6ae4",
+          "reason_code": null
+        },
+        {
+          "ordinal": 82,
+          "target_start": "2026-09-02T00:00:00Z",
+          "target_end": "2026-09-02T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.013749361038208008,
+          "baseline_mae": 2.0,
+          "evaluation_id": "94fe67ab634671743c06c2001394ce34c4b797a08ee06b98bec5bd2fbf51104d",
+          "reason_code": null
+        },
+        {
+          "ordinal": 83,
+          "target_start": "2026-09-03T00:00:00Z",
+          "target_end": "2026-09-03T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.012980222702026367,
+          "baseline_mae": 2.0,
+          "evaluation_id": "a21adba0f0502ce02a42eedba959ae601741f61436f97ca75c49ecd6ced11dc3",
+          "reason_code": null
+        },
+        {
+          "ordinal": 84,
+          "target_start": "2026-09-04T00:00:00Z",
+          "target_end": "2026-09-04T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.011620283126831055,
+          "baseline_mae": 2.0,
+          "evaluation_id": "31c3397b873537b1a9b228f6f8114c4ce724cc4da319efb36d9ced75e416313a",
+          "reason_code": null
+        },
+        {
+          "ordinal": 85,
+          "target_start": "2026-09-05T00:00:00Z",
+          "target_end": "2026-09-05T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.012439727783203125,
+          "baseline_mae": 2.0,
+          "evaluation_id": "c99c9699d006d18acb30fb371e52d86f17dc0ba1db779431a581a40f3da8acb5",
+          "reason_code": null
+        },
+        {
+          "ordinal": 86,
+          "target_start": "2026-09-06T00:00:00Z",
+          "target_end": "2026-09-06T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.01282954216003418,
+          "baseline_mae": 2.0,
+          "evaluation_id": "768704fc1a886af15b057f71de951ecea6f5c67db43137ec01468a977f1e2259",
+          "reason_code": null
+        },
+        {
+          "ordinal": 87,
+          "target_start": "2026-09-07T00:00:00Z",
+          "target_end": "2026-09-07T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.012894153594970703,
+          "baseline_mae": 2.0,
+          "evaluation_id": "f1e3e6228568525ca23740b5d9f474d88599cea7ba7509106fe5c88b1ac95063",
+          "reason_code": null
+        },
+        {
+          "ordinal": 88,
+          "target_start": "2026-09-08T00:00:00Z",
+          "target_end": "2026-09-08T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.012085676193237305,
+          "baseline_mae": 2.0,
+          "evaluation_id": "a04ef54444b2caf893c52abea719d8c836d9df88af0904c7d4ad9f495affd57f",
+          "reason_code": null
+        },
+        {
+          "ordinal": 89,
+          "target_start": "2026-09-09T00:00:00Z",
+          "target_end": "2026-09-09T00:00:00Z",
+          "status": "evaluated",
+          "model_mae": 0.011591434478759766,
+          "baseline_mae": 2.0,
+          "evaluation_id": "55a048548a10f8330407a546c49f082ccd0b80efa8587d0d1e32e3875cb4808f",
+          "reason_code": null
+        }
+      ],
+      "assumptions": [
+        "Only supplied revisions are replayed; upstream-discarded vintages cannot be reconstructed.",
+        "Frozen 50/25/25 partitions; earliest bounded origins; no tuning or imputation."
+      ],
+      "watch": {
+        "watch_id": "d73892730c88cadd317af9004a190d5c768a1356dc9a5a57d46d63d2699b7f82",
+        "lifecycle": "active",
+        "quality": "usable",
+        "evidence_applicable": true,
+        "reevaluation_required": false,
+        "candidate_invalidated": false,
+        "operational": true,
+        "linked_to_backtest": true,
+        "decision_backtest_id": "0343b5e4bd42eb55aa7390f746deef032c76901dc112d216e319319b8ea26eed",
+        "decision_action": "activate",
+        "reason_codes": [
+          "qualified_final_backtest_evidence"
+        ],
+        "final_evaluation_count": 30
+      }
+    }
+  },
+  "candidate_id": "8d06e8b198820a1b4927f5fa64bfbb40115ed0677b58dea9087c7e6fe7c7926b",
+  "watch_id": "d73892730c88cadd317af9004a190d5c768a1356dc9a5a57d46d63d2699b7f82",
+  "before_run_id": "ee983b606f940b7042965297c145287c0107eec54cf2623cf5723187b1fa0832",
+  "backtest_result": {
+    "backtest_id": "0343b5e4bd42eb55aa7390f746deef032c76901dc112d216e319319b8ea26eed",
+    "eligibility": "activate",
+    "reason_codes": [
+      "qualified_final_backtest_evidence"
+    ],
+    "report_id": "62a0603492d0562403fd366a984752260cf16a7b0739e9e666847b5d043294d0",
+    "watch_id": "d73892730c88cadd317af9004a190d5c768a1356dc9a5a57d46d63d2699b7f82",
+    "watch_lifecycle": "active"
+  },
+  "backtest_summary": {
+    "backtest_id": "0343b5e4bd42eb55aa7390f746deef032c76901dc112d216e319319b8ea26eed",
+    "report_id": "62a0603492d0562403fd366a984752260cf16a7b0739e9e666847b5d043294d0",
+    "source_id": "timestral-synthetic",
+    "source_revision": "674e9abbdab1cb9687f22d2117d6f9f133e2ab03a32a42f38d6cc381a9d67a33",
+    "captured_at": "2026-11-08T00:50:37.861795Z",
+    "status": "completed",
+    "selection": {
+      "provider": "timestral",
+      "options": {},
+      "horizon": 1,
+      "baseline_period": 1
+    },
+    "frequency": "1d",
+    "partitions": [
+      {
+        "partition": "exploration",
+        "planned": 30,
+        "evaluated": 30,
+        "excluded": 0,
+        "failed": 0,
+        "insufficient": 0,
+        "matched_count": 30,
+        "model_mae": 0.26940266688664755,
+        "baseline_mae": 2.0,
+        "relative_mae": 0.13470133344332377,
+        "relative_mae_reason": null
+      },
+      {
+        "partition": "selection",
+        "planned": 30,
+        "evaluated": 30,
+        "excluded": 0,
+        "failed": 0,
+        "insufficient": 0,
+        "matched_count": 30,
+        "model_mae": 0.008823672930399576,
+        "baseline_mae": 2.0,
+        "relative_mae": 0.004411836465199788,
+        "relative_mae_reason": null
+      },
+      {
+        "partition": "final",
+        "planned": 30,
+        "evaluated": 30,
+        "excluded": 0,
+        "failed": 0,
+        "insufficient": 0,
+        "matched_count": 30,
+        "model_mae": 0.01022263765335083,
+        "baseline_mae": 2.0,
+        "relative_mae": 0.005111318826675415,
+        "relative_mae_reason": null
+      }
+    ],
+    "final_comparison": "model_lower_mae",
+    "relative_mae": 0.005111318826675415,
+    "relative_mae_reason": null,
+    "metric_definition": "MAE is mean absolute error on matched evaluated cells; lower is better. relative_mae is model_mae / baseline_mae.",
+    "interpretation_limit": "These scores describe only the recorded matched cells; they do not establish future accuracy or statistical significance.",
+    "final_origin_points": [
+      {
+        "ordinal": 60,
+        "target_start": "2026-08-11T00:00:00Z",
+        "target_end": "2026-08-11T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.0097123384475708,
+        "baseline_mae": 2.0,
+        "evaluation_id": "e79f9492ee5a23c92d8cb63601de025d752917650a90e8520bd27b5b1b742cd8",
+        "reason_code": null
+      },
+      {
+        "ordinal": 61,
+        "target_start": "2026-08-12T00:00:00Z",
+        "target_end": "2026-08-12T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.007645845413208008,
+        "baseline_mae": 2.0,
+        "evaluation_id": "382c8ee20e26722fce7c0e531fec2d79da4ce4043bc05e4474da68c46e1213f1",
+        "reason_code": null
+      },
+      {
+        "ordinal": 62,
+        "target_start": "2026-08-13T00:00:00Z",
+        "target_end": "2026-08-13T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.007013797760009766,
+        "baseline_mae": 2.0,
+        "evaluation_id": "d0d487e66e40bfc3f57569043c3f22cd1f8014eba08b18818bcb78da2328bf62",
+        "reason_code": null
+      },
+      {
+        "ordinal": 63,
+        "target_start": "2026-08-14T00:00:00Z",
+        "target_end": "2026-08-14T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.00731658935546875,
+        "baseline_mae": 2.0,
+        "evaluation_id": "a2c65c020cd8968fb8a91884109d23f9667052dd50de53ff0de63265ffa169a7",
+        "reason_code": null
+      },
+      {
+        "ordinal": 64,
+        "target_start": "2026-08-15T00:00:00Z",
+        "target_end": "2026-08-15T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.0069484710693359375,
+        "baseline_mae": 2.0,
+        "evaluation_id": "fb86d039be10d15a26d0b2b0e71b53f30603569fe02090cee8d8b39bf36d5759",
+        "reason_code": null
+      },
+      {
+        "ordinal": 65,
+        "target_start": "2026-08-16T00:00:00Z",
+        "target_end": "2026-08-16T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.007751941680908203,
+        "baseline_mae": 2.0,
+        "evaluation_id": "84ecdb1d8b3bceac178daaa48d59e706fa7f8d219213db3a14192dcffda31f39",
+        "reason_code": null
+      },
+      {
+        "ordinal": 66,
+        "target_start": "2026-08-17T00:00:00Z",
+        "target_end": "2026-08-17T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.0085221529006958,
+        "baseline_mae": 2.0,
+        "evaluation_id": "85461fbeed9a7c545129cb449463192147a8ad18bdeb28adc16a1a89db1c62f0",
+        "reason_code": null
+      },
+      {
+        "ordinal": 67,
+        "target_start": "2026-08-18T00:00:00Z",
+        "target_end": "2026-08-18T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.007885217666625977,
+        "baseline_mae": 2.0,
+        "evaluation_id": "4e07025de4cd24fcb406c39dc6cc6b844f5fcf057c34d73247bc46839b736be2",
+        "reason_code": null
+      },
+      {
+        "ordinal": 68,
+        "target_start": "2026-08-19T00:00:00Z",
+        "target_end": "2026-08-19T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.009941577911376953,
+        "baseline_mae": 2.0,
+        "evaluation_id": "2836d07a868a5e88a5e221f603d3426ff2c1d9d78b74850ce2ea500299c2e088",
+        "reason_code": null
+      },
+      {
+        "ordinal": 69,
+        "target_start": "2026-08-20T00:00:00Z",
+        "target_end": "2026-08-20T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.008566856384277344,
+        "baseline_mae": 2.0,
+        "evaluation_id": "3a8d253163f1bfb24fb0722a76feda47a466e7ef446a55e1135cbabbf47cfec0",
+        "reason_code": null
+      },
+      {
+        "ordinal": 70,
+        "target_start": "2026-08-21T00:00:00Z",
+        "target_end": "2026-08-21T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.00839090347290039,
+        "baseline_mae": 2.0,
+        "evaluation_id": "4614815d43d4aec797ba552bb39384fc30f552efdb83837943a2edd01d7c0a12",
+        "reason_code": null
+      },
+      {
+        "ordinal": 71,
+        "target_start": "2026-08-22T00:00:00Z",
+        "target_end": "2026-08-22T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.008615970611572266,
+        "baseline_mae": 2.0,
+        "evaluation_id": "eede18493f386c811eaaa0f7ec7562614a2378ad1883110ca739dbf620726cca",
+        "reason_code": null
+      },
+      {
+        "ordinal": 72,
+        "target_start": "2026-08-23T00:00:00Z",
+        "target_end": "2026-08-23T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.0083695650100708,
+        "baseline_mae": 2.0,
+        "evaluation_id": "086a2ec6fa5f4210a558bbd4d1629abcf3cd17381326bf427934fcfd577a825e",
+        "reason_code": null
+      },
+      {
+        "ordinal": 73,
+        "target_start": "2026-08-24T00:00:00Z",
+        "target_end": "2026-08-24T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.009270668029785156,
+        "baseline_mae": 2.0,
+        "evaluation_id": "77e07ea09b6c36ab9169b5feefc6c7bde32e43f184a94db87f694c5ff4ab0d57",
+        "reason_code": null
+      },
+      {
+        "ordinal": 74,
+        "target_start": "2026-08-25T00:00:00Z",
+        "target_end": "2026-08-25T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.010146260261535645,
+        "baseline_mae": 2.0,
+        "evaluation_id": "2352767da392f7e8fa01ef089f5dc345261c0eb1b1acb071521c02688f0dfb60",
+        "reason_code": null
+      },
+      {
+        "ordinal": 75,
+        "target_start": "2026-08-26T00:00:00Z",
+        "target_end": "2026-08-26T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.010516643524169922,
+        "baseline_mae": 2.0,
+        "evaluation_id": "63aa3ec1b0eddb4530bc4f1ea6cf06c717ef68bf4b08a975ae4e931b7a168d73",
+        "reason_code": null
+      },
+      {
+        "ordinal": 76,
+        "target_start": "2026-08-27T00:00:00Z",
+        "target_end": "2026-08-27T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.010866045951843262,
+        "baseline_mae": 2.0,
+        "evaluation_id": "c52b9ef5c194057e89a99a4c3763c4cc3982f787a08414c5f7c2486522ae5c9d",
+        "reason_code": null
+      },
+      {
+        "ordinal": 77,
+        "target_start": "2026-08-28T00:00:00Z",
+        "target_end": "2026-08-28T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.01227259635925293,
+        "baseline_mae": 2.0,
+        "evaluation_id": "3b20c485ca9a97a25c6a8b14a4a217cd59be649289dbc2b3013c25a52f3f72da",
+        "reason_code": null
+      },
+      {
+        "ordinal": 78,
+        "target_start": "2026-08-29T00:00:00Z",
+        "target_end": "2026-08-29T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.011448383331298828,
+        "baseline_mae": 2.0,
+        "evaluation_id": "390f1aa3841cd0c16778df94e5ea070fa9eb494216313b17d9ed41dfa6cd4876",
+        "reason_code": null
+      },
+      {
+        "ordinal": 79,
+        "target_start": "2026-08-30T00:00:00Z",
+        "target_end": "2026-08-30T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.011194229125976562,
+        "baseline_mae": 2.0,
+        "evaluation_id": "01ba2ef4d75caa412c1856400375f8623218efd46d776541b796d978246773f3",
+        "reason_code": null
+      },
+      {
+        "ordinal": 80,
+        "target_start": "2026-08-31T00:00:00Z",
+        "target_end": "2026-08-31T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.013374090194702148,
+        "baseline_mae": 2.0,
+        "evaluation_id": "40b6648dc65ab382e97a319914ed37935daae058b2865f70c827ed7988a35170",
+        "reason_code": null
+      },
+      {
+        "ordinal": 81,
+        "target_start": "2026-09-01T00:00:00Z",
+        "target_end": "2026-09-01T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.010718584060668945,
+        "baseline_mae": 2.0,
+        "evaluation_id": "7c2dbc5fc15f5a0770dc7ed0fb30fbdfff38f126d28f163f744732cfba6d6ae4",
+        "reason_code": null
+      },
+      {
+        "ordinal": 82,
+        "target_start": "2026-09-02T00:00:00Z",
+        "target_end": "2026-09-02T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.013749361038208008,
+        "baseline_mae": 2.0,
+        "evaluation_id": "94fe67ab634671743c06c2001394ce34c4b797a08ee06b98bec5bd2fbf51104d",
+        "reason_code": null
+      },
+      {
+        "ordinal": 83,
+        "target_start": "2026-09-03T00:00:00Z",
+        "target_end": "2026-09-03T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.012980222702026367,
+        "baseline_mae": 2.0,
+        "evaluation_id": "a21adba0f0502ce02a42eedba959ae601741f61436f97ca75c49ecd6ced11dc3",
+        "reason_code": null
+      },
+      {
+        "ordinal": 84,
+        "target_start": "2026-09-04T00:00:00Z",
+        "target_end": "2026-09-04T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.011620283126831055,
+        "baseline_mae": 2.0,
+        "evaluation_id": "31c3397b873537b1a9b228f6f8114c4ce724cc4da319efb36d9ced75e416313a",
+        "reason_code": null
+      },
+      {
+        "ordinal": 85,
+        "target_start": "2026-09-05T00:00:00Z",
+        "target_end": "2026-09-05T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.012439727783203125,
+        "baseline_mae": 2.0,
+        "evaluation_id": "c99c9699d006d18acb30fb371e52d86f17dc0ba1db779431a581a40f3da8acb5",
+        "reason_code": null
+      },
+      {
+        "ordinal": 86,
+        "target_start": "2026-09-06T00:00:00Z",
+        "target_end": "2026-09-06T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.01282954216003418,
+        "baseline_mae": 2.0,
+        "evaluation_id": "768704fc1a886af15b057f71de951ecea6f5c67db43137ec01468a977f1e2259",
+        "reason_code": null
+      },
+      {
+        "ordinal": 87,
+        "target_start": "2026-09-07T00:00:00Z",
+        "target_end": "2026-09-07T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.012894153594970703,
+        "baseline_mae": 2.0,
+        "evaluation_id": "f1e3e6228568525ca23740b5d9f474d88599cea7ba7509106fe5c88b1ac95063",
+        "reason_code": null
+      },
+      {
+        "ordinal": 88,
+        "target_start": "2026-09-08T00:00:00Z",
+        "target_end": "2026-09-08T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.012085676193237305,
+        "baseline_mae": 2.0,
+        "evaluation_id": "a04ef54444b2caf893c52abea719d8c836d9df88af0904c7d4ad9f495affd57f",
+        "reason_code": null
+      },
+      {
+        "ordinal": 89,
+        "target_start": "2026-09-09T00:00:00Z",
+        "target_end": "2026-09-09T00:00:00Z",
+        "status": "evaluated",
+        "model_mae": 0.011591434478759766,
+        "baseline_mae": 2.0,
+        "evaluation_id": "55a048548a10f8330407a546c49f082ccd0b80efa8587d0d1e32e3875cb4808f",
+        "reason_code": null
+      }
+    ],
+    "assumptions": [
+      "Only supplied revisions are replayed; upstream-discarded vintages cannot be reconstructed.",
+      "Frozen 50/25/25 partitions; earliest bounded origins; no tuning or imputation."
+    ],
+    "watch": {
+      "watch_id": "d73892730c88cadd317af9004a190d5c768a1356dc9a5a57d46d63d2699b7f82",
+      "lifecycle": "active",
+      "quality": "usable",
+      "evidence_applicable": true,
+      "reevaluation_required": false,
+      "candidate_invalidated": false,
+      "operational": true,
+      "linked_to_backtest": true,
+      "decision_backtest_id": "0343b5e4bd42eb55aa7390f746deef032c76901dc112d216e319319b8ea26eed",
+      "decision_action": "activate",
+      "reason_codes": [
+        "qualified_final_backtest_evidence"
+      ],
+      "final_evaluation_count": 30
+    }
+  },
+  "watch_before_refresh": {
+    "lifecycle": "active",
+    "quality": "usable",
+    "operational": true,
+    "next_due_at": "2026-11-08T00:54:06.968089Z"
+  },
+  "forecast_replay": {
+    "job_id": "348061e3d56a1277f23c0a2306e0e3b65b28a75cecebcdcad892a42204f3f89a",
+    "run_id": "ebf3541dfc6669c8bf37c4373ca958b24a90a155947f523250a66f87929d3f3f"
+  },
+  "after_run_id": "69858264189097817efbfb248526aa3fad95da67e44c89a1684cfbd7b27148d6",
+  "change": {
+    "previous_run_id": "ee983b606f940b7042965297c145287c0107eec54cf2623cf5723187b1fa0832",
+    "current_run_id": "69858264189097817efbfb248526aa3fad95da67e44c89a1684cfbd7b27148d6",
+    "changes": [
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "point",
+        "previous": 1.0119681358337402,
+        "current": 11.06694507598877,
+        "delta": 10.05497694015503,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.01",
+        "previous": 0.9663081765174866,
+        "current": 7.143364906311035,
+        "delta": 6.177056729793549,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.05",
+        "previous": 0.9798603057861328,
+        "current": 9.541143417358398,
+        "delta": 8.561283111572266,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.1",
+        "previous": 0.9877587556838989,
+        "current": 10.111906051635742,
+        "delta": 9.124147295951843,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.15",
+        "previous": 0.9930305480957031,
+        "current": 10.364794731140137,
+        "delta": 9.371764183044434,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.2",
+        "previous": 0.9962446689605713,
+        "current": 10.517468452453613,
+        "delta": 9.521223783493042,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.25",
+        "previous": 1.0008111000061035,
+        "current": 10.695539474487305,
+        "delta": 9.694728374481201,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.3",
+        "previous": 1.0031485557556152,
+        "current": 10.80035400390625,
+        "delta": 9.797205448150635,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.35",
+        "previous": 1.0051472187042236,
+        "current": 10.880627632141113,
+        "delta": 9.87548041343689,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.4",
+        "previous": 1.0071821212768555,
+        "current": 10.956409454345703,
+        "delta": 9.949227333068848,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.45",
+        "previous": 1.0086442232131958,
+        "current": 11.017585754394531,
+        "delta": 10.008941531181335,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.5",
+        "previous": 1.0119681358337402,
+        "current": 11.06694507598877,
+        "delta": 10.05497694015503,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.55",
+        "previous": 1.0133585929870605,
+        "current": 11.13828182220459,
+        "delta": 10.12492322921753,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.6",
+        "previous": 1.0159480571746826,
+        "current": 11.228128433227539,
+        "delta": 10.212180376052856,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.65",
+        "previous": 1.0199793577194214,
+        "current": 11.327874183654785,
+        "delta": 10.307894825935364,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.7",
+        "previous": 1.0223960876464844,
+        "current": 11.386900901794434,
+        "delta": 10.36450481414795,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.75",
+        "previous": 1.023369312286377,
+        "current": 11.469671249389648,
+        "delta": 10.446301937103271,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.8",
+        "previous": 1.0284377336502075,
+        "current": 11.603580474853516,
+        "delta": 10.575142741203308,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.85",
+        "previous": 1.029895544052124,
+        "current": 11.730534553527832,
+        "delta": 10.700639009475708,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.9",
+        "previous": 1.0342117547988892,
+        "current": 11.955460548400879,
+        "delta": 10.92124879360199,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.95",
+        "previous": 1.0395764112472534,
+        "current": 12.361557960510254,
+        "delta": 11.321981549263,
+        "unit": "count"
+      },
+      {
+        "node_id": "forecast",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "quantile:0.99",
+        "previous": 1.0619332790374756,
+        "current": 14.05886459350586,
+        "delta": 12.996931314468384,
+        "unit": "count"
+      },
+      {
+        "node_id": "question",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "point",
+        "previous": 1.0119681358337402,
+        "current": 11.06694507598877,
+        "delta": 10.05497694015503,
+        "unit": "count"
+      },
+      {
+        "node_id": "reference",
+        "series_id": "sales",
+        "timestamp": "2026-11-09T00:00:00+00:00",
+        "representation": "point",
+        "previous": 3.0,
+        "current": 13.0,
+        "delta": 10.0,
+        "unit": "count"
+      }
+    ],
+    "added_targets": [],
+    "removed_targets": [],
+    "common_target_count": 3,
+    "incomparable": [],
+    "new_snapshot_ids": [
+      "10accc61cc402275f30224e399fc2f2b68cbde589981b6013468e8c841219e43"
+    ],
+    "new_evidence_ids": [],
+    "explanation": "Observed forecast differences at common targets and newly available input snapshots; input dependencies do not establish causal effects.",
+    "watch_id": "d73892730c88cadd317af9004a190d5c768a1356dc9a5a57d46d63d2699b7f82",
+    "candidate_id": "8d06e8b198820a1b4927f5fa64bfbb40115ed0677b58dea9087c7e6fe7c7926b",
+    "template_id": "expected_deviation",
+    "question": "Registered expected_deviation question for timestral-synthetic.",
+    "dependencies": [
+      "timestral-synthetic"
+    ]
+  },
+  "successor_watch_id": "9fd8cc852a9dce66db0cbb630b153c338aaff9d6493c8903d886003cc4960a11",
+  "watch_after_refresh": {
+    "lifecycle": "evaluating",
+    "quality": "stale",
+    "operational": false,
+    "candidate_invalidated": true
+  },
+  "completed": true
+}

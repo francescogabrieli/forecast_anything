@@ -27,7 +27,7 @@ _ROUTES = {
         rf"sources/{_SEGMENT}/profile|runs/{_SEGMENT}/(?:evaluations|presentation))"
     ),
     "POST": re.compile(
-        rf"/v1/(?:sources|jobs|watches|questions|sources/{_SEGMENT}/refresh|"
+        rf"/v1/(?:sources|sources/csv-preview|sources/csv-confirm|jobs|watches|questions|sources/{_SEGMENT}/refresh|"
         rf"questions/{_SEGMENT}/(?:revisions|references)|"
         rf"operations|operations/{_SEGMENT}/(?:submit|resume))"
     ),
@@ -147,6 +147,29 @@ class CoreClient:
                     params=params,
                 ) as response:
                     if not 200 <= response.status_code < 300:
+                        if path in {
+                            "/v1/sources/csv-confirm",
+                            "/v1/sources/csv-preview",
+                        } and response.status_code in {409, 422}:
+                            error_body = bytearray()
+                            async for chunk in response.aiter_bytes(chunk_size=4096):
+                                error_body.extend(chunk)
+                                if len(error_body) > 4096:
+                                    raise CoreRequestError("invalid_response")
+                            try:
+                                code = json.loads(error_body).get("code")
+                            except (ValueError, AttributeError):
+                                code = None
+                            if code in {
+                                "source_content_changed",
+                                "source_unavailable",
+                                "source_too_large",
+                                "source_row_limit",
+                                "unresolved_source_mapping",
+                                "invalid_source_row",
+                                "invalid_source_data",
+                            }:
+                                raise CoreRequestError(code)
                         raise CoreRequestError(
                             _STATUS_CODES.get(response.status_code, "upstream_error")
                         )

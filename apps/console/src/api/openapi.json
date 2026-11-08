@@ -715,6 +715,159 @@
         "title": "ConfiguredRunJobRequest",
         "type": "object"
       },
+      "CsvConfirmation": {
+        "additionalProperties": false,
+        "properties": {
+          "adapter_session": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adapter Session"
+          },
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "key": {
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal_version": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Proposal Version",
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/SourceSpec"
+          }
+        },
+        "required": [
+          "key",
+          "spec",
+          "proposal_version",
+          "as_of"
+        ],
+        "title": "CsvConfirmation",
+        "type": "object"
+      },
+      "CsvConfirmationResult": {
+        "additionalProperties": false,
+        "properties": {
+          "epoch_id": {
+            "minLength": 1,
+            "title": "Epoch Id",
+            "type": "string"
+          },
+          "job_id": {
+            "minLength": 1,
+            "title": "Job Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "csv",
+              "http_json"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/SourceProfile"
+          },
+          "refresh_seconds": {
+            "title": "Refresh Seconds",
+            "type": "integer"
+          },
+          "replayed": {
+            "title": "Replayed",
+            "type": "boolean"
+          },
+          "revision": {
+            "minLength": 1,
+            "title": "Revision",
+            "type": "string"
+          },
+          "session_grant": {
+            "default": false,
+            "title": "Session Grant",
+            "type": "boolean"
+          },
+          "source_id": {
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "revision",
+          "kind",
+          "refresh_seconds",
+          "profile",
+          "job_id",
+          "epoch_id",
+          "replayed"
+        ],
+        "title": "CsvConfirmationResult",
+        "type": "object"
+      },
+      "CsvPreview": {
+        "additionalProperties": false,
+        "properties": {
+          "content_digest": {
+            "title": "Content Digest",
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/SourceProfile"
+          },
+          "proposal_version": {
+            "title": "Proposal Version",
+            "type": "string"
+          },
+          "suggestions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Suggestions",
+            "type": "object"
+          }
+        },
+        "required": [
+          "profile",
+          "content_digest",
+          "proposal_version"
+        ],
+        "title": "CsvPreview",
+        "type": "object"
+      },
+      "CsvPreviewRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/SourceSpec"
+          }
+        },
+        "required": [
+          "spec",
+          "as_of"
+        ],
+        "title": "CsvPreviewRequest",
+        "type": "object"
+      },
       "EligibilityDecision": {
         "additionalProperties": false,
         "properties": {
@@ -7480,6 +7633,152 @@
           }
         ],
         "summary": "Register"
+      }
+    },
+    "/v1/sources/csv-confirm": {
+      "post": {
+        "operationId": "confirm_csv_source_v1_sources_csv_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CsvConfirmation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CsvConfirmationResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Confirm Csv Source"
+      }
+    },
+    "/v1/sources/csv-preview": {
+      "post": {
+        "operationId": "preview_csv_source_v1_sources_csv_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CsvPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CsvPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Csv Source"
       }
     },
     "/v1/sources/preview": {

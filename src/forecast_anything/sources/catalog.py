@@ -72,25 +72,27 @@ class SourceCatalog:
         )
 
     def append(
-        self, spec: SourceSpec, assumptions: tuple[str, ...] = ()
+        self, spec: SourceSpec, assumptions: tuple[str, ...] = (), *, connection=None
     ) -> SourceRevision:
+        if connection is None:
+            with sqlite3.connect(self.path) as own:
+                own.execute("BEGIN IMMEDIATE")
+                return self.append(spec, assumptions, connection=own)
         revision = source_revision(spec, assumptions)
-        with sqlite3.connect(self.path) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            latest = connection.execute(
-                "SELECT revision, spec_json, assumptions_json FROM source_revisions "
-                "WHERE source_id = ? ORDER BY sequence DESC LIMIT 1",
-                (spec.source_id,),
-            ).fetchone()
-            if latest is not None and latest[0] == revision:
-                return self._decode(latest)
-            spec_json = spec.model_dump_json()
-            assumptions_json = json.dumps(assumptions)
-            connection.execute(
-                "INSERT INTO source_revisions (source_id, revision, spec_json, assumptions_json) "
-                "VALUES (?, ?, ?, ?)",
-                (spec.source_id, revision, spec_json, assumptions_json),
-            )
+        latest = connection.execute(
+            "SELECT revision, spec_json, assumptions_json FROM source_revisions "
+            "WHERE source_id = ? ORDER BY sequence DESC LIMIT 1",
+            (spec.source_id,),
+        ).fetchone()
+        if latest is not None and latest[0] == revision:
+            return self._decode(latest)
+        spec_json = spec.model_dump_json()
+        assumptions_json = json.dumps(assumptions)
+        connection.execute(
+            "INSERT INTO source_revisions (source_id, revision, spec_json, assumptions_json) "
+            "VALUES (?, ?, ?, ?)",
+            (spec.source_id, revision, spec_json, assumptions_json),
+        )
         return self._decode((revision, spec_json, assumptions_json))
 
     def history(self, source_id: str) -> tuple[SourceRevision, ...]:

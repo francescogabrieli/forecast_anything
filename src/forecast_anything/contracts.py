@@ -179,6 +179,28 @@ class SourceProfile(Contract):
     ] = ()
 
 
+class CsvPreviewRequest(Contract):
+    spec: SourceSpec
+    as_of: AwareDatetime
+
+
+class CsvConfirmation(Contract):
+    adapter_session: (
+        Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{32}$")] | None
+    ) = None
+    key: Identifier
+    spec: SourceSpec
+    proposal_version: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    as_of: AwareDatetime
+
+
+class CsvPreview(Contract):
+    suggestions: dict[str, str] = Field(default_factory=dict)
+    profile: SourceProfile
+    content_digest: str
+    proposal_version: str
+
+
 class Node(Contract):
     node_id: Identifier
     kind: Literal["source", "forecast", "transform", "event"]
@@ -562,6 +584,11 @@ class SourceRegistration(SourceView):
     profile: SourceProfile
     job_id: Identifier
     epoch_id: Identifier
+
+
+class CsvConfirmationResult(SourceRegistration):
+    replayed: bool
+    session_grant: bool = False
 
 
 class SourceRefreshRequest(Contract):

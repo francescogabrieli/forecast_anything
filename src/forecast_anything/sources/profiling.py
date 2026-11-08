@@ -20,16 +20,20 @@ HTTP records_path is a separate optional dotted path to an array of records.
 
 from __future__ import annotations
 
+import json
 import math
+import os
 import re
+import stat
 from datetime import datetime, timezone
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import ValidationError
 
-from ..connectors.csv import load_csv_rows
+from ..connectors.csv import load_csv_rows, parse_csv_rows
 from ..connectors.http_json import (
     SecretResolver,
     load_http_json,
@@ -38,6 +42,7 @@ from ..connectors.http_json import (
     sensitive_key,
 )
 from ..contracts import (
+    CsvPreview,
     DomainError,
     Observation,
     Snapshot,
@@ -47,6 +52,9 @@ from ..contracts import (
 )
 from ..temporal import freeze
 from .catalog import source_revision
+
+_MAX_GUIDED_CSV_BYTES = 64 * 1024 * 1024
+_MAX_GUIDED_CSV_ROWS = 100_000
 
 _ROLES = tuple(Observation.model_fields)
 _SEMANTICS = ("frequency", "timezone", "calendar", "missing_values")
@@ -210,6 +218,100 @@ def inspect_source(
     return _profile(spec, _read(spec, 100, secret_resolver))
 
 
+def _read_guided_csv(location: str) -> bytes:
+    """Open each resolved path component without following replacement symlinks."""
+    fd = None
+    try:
+        path = Path(location)
+        parts = path.parts
+        if not path.is_absolute() or any(part in {".", ".."} for part in parts):
+            raise ValueError
+        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        fd = os.open("/", directory_flags)
+        for part in parts[1:-1]:
+            next_fd = os.open(part, directory_flags, dir_fd=fd)
+            os.close(fd)
+            fd = next_fd
+        file_fd = os.open(
+            parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd
+        )
+        try:
+            if not stat.S_ISREG(os.fstat(file_fd).st_mode):
+                raise ValueError
+            with os.fdopen(file_fd, "rb") as stream:
+                file_fd = None
+                content = stream.read(_MAX_GUIDED_CSV_BYTES + 1)
+        finally:
+            if file_fd is not None:
+                os.close(file_fd)
+        if len(content) > _MAX_GUIDED_CSV_BYTES:
+            raise DomainError("source_too_large", {})
+        return content
+    except (OSError, ValueError):
+        raise DomainError("source_unavailable", {"reason": "csv_read_failed"}) from None
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+
+def preview_csv(
+    spec: SourceSpec, as_of: datetime, *, content: bytes | None = None
+) -> CsvPreview:
+    """Describe one captured file and bind its exact content to the proposal."""
+    if spec.kind != "csv" or spec.secret_ref is not None:
+        raise DomainError(
+            "source_unavailable", {"reason": "csv_credentials_unsupported"}
+        )
+    if content is None:
+        content = _read_guided_csv(spec.location)
+    digest, version = _csv_identity(spec, content, as_of)
+    rows = sanitize_rows(
+        parse_csv_rows(content, limit=100), mapping=spec.mapping, limit=100
+    )
+    profile = _profile(spec, rows)
+    hints = {}
+    unit_columns = [name for name in profile.fields if name.lower() == "unit"]
+    if len(unit_columns) == 1 and rows:
+        values = {row.get(unit_columns[0]) for row in rows}
+        if len(values) == 1:
+            unit = next(iter(values))
+            if isinstance(unit, str) and unit.strip() and unit != "[redacted]":
+                hints["unit"] = unit
+    event_column = profile.proposed_mapping.get("event_time")
+    if isinstance(event_column, str) and len(rows) >= 3:
+        try:
+            times = [datetime.fromisoformat(str(row[event_column])) for row in rows]
+            intervals = {(b - a).total_seconds() for a, b in zip(times, times[1:])}
+            if intervals == {86400}:
+                hints["frequency"] = "1d"
+            elif intervals == {3600}:
+                hints["frequency"] = "1h"
+        except (ValueError, TypeError, KeyError):
+            pass
+    return CsvPreview(
+        profile=profile,
+        content_digest=digest,
+        proposal_version=version,
+        suggestions=hints,
+    )
+
+
+def _csv_identity(spec: SourceSpec, content: bytes, as_of: datetime) -> tuple[str, str]:
+    digest = sha256(content).hexdigest()
+    proposal = json.dumps(
+        {
+            "algorithm": "guided-csv-v1",
+            "as_of": as_of.astimezone(timezone.utc).isoformat(),
+            "spec": spec.model_dump(mode="json"),
+            "content_digest": digest,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    return digest, sha256(proposal.encode()).hexdigest()
+
+
 def _timestamp(value: Any, zone: ZoneInfo) -> datetime:
     if not isinstance(value, str):
         raise ValueError
@@ -240,6 +342,10 @@ def read_observations(
     rows = _read(spec, limit, secret_resolver, read_limit=limit)
     if max_rows is not None and len(rows) > max_rows:
         raise DomainError("source_row_limit", {"max_rows": max_rows})
+    return _observations_from_rows(spec, rows)
+
+
+def _observations_from_rows(spec: SourceSpec, rows) -> tuple[Observation, ...]:
     profile = _profile(spec, rows)
     if profile.unresolved:
         raise DomainError(
@@ -271,6 +377,28 @@ def read_observations(
         except (KeyError, ValueError, TypeError, ValidationError):
             raise DomainError("invalid_source_row", {"row": number}) from None
     return tuple(observations)
+
+
+def capture_confirmed_csv(spec: SourceSpec, proposal_version: str, as_of: datetime):
+    content = _read_guided_csv(spec.location)
+    if _csv_identity(spec, content, as_of)[1] != proposal_version:
+        raise DomainError("source_content_changed", {})
+    preview = preview_csv(spec, as_of, content=content)
+    raw_rows = parse_csv_rows(content, limit=_MAX_GUIDED_CSV_ROWS + 1)
+    if len(raw_rows) > _MAX_GUIDED_CSV_ROWS:
+        raise DomainError("source_row_limit", {"max_rows": _MAX_GUIDED_CSV_ROWS})
+    rows = sanitize_rows(raw_rows, mapping=spec.mapping, limit=None)
+    observations = _observations_from_rows(spec, rows)
+    snapshot = freeze(
+        observations,
+        as_of,
+        (
+            f"source_revision={source_revision(spec)}",
+            f"csv_content_sha256={preview.content_digest}",
+            "Explicit source mapping and time semantics.",
+        ),
+    )
+    return preview.profile, snapshot
 
 
 def ingest_source(

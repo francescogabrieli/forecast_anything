@@ -2324,6 +2324,520 @@
     "title": "Contract",
     "type": "object"
   },
+  "CsvConfirmation": {
+    "$defs": {
+      "JsonValue": {},
+      "SourceSpec": {
+        "additionalProperties": false,
+        "description": "Registered source configuration. Mapping is explicit; see profiling module.\n\nsecret_ref names a source-scoped injected credential, never a literal token.\nLocations and secret references must not be passed to agents or logs.",
+        "properties": {
+          "kind": {
+            "enum": [
+              "csv",
+              "http_json"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "location": {
+            "minLength": 1,
+            "title": "Location",
+            "type": "string"
+          },
+          "mapping": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "title": "Mapping",
+            "type": "object"
+          },
+          "refresh_seconds": {
+            "exclusiveMinimum": 0,
+            "title": "Refresh Seconds",
+            "type": "integer"
+          },
+          "secret_ref": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Secret Ref"
+          },
+          "source_id": {
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "kind",
+          "location",
+          "refresh_seconds"
+        ],
+        "title": "SourceSpec",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "adapter_session": {
+        "anyOf": [
+          {
+            "pattern": "^[0-9a-f]{32}$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Adapter Session"
+      },
+      "as_of": {
+        "format": "date-time",
+        "title": "As Of",
+        "type": "string"
+      },
+      "key": {
+        "minLength": 1,
+        "title": "Key",
+        "type": "string"
+      },
+      "proposal_version": {
+        "pattern": "^[0-9a-f]{64}$",
+        "title": "Proposal Version",
+        "type": "string"
+      },
+      "spec": {
+        "$ref": "#/$defs/SourceSpec"
+      }
+    },
+    "required": [
+      "key",
+      "spec",
+      "proposal_version",
+      "as_of"
+    ],
+    "title": "CsvConfirmation",
+    "type": "object"
+  },
+  "CsvConfirmationResult": {
+    "$defs": {
+      "JsonValue": {},
+      "SourceField": {
+        "additionalProperties": false,
+        "properties": {
+          "data_type": {
+            "enum": [
+              "string",
+              "integer",
+              "number",
+              "boolean",
+              "datetime",
+              "null",
+              "mixed"
+            ],
+            "title": "Data Type",
+            "type": "string"
+          },
+          "nullable": {
+            "title": "Nullable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "data_type",
+          "nullable"
+        ],
+        "title": "SourceField",
+        "type": "object"
+      },
+      "SourceProfile": {
+        "additionalProperties": false,
+        "description": "Sanitized agent-facing view, bounded independently of source size.",
+        "properties": {
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "fields": {
+            "additionalProperties": {
+              "$ref": "#/$defs/SourceField"
+            },
+            "title": "Fields",
+            "type": "object"
+          },
+          "proposed_mapping": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "title": "Proposed Mapping",
+            "type": "object"
+          },
+          "sample_rows": {
+            "default": [],
+            "items": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "maxItems": 100,
+            "title": "Sample Rows",
+            "type": "array"
+          },
+          "source_id": {
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_revision": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source Revision"
+          },
+          "unresolved": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_id",
+          "fields",
+          "proposed_mapping",
+          "unresolved",
+          "assumptions"
+        ],
+        "title": "SourceProfile",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "epoch_id": {
+        "minLength": 1,
+        "title": "Epoch Id",
+        "type": "string"
+      },
+      "job_id": {
+        "minLength": 1,
+        "title": "Job Id",
+        "type": "string"
+      },
+      "kind": {
+        "enum": [
+          "csv",
+          "http_json"
+        ],
+        "title": "Kind",
+        "type": "string"
+      },
+      "profile": {
+        "$ref": "#/$defs/SourceProfile"
+      },
+      "refresh_seconds": {
+        "title": "Refresh Seconds",
+        "type": "integer"
+      },
+      "replayed": {
+        "title": "Replayed",
+        "type": "boolean"
+      },
+      "revision": {
+        "minLength": 1,
+        "title": "Revision",
+        "type": "string"
+      },
+      "session_grant": {
+        "default": false,
+        "title": "Session Grant",
+        "type": "boolean"
+      },
+      "source_id": {
+        "minLength": 1,
+        "title": "Source Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "source_id",
+      "revision",
+      "kind",
+      "refresh_seconds",
+      "profile",
+      "job_id",
+      "epoch_id",
+      "replayed"
+    ],
+    "title": "CsvConfirmationResult",
+    "type": "object"
+  },
+  "CsvPreview": {
+    "$defs": {
+      "JsonValue": {},
+      "SourceField": {
+        "additionalProperties": false,
+        "properties": {
+          "data_type": {
+            "enum": [
+              "string",
+              "integer",
+              "number",
+              "boolean",
+              "datetime",
+              "null",
+              "mixed"
+            ],
+            "title": "Data Type",
+            "type": "string"
+          },
+          "nullable": {
+            "title": "Nullable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "data_type",
+          "nullable"
+        ],
+        "title": "SourceField",
+        "type": "object"
+      },
+      "SourceProfile": {
+        "additionalProperties": false,
+        "description": "Sanitized agent-facing view, bounded independently of source size.",
+        "properties": {
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "fields": {
+            "additionalProperties": {
+              "$ref": "#/$defs/SourceField"
+            },
+            "title": "Fields",
+            "type": "object"
+          },
+          "proposed_mapping": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "title": "Proposed Mapping",
+            "type": "object"
+          },
+          "sample_rows": {
+            "default": [],
+            "items": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "maxItems": 100,
+            "title": "Sample Rows",
+            "type": "array"
+          },
+          "source_id": {
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_revision": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source Revision"
+          },
+          "unresolved": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_id",
+          "fields",
+          "proposed_mapping",
+          "unresolved",
+          "assumptions"
+        ],
+        "title": "SourceProfile",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "content_digest": {
+        "title": "Content Digest",
+        "type": "string"
+      },
+      "profile": {
+        "$ref": "#/$defs/SourceProfile"
+      },
+      "proposal_version": {
+        "title": "Proposal Version",
+        "type": "string"
+      },
+      "suggestions": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "title": "Suggestions",
+        "type": "object"
+      }
+    },
+    "required": [
+      "profile",
+      "content_digest",
+      "proposal_version"
+    ],
+    "title": "CsvPreview",
+    "type": "object"
+  },
+  "CsvPreviewRequest": {
+    "$defs": {
+      "JsonValue": {},
+      "SourceSpec": {
+        "additionalProperties": false,
+        "description": "Registered source configuration. Mapping is explicit; see profiling module.\n\nsecret_ref names a source-scoped injected credential, never a literal token.\nLocations and secret references must not be passed to agents or logs.",
+        "properties": {
+          "kind": {
+            "enum": [
+              "csv",
+              "http_json"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "location": {
+            "minLength": 1,
+            "title": "Location",
+            "type": "string"
+          },
+          "mapping": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "title": "Mapping",
+            "type": "object"
+          },
+          "refresh_seconds": {
+            "exclusiveMinimum": 0,
+            "title": "Refresh Seconds",
+            "type": "integer"
+          },
+          "secret_ref": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Secret Ref"
+          },
+          "source_id": {
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "kind",
+          "location",
+          "refresh_seconds"
+        ],
+        "title": "SourceSpec",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "as_of": {
+        "format": "date-time",
+        "title": "As Of",
+        "type": "string"
+      },
+      "spec": {
+        "$ref": "#/$defs/SourceSpec"
+      }
+    },
+    "required": [
+      "spec",
+      "as_of"
+    ],
+    "title": "CsvPreviewRequest",
+    "type": "object"
+  },
   "DiscoveryBudget": {
     "additionalProperties": false,
     "properties": {

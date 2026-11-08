@@ -40,6 +40,8 @@ TOOLS = {
     "submit_operation",
     "resume_operation",
     "list_sources",
+    "preview_csv_source",
+    "confirm_csv_source",
     "register_csv_source",
     "get_source_profile",
     "refresh_source",
