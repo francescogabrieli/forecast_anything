@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 
 const sourceCsv = resolve(process.cwd(), "../../tests/fixtures/console-e2e-actuals.csv");
 
@@ -317,10 +317,11 @@ test("opens the linked run after a cold browser connection and retains it on rel
   await expect(page.getByRole("alert")).toContainText("workspace diverso");
 });
 
-test("opens exact saved question and historical report across navigation and reload", async ({ page, request }) => {
+test("opens exact saved question and historical report across navigation and reload", async ({ page, request }, testInfo) => {
   const api = "http://127.0.0.1:8000/v1";
   const headers = { Authorization: "Bearer local-e2e-token" };
-  const sourcePath = "/private/tmp/forecast-phase4-browser-history.csv";
+  const sourcePath = testInfo.outputPath("browser-history.csv");
+  await mkdir(dirname(sourcePath), { recursive: true });
   await writeFile(sourcePath, "time,value\n" + Array.from({ length: 20 }, (_, i) => `2026-10-${String(i + 1).padStart(2, "0")},${i + 1}\n`).join(""));
   const source = await request.post(`${api}/sources`, { headers, data: { source_id: "browser-history", kind: "csv", location: sourcePath, refresh_seconds: 86400, mapping: { event_time: "time", available_at: "time", value: "value", revision: { constant: "1" }, series_id: { constant: "sales" }, unit: { constant: "count" }, frequency: { constant: "1d" }, timezone: { constant: "UTC" }, calendar: { constant: "gregorian" }, missing_values: { constant: [""] } } } });
   expect(source.status()).toBe(201);
