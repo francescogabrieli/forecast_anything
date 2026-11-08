@@ -1,8 +1,8 @@
-# Phase 6A: Contratto di Continuità, Qualifica e Controlli delle Domande (Revisione 2)
+# Phase 6A: Contratto di Continuità, Qualifica e Controlli delle Domande (Revisione 3)
 
-**Base di partenza:** `400239ccdda02a362c3b809b05650aa28afa481a` (`origin/main`, che unisce la PR #22 e include il commit finale della fase 5 `617e8a948ae9bdc3afc79540cf9d56b66c5b9c53`).  
-**Worktree e branch dedicati:** branch `codex/phase-6-continuity-updates` in `/private/tmp/forecast-phase6-continuity-updates`.  
-**Stato:** Checkpoint 6A revisionato in base al feedback. Nessun codice della fase 6B implementato in anticipo.
+**Base di partenza:** `400239ccdda02a362c3b809b05650aa28afa481a` (`origin/main`, che unisce la PR #22 e include il commit finale della fase 5 `617e8a948ae9bdc3afc79540cf9d56b66c5b9c53`).
+**Worktree e branch dedicati:** branch `codex/phase-6-continuity-updates` in `/private/tmp/forecast-phase6-continuity-updates`.
+**Stato:** Checkpoint 6A revisionato e allineato con le soglie di backtest, la disponibilità storica e l'identità degli eventi. Nessun codice della fase 6B implementato in anticipo.
 
 ---
 
@@ -101,7 +101,7 @@ L'esecuzione in background è gestita da `Worker` (`src/forecast_anything/worker
 
 ## 2. Separazione concettuale: Polling, Freschezza e Evidenze
 
-Un aspetto cruciale chiarito nella revisione è la **rigorosa separazione tra tre dimensioni temporali distinte**, che non devono mai essere confuse tra loro:
+Separiamo formalmente tre dimensioni temporali distinte:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -119,7 +119,7 @@ Un aspetto cruciale chiarito nella revisione è la **rigorosa separazione tra tr
 ├────────────────────────────────────────────────────────────────────────┤
 │ 3. APPLICABILITÀ DELLE EVIDENZE (Lineage scientifico del Candidato)    │
 │    Attesta che il candidato ha dimostrato skill positiva (MAE < base)  │
-│    su >= 30 origini finali non sovrapposte e prive di leakage.        │
+│    sulla partizione di qualifica minima della policy fail-closed.      │
 │    È indipendente dal fatto che l'orizzonte sia fresco o scaduto.      │
 └────────────────────────────────────────────────────────────────────────┘
 ```
@@ -130,15 +130,16 @@ Un refresh della fonte che riscontra dati identici (nessuna nuova riga, hash inv
 - **NON rinnova la freschezza della previsione:** se l'orizzonte della previsione precedente è già trascorso nel tempo (`max(timestamps) < now`), la previsione **diventa scaduta (`horizon_expired`)**. Non esistono proiezioni attive per il futuro. Il sistema segnala esplicitamente: *"La fonte è invariata, ma l'orizzonte della previsione precedente è trascorso nel passato. Nessuna previsione attiva per date future."*
 - **Non tocca le evidenze storiche:** le evidenze del backtest originale rimangono integre e immutate nel ledger.
 
-### 2.2 Criteri completi per classificare un "Append"
+### 2.2 Criteri completi per classificare un "Append" e Disponibilità Storica
 Un aggiornamento viene classificato come **Append valido** solo se soddisfa congiuntamente tutte le seguenti verifiche sul nuovo `Snapshot` rispetto al precedente:
 1. **Integrità dei record passati (`event_time` e `value`):** tutte le osservazioni presenti nello snapshot precedente compaiono nel nuovo snapshot con identico timestamp, valore e serie.
-2. **Monotonia temporale dei nuovi arrivi:** tutti i record aggiunti hanno `event_time > max(previous_event_times)`. Non è ammesso alcun inserimento retroattivo.
-3. **Disponibilità temporale (`available_at`):** per ogni nuovo record, `available_at <= now` e rispetta le regole di consistenza temporale (nessun punto retro-datato come disponibile prima del tempo reale).
-4. **Stabilità delle revisioni (`revision`):** i campi `revision` dei record storici passati rimangono rigorosamente identici (nessun cambio di etichetta o ricalcolo).
-5. **Invarianza del mapping e delle specifiche (`mapping`):** il mapping applicato (colonne, frequenza, fuso orario, calendario, conversioni di unità) è identico al profilo con cui è stato compilato il candidato.
+2. **Invarianza della disponibilità storica (`available_at` storico immutato):** per tutte le osservazioni già presenti nello snapshot precedente, la data di disponibilità `available_at` deve rimanere **rigorosamente identica**. La semplice verifica `available_at <= now` sui nuovi arrivi non è sufficiente: una modifica retroattiva a un `available_at` passato altera la cronologia della visibilità causale (*point-in-time causality*) e può introdurre *lookahead leakage*.
+3. **Monotonia temporale dei nuovi arrivi:** tutti i record aggiunti hanno `event_time > max(previous_event_times)`. Non è ammesso alcun inserimento retroattivo.
+4. **Disponibilità temporale dei nuovi arrivi:** per ogni nuovo record, `available_at <= now` e rispetta le regole di consistenza temporale (nessun punto retro-datato come disponibile prima del tempo reale).
+5. **Stabilità delle revisioni (`revision`):** i campi `revision` dei record storici passati rimangono rigorosamente identici (nessun cambio di etichetta o ricalcolo).
+6. **Invarianza del mapping e delle specifiche (`mapping`):** il mapping applicato (colonne, frequenza, fuso orario, calendario, conversioni di unità) è identico al profilo con cui è stato compilato il candidato.
 
-Se anche una sola di queste verifiche fallisce (es. un valore passato corretto, un record inserito in una data passata, un mapping modificato o una revisione alterata), l'operazione **NON è un append**: viene classificata come **Rettifica** o **Mutazione**, con invalidazione immediata di candidato ed evidenze.
+Se anche una sola di queste verifiche fallisce (es. `available_at` storico modificato, un valore passato corretto, un record inserito nel passato, un mapping variato o una revisione alterata), l'operazione **NON è un append**: viene classificata come **Rettifica** o **Mutazione**, con invalidazione immediata di candidato ed evidenze.
 
 ---
 
@@ -151,13 +152,13 @@ Nel primo rilascio della fase 6B:
   1. La **domanda conserva il proprio ID stabile (`question_id`)**.
   2. Viene emesso il nuovo run per il nuovo orizzonte e **collegato immediatamente alla domanda**.
   3. Lo stato della domanda/watch **è e rimane esplicitamente PROVVISORIO (`quality="provisional"`, `lifecycle="evaluating"`, `evidence_applicable=False`)** fino all'acquisizione della nuova qualifica.
-  4. Viene programmato un job di **riqualifica automatica entro budget**.
-  5. L'utente vede nella chat, nelle viste e nell'Inbox:  
+  4. Viene programmato un job di **riqualifica automatica entro budget**, con una scadenza dedicata `requalification_due_at` separata da `next_due_at`.
+  5. L'utente vede nella chat, nelle viste e nell'Inbox:
      *"Previsione aggiornata emessa sui nuovi dati. Lo stato resta provvisorio in attesa della riqualifica scientifica su nuove origini."*
-  6. Quando il job di riqualifica completa con successo la valutazione su almeno 30 origini finali con `mean_loss < mean_reference`, la qualifica transita a `active` / `usable`.
+  6. Quando il job di riqualifica completa con successo la valutazione su 30 origini con `mean_loss < mean_reference`, la qualifica transita a `active` / `usable`.
 
 ### 3.2 Spostamento di `continuity-v1` tra le proposte future
-La proposta di policy `continuity-v1` (mantenimento presuntivo della qualifica attiva durante un append ordinario) viene formalmente **spostata tra le estensioni future**.  
+La proposta di policy `continuity-v1` (mantenimento presuntivo della qualifica attiva durante un append ordinario) viene formalmente **spostata tra le estensioni future**.
 Prima di poterla introdurre saranno necessari:
 1. **Regola di scadenza precisa (TTL):** un limite temporale e di cicli rigidamente provato oltre il quale la qualifica non può essere estesa senza backtest completo.
 2. **Criteri oggettivi di confronto con la baseline sui dati realizzati:** una metrica formale per calcolare in tempo reale l'errore delle previsioni man mano che gli effettivi si materializzano, con revoca istantanea se il modello perde contro la baseline.
@@ -171,13 +172,14 @@ Prima di poterla introdurre saranno necessari:
 | :--- | :--- | :--- | :--- | :--- |
 | **1. Refresh senza nuovi contenuti** (Dati identici) | Riprogramma polling a `now + refresh_seconds`. Nessun nuovo run. | Evidenze storiche intatte e valide. | Se orizzonte ancora futuro: `active` / `usable`. Se orizzonte trascorso: `active` / `stale` (`horizon_expired`). | *Se orizzonte futuro:* "Dati invariati: la fonte è verificata e la previsione resta valida."<br>*Se orizzonte passato:* "Dati invariati, ma l'orizzonte dell'ultima previsione è trascorso nel passato. Nessuna previsione attiva per date future." |
 | **2. Scadenza intervallo polling** (`now >= next_due_at`) | Accoda job `source_refresh`. In attesa di lettura. | Evidenze intatte; freschezza polling scaduta. | `active` / `stale` (`reevaluation_required=True`) | "Intervallo di aggiornamento della fonte scaduto: in attesa della nuova lettura programmata." |
-| **3. Append valido** (Nuovi punti futuri, passato/mapping/revisioni immutati) | Ingestione nuovo snapshot. Emette nuovo `RunRecord` collegato alla domanda. **Accoda riqualifica entro budget.** | **Non ancora applicabili al nuovo run (Stato provvisorio).** | `evaluating` / `provisional` (`evidence_applicable=False`) | "Nuove osservazioni acquisite in coda: emessa nuova previsione per il nuovo orizzonte. Lo stato resta provvisorio in attesa della riqualifica sulle nuove origini." |
-| **4. Dati tardivi** (Nuovi record inseriti retroattivamente nel passato) | Ingestione nuovo snapshot. Rileva intersezione con partizioni passate. Emette run provvisorio. Accoda riqualifica. | Sospese / Richiedono rivalutazione per rischio lookahead leakage. | `evaluating` / `provisional` | "Dati storici pervenuti in ritardo: le serie temporali passate sono cambiate. La previsione corrente è provvisoria in attesa di rivalutazione." |
-| **5. Correzioni dati passati** (Valori o revisioni modificati per date note) | Ingestione snapshot. **Invalidazione obbligatoria** del candidato e delle evidenze. Accoda nuovo backtest entro budget. | **Inapplicabili.** `candidate_invalidated=True`, `evidence_applicable=False`. | `evaluating` / `provisional` | "Rettifica dei dati storici: valori passati modificati dalla fonte. La qualifica precedente è invalidata e richiede un nuovo backtest sui dati corretti." |
-| **6. Cancellazioni dati passati** (Record rimossi retroattivamente) | Ingestione snapshot. Invalidazione completa di candidato ed evidenze. | **Inapplicabili.** | `evaluating` / `provisional` | "Dati storici cancellati o mancanti nella fonte: la qualifica precedente è invalidata e non può essere mantenuta." |
-| **7. Variazione mapping, modello o orizzonte** | Crea **nuova revisione semantica** (`revision + 1`). Compila nuovo `Candidate`. | **Completamente inapplicabili** alla nuova revisione. | `candidate` / `provisional` | "Modifica metodologica o di configurazione: creata la revisione {revision}. La domanda richiede una qualifica iniziale prima di diventare attiva." |
-| **8. Fonte temporaneamente non disponibile** (Errore di rete / HTTP 5xx) | Fallimento registrato in `source_polling`. Backoff esponenziale sui retry. Nessun nuovo run. | Evidenze congelate; qualità degradata per mancato aggiornamento. | `active` o `evaluating` / `degraded` | "Fonte non raggiungibile: conservata l'ultima previsione emessa, ma contrassegnata come degradata per mancato aggiornamento." |
-| **9. Errore provider modello** (Timestral OOM, timeout, crash binario) | Fallimento registrato in `JobQueue`. Retry se transient, stop se permanente. **Nessun fallback silenzioso.** | Non applicabile al run fallito. | `evaluating` / `degraded` con errore esplicito | "Errore del provider di previsione (Timestral): {errore esplicito}. Nessuna previsione generata; la baseline dichiarata o l'errore restano visibili." |
+| **3. Append valido** (Nuovi punti futuri, passato/available_at/mapping/revisioni immutati) | Ingestione nuovo snapshot. Emette nuovo `RunRecord` collegato alla domanda. **Accoda riqualifica entro budget (`requalification_due_at`).** | **Non ancora applicabili al nuovo run (Stato provvisorio).** | `evaluating` / `provisional` (`evidence_applicable=False`) | "Nuove osservazioni acquisite in coda: emessa nuova previsione per il nuovo orizzonte. Lo stato resta provvisorio in attesa della riqualifica sulle nuove origini." |
+| **4. Modifica della disponibilità storica** (`available_at` passato alterato) | Ingestione nuovo snapshot. Rileva violazione della consistenza temporale passata. **Invalidazione obbligatoria** del candidato e delle evidenze. | **Inapplicabili.** `candidate_invalidated=True`, `evidence_applicable=False`. | `evaluating` / `provisional` | "Disponibilità temporale dei dati storici modificata retroattivamente: la qualifica precedente è invalidata per violazione di consistenza temporale (point-in-time)." |
+| **5. Dati tardivi** (Nuovi record inseriti retroattivamente nel passato) | Ingestione nuovo snapshot. Rileva intersezione con partizioni passate. Emette run provvisorio. Accoda riqualifica. | Sospese / Richiedono rivalutazione per rischio lookahead leakage. | `evaluating` / `provisional` | "Dati storici pervenuti in ritardo: le serie temporali passate sono cambiate. La previsione corrente è provvisoria in attesa di rivalutazione." |
+| **6. Correzioni dati passati** (Valori o revisioni modificati per date note) | Ingestione snapshot. **Invalidazione obbligatoria** del candidato e delle evidenze. Accoda nuovo backtest entro budget. | **Inapplicabili.** `candidate_invalidated=True`, `evidence_applicable=False`. | `evaluating` / `provisional` | "Rettifica dei dati storici: valori passati modificati dalla fonte. La qualifica precedente è invalidata e richiede un nuovo backtest sui dati corretti." |
+| **7. Cancellazioni dati passati** (Record rimossi retroattivamente) | Ingestione snapshot. Invalidazione completa di candidato ed evidenze. | **Inapplicabili.** | `evaluating` / `provisional` | "Dati storici cancellati o mancanti nella fonte: la qualifica precedente è invalidata e non può essere mantenuta." |
+| **8. Variazione mapping, modello o orizzonte** | Crea **nuova revisione semantica** (`revision + 1`). Compila nuovo `Candidate`. | **Completamente inapplicabili** alla nuova revisione. | `candidate` / `provisional` | "Modifica metodologica o di configurazione: creata la revisione {revision}. La domanda richiede una qualifica iniziale prima di diventare attiva." |
+| **9. Fonte temporaneamente non disponibile** (Errore di rete / HTTP 5xx) | Fallimento registrato in `source_polling`. Backoff esponenziale sui retry. Nessun nuovo run. | Evidenze congelate; qualità degradata per mancato aggiornamento. | `active` o `evaluating` / `degraded` | "Fonte non raggiungibile: conservata l'ultima previsione emessa, ma contrassegnata come degradata per mancato aggiornamento." |
+| **10. Errore provider modello** (Timestral OOM, timeout, crash binario) | Fallimento registrato in `JobQueue`. Retry se transient, stop se permanente. **Nessun fallback silenzioso.** | Non applicabile al run fallito. | `evaluating` / `degraded` con errore esplicito | "Errore del provider di previsione (Timestral): {errore esplicito}. Nessuna previsione generata; la baseline dichiarata o l'errore restano visibili." |
 
 ---
 
@@ -197,42 +199,53 @@ I controlli sono specificati distinguendo tre stati temporali di esecuzione e do
 ## 5. Verificabilità del Budget e Recupero del Webhook
 
 ### 5.1 Regole e limiti del Budget di Riqualifica
-Il budget di riqualifica è strutturato con vincoli verificabili e deterministici:
+Il budget di riqualifica deve essere rigorosamente compatibile con il contratto corrente di backtest (`src/forecast_anything/contracts.py:86`), in cui `BacktestSettings.max_origins_per_partition` impone un tetto massimo di 50 origini (`Field(ge=1, le=50)`):
+- **Soglia di partizione scelta per il primo 6B:** esattamente **30 origini** (`max_origins_per_partition = 30`).
+  - Il valore 30 è la **soglia minima operativa fail-closed** prescritta dalla policy di qualifica (`len(evaluation_ids) >= 30` in `discovery/policy.py:245` e `len(losses) >= 30` in `discovery/policy.py:158`).
+  - **Dichiarazione metodologica:** 30 è una soglia di policy operativa fail-closed, senza alcuna attribuzione o pretesa di significatività statistica globale.
+- **Scadenza dedicata di riqualifica:**
+  La schedulazione della riqualifica opera sul campo dedicato **`requalification_due_at: AwareDatetime | None`**, completamente distinto e disaccoppiato da `next_due_at`, che governa esclusivamente la cadenza di polling della fonte.
 - `max_requalification_jobs_per_window`: massimo 1 job di backtest automatico ogni 24 ore per ciascuna domanda.
-- `max_origins_per_recheck`: blocco di valutazione compreso tra 30 (minimo per significatività) e 60 origini.
 - `max_execution_seconds`: timeout rigido di 300 secondi per il calcolo del backtest.
 
 #### Comportamento nei casi limite del budget:
-1. **Mancanza di nuove finestre finali (storia insufficiente):**  
+1. **Mancanza di nuove finestre finali (storia insufficiente per la soglia minima di 30):**
    Se dopo un append il numero di nuove finestre finali indipendenti e non sovrapposte è inferiore a 30 (`new_final_origins < 30`):
    - Il worker **non accoda un backtest fittizio né forza una qualifica parziale**.
    - Lo stato della domanda **resta provvisorio (`quality="provisional"`, reason code `insufficient_final_origins`)**.
-   - Spiegazione visibile: *"Previsione calcolata sui dati aggiornati; lo stato resta provvisorio poiché la storia accumulata dall'ultimo backtest ({N} origini) non è ancora sufficiente per un nuovo blocco di qualifica indipendente (minimo 30)."*
-2. **Esaurimento del budget computazionale / quota:**  
+   - Spiegazione visibile: *"Previsione calcolata sui dati aggiornati; lo stato resta provvisorio poiché la storia accumulata dall'ultimo backtest ({N} origini) non raggiunge la soglia minima di policy di 30 origini indipendenti."*
+2. **Esaurimento del budget computazionale / quota:**
    Se il limite di job o il tempo massimo di calcolo per la finestra corrente è superato:
    - Il sistema **non va in crash e non entra in loop di retry**.
-   - Il job di riqualifica viene rinviato alla finestra successiva (`next_due_at = now + budget_cooldown`).
+   - Il job di riqualifica viene rinviato alla finestra successiva (`requalification_due_at = now + budget_cooldown`).
    - Lo stato della previsione resta provvisorio con codice `requalification_budget_exhausted`.
    - Spiegazione visibile: *"Budget computazionale di riqualifica esaurito per la finestra corrente. Nuova verifica programmata per {prossima_finestra}."*
 
 ---
 
-### 5.2 Recupero, Deduplicazione e Fallimento del Webhook
+### 5.2 Identità degli Eventi, Deduplicazione e Retry del Webhook
 
-1. **Persistenza dell'ID e Deduplicazione dopo Crash:**
-   - Ogni evento dell'Inbox possiede un identificatore immutabile e deterministico calcolato al momento dell'emissione:
-     $$\text{event\_id} = \text{sha256}(f"\text{inbox}/\{\text{question\_id}\}/\{\text{revision}\}/\{\text{run\_id}\}/\{\text{decision\_id}\}")$$
-   - L'Outbox registra il job di consegna con questo `event_id`.
-   - L'header HTTP inviato include obbligatoriamente:
-     `X-Forecast-Event-Id: {event_id}`
-   - **Comportamento dopo un crash:** se il worker o il sistema si arresta mentre la richiesta HTTP è in transito o prima della scrittura di conferma, al riavvio il worker recupera il record dall'Outbox tramite il lease fencer e ripete l'invio con **lo stesso identico `event_id`**. Il ricevente del webhook può scartare il duplicato controllando `X-Forecast-Event-Id`.
+1. **Identità deterministica degli eventi (`event_id`):**
+   Eventi distinti (es. `source_degraded` e `source_restored`, o `forecast_issued` ed `evidence_qualified`) possono riferirsi alla stessa domanda, revisione, run e decisione.
+   Per garantire unicità semantica e idempotenza, l'ID dell'evento nell'Inbox e nell'Outbox include obbligatoriamente il tipo di evento e l'identificativo stabile della transizione:
+   $$\text{event\_id} = \text{sha256}(f"\text{inbox}/\{\text{question\_id}\}/\{\text{revision}\}/\{\text{event\_kind}\}/\{\text{transition\_id}\}/\{\text{run\_id}\}/\{\text{decision\_id}\}")$$
+   dove `transition_id` è l'identificativo immutabile della transizione (es. `watch_history.event_id` o chiave deterministica della transizione).
 
-2. **Gestione Retry e Fallimento Definitivo:**
-   - La coda Outbox esegue al massimo 3 tentativi con backoff esponenziale (es. dopo 30s, 120s, 600s) in caso di errori di rete o risposte HTTP 5xx.
-   - **Dopo l'ultimo tentativo fallito:**
-     - La consegna transita a `state='delivery_failed'` con timestamp, codice di errore e risposta registrati nel ledger.
-     - I retry automatici si arrestano definitivamente (nessun ciclo infinito).
-     - **L'evento nell'Inbox locale rimane integro e non viene perso**: l'utente o l'assistente possono consultarlo via MCP o console web, con evidenza esplicita del fallimento webhook (`webhook_delivery="failed"`).
+2. **Politica di Retry con 3 Tentativi Totali e 2 Attese:**
+   La coda Outbox opera con una politica a 3 tentativi totali:
+   - **1° tentativo:** immediato all'accodamento dell'evento.
+   - *Se fallisce (errore di rete, timeout, HTTP 5xx):* prima attesa di retry (backoff di 30 secondi).
+   - **2° tentativo.**
+   - *Se fallisce nuovamente:* seconda attesa di retry (backoff di 120 secondi).
+   - **3° tentativo finale.**
+   - *Se fallisce anche il 3° tentativo:* **passaggio definitivo a `delivery_failed`** con memorizzazione dell'errore finale e del timestamp.
+   - I retry automatici si arrestano definitivamente (nessun loop infinito).
+   - **L'evento nell'Inbox locale rimane integro e non viene perso**: l'utente o l'assistente possono consultarlo via MCP o console web, con evidenza esplicita del fallimento webhook (`webhook_delivery="failed"`).
+
+3. **Persistenza dell'ID e Deduplicazione dopo Crash:**
+   L'Outbox registra il job di consegna con l'`event_id` calcolato. L'header HTTP inviato include obbligatoriamente:
+   `X-Forecast-Event-Id: {event_id}`
+   Se il worker o la macchina si arresta durante l'invio HTTP o prima della scrittura di conferma, al riavvio il worker recupera il record dall'Outbox tramite lease fencer e ripete l'invio con **lo stesso identico `event_id`**. Il ricevente del webhook può deduplicare le chiamate in modo sicuro scartando gli ID già elaborati.
 
 ---
 
@@ -240,13 +253,14 @@ Il budget di riqualifica è strutturato con vincoli verificabili e deterministic
 
 | Ambito di Prova | Tipologia | Descrizione del Test | Criterio di Successo |
 | :--- | :--- | :--- | :--- |
-| **1. Append ordinario e Riqualifica provvisoria** | Deterministica (`seasonal_naive`) | Ingestione nuove righe con prefisso, mapping e revisioni immutati. Emette nuovo run. | Question ID preservato, run collegato, stato **provvisorio** esposto finché la riqualifica non completa. |
-| **2. Refresh con dati identici ed orizzonte scaduto** | Deterministica | Polling fonte identica quando `now > max(timestamps)` della previsione. | Prossimo polling avanzato, ma stato previsione **`horizon_expired` / `stale`**, spiegazione utente chiara. |
-| **3. Rettifica retroattiva e invalidazione** | Deterministica | Modifica di un valore o revisione passata. | Candidato invalidato, `evidence_applicable=False`, stato provvisorio motivato con spiegazione rettifica. |
-| **4. Mancanza di finestre finali (< 30)** | Deterministica | Riqualifica automatica con meno di 30 origini nuove. | Nessun backtest forzato, stato resta provvisorio con `insufficient_final_origins`. |
-| **5. Esaurimento budget di riqualifica** | Deterministica | Superamento limite giornaliero job di backtest. | Nessun loop o crash; stato provvisorio con `requalification_budget_exhausted` e riprogrammazione al cooldown. |
-| **6. Perdita della qualifica (MAE >= Baseline)** | Deterministica | Backtest automatico in cui il modello perde contro la baseline. | Decisione `reject` con codice `nonpositive_final_skill`, stato watch provvisorio visibile. |
-| **7. Controlli: Pausa, Mute, Priorità e Fonti Condivise** | Deterministica | Due domande sulla stessa fonte: pausa su una sola (l'altra continua i run; il polling continua finché la seconda è attiva). Mute: soppressione consegna webhook pendente in outbox e conservazione evento con `muted=True` nell'inbox. | Rispetto esatto della matrice dei controlli della Sezione 4. |
-| **8. Webhook: Idempotenza e Fallimento Definitivo** | Integrazione con mock HTTP | Crash simulato durante l'invio (ripetizione con stesso `event_id`); fallimento 3/3 tentativi -> transizione a `delivery_failed` senza perdita dell'evento inbox. | Deduplicazione verificata sul receiver, outbox marcata fallita, evento leggibile in inbox. |
-| **9. Inferenza reale Timestral** | Live model (Timestral locale pinned) | Esecuzione su fonte reale con pesi locali congelati. | Previsione reale completata con successo o errore/degradazione esplicito esposto all'utente (nessun fallback silenzioso). |
-| **10. E2E Assistente Chiuso** | End-to-end multi-processo | Assistente chiuso -> append esterno -> daemon elabora, emette run provvisorio e notifica webhook -> assistente riaperto ritrova domanda e spiega l'aggiornamento. | Flusso completo senza sessione attiva, recupero perfetto alla riapertura. |
+| **1. Append ordinario e Riqualifica provvisoria** | Deterministica (`seasonal_naive`) | Ingestione nuove righe con prefisso, mapping, revisioni e `available_at` storico immutati. Emette nuovo run. | Question ID preservato, run collegato, stato **provvisorio** esposto finché la riqualifica (target 30 origini) non completa. |
+| **2. Modifica disponibilità storica (`available_at`)** | Deterministica | Modifica retroattiva di `available_at` su un record storico già noto. | Rilevata violazione di consistenza temporale, invalidazione immediata (`candidate_invalidated=True`, `evidence_applicable=False`), stato provvisorio. |
+| **3. Refresh con dati identici ed orizzonte scaduto** | Deterministica | Polling fonte identica quando `now > max(timestamps)` della previsione. | `next_due_at` avanzato, ma stato previsione **`horizon_expired` / `stale`**, spiegazione utente chiara. |
+| **4. Rettifica retroattiva valori passati** | Deterministica | Modifica di un valore passato o revisione storica. | Candidato invalidato, `evidence_applicable=False`, stato provvisorio motivato con spiegazione rettifica. |
+| **5. Mancanza di finestre finali (< 30)** | Deterministica | Riqualifica automatica con meno di 30 origini nuove. | Nessun backtest forzato, stato resta provvisorio con `insufficient_final_origins`. |
+| **6. Esaurimento budget di riqualifica** | Deterministica | Superamento limite giornaliero job di backtest. | Nessun loop o crash; stato provvisorio con `requalification_budget_exhausted` e riprogrammazione su `requalification_due_at`. |
+| **7. Perdita della qualifica (MAE >= Baseline)** | Deterministica | Backtest automatico su 30 origini in cui il modello perde contro la baseline. | Decisione `reject` con codice `nonpositive_final_skill`, stato watch provvisorio visibile. |
+| **8. Controlli: Pausa, Mute, Priorità e Fonti Condivise** | Deterministica | Due domande sulla stessa fonte: pausa su una sola (l'altra continua i run; il polling continua finché la seconda è attiva). Mute: soppressione consegna webhook pendente in outbox e conservazione evento con `muted=True` nell'inbox. | Rispetto esatto della matrice dei controlli della Sezione 4. |
+| **9. Webhook: Idempotenza post-crash e 3 tentativi** | Integrazione con mock HTTP | Crash simulato durante l'invio (ripetizione con stesso `event_id`); fallimento 3 tentativi con 2 attese -> transizione a `delivery_failed` senza perdita dell'evento inbox. | Deduplicazione verificata sul receiver tramite `X-Forecast-Event-Id`, outbox marcata fallita al 3° tentativo, evento leggibile in inbox. |
+| **10. Inferenza reale Timestral** | Live model (Timestral locale pinned) | Esecuzione su fonte reale con pesi locali congelati. | Previsione reale completata con successo o errore/degradazione esplicito esposto all'utente (nessun fallback silenzioso). |
+| **11. E2E Assistente Chiuso** | End-to-end multi-processo | Assistente chiuso -> append esterno -> daemon elabora, emette run provvisorio e notifica webhook -> assistente riaperto ritrova domanda e spiega l'aggiornamento. | Flusso completo senza sessione attiva, recupero perfetto alla riapertura. |
