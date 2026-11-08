@@ -11,7 +11,7 @@ from mcp_processes import LocalWorkspace, call, poll_job, source_spec
 
 
 def test_assistant_watch_report_permissions_and_automatic_update(tmp_path):
-    async def journey(workspace):
+    async def journey(workspace, webhook_url, received):
         start = date(2026, 1, 1)
         workspace.history.write_text(
             "time,value,published\n"
@@ -40,6 +40,29 @@ def test_assistant_watch_report_permissions_and_automatic_update(tmp_path):
             )
             watch_id = watch["watch_id"]
             candidate_id = watch["candidate_id"]
+            original_snapshots = watch["source_snapshot_ids"]
+            question = await call(
+                client,
+                "create_question",
+                key="saved-sales-continuity",
+                title="Sales outlook",
+                meaning="Forecast daily sales",
+                source_ids=["sales"],
+                selection=selection,
+            )
+            await call(
+                client,
+                "link_question_reference",
+                question_id=question["question_id"],
+                key="saved-sales-watch-link",
+                revision=1,
+                target_type="watch",
+                target_id=watch_id,
+            )
+            webhook = workspace.post(
+                "/v1/webhook-subscriptions",
+                {"target_url": webhook_url, "active": True},
+            )
         request = dict(
             key="qualified-assistant",
             source_id="sales",
@@ -112,24 +135,78 @@ def test_assistant_watch_report_permissions_and_automatic_update(tmp_path):
         deadline = asyncio.get_running_loop().time() + 12
         while True:
             watches = workspace.get("/v1/watches")
-            successors = [w for w in watches if w["supersedes_watch_id"] == watch_id]
-            if successors:
+            updated = next((w for w in watches if w["watch_id"] == watch_id), None)
+            if (
+                updated is not None
+                and len(updated["source_snapshot_ids"]) > len(original_snapshots)
+                and updated.get("last_run_id") is not None
+                and any(
+                    payload.get("question_id") == question["question_id"]
+                    and payload.get("event_kind") == "forecast_issued"
+                    for _, payload in received
+                )
+            ):
                 break
             assert asyncio.get_running_loop().time() < deadline, watches
             await asyncio.sleep(0.05)
         async with workspace.client() as client:
             old = await call(client, "get_watch", watch_id=watch_id)
-            fresh = await call(client, "get_watch", watch_id=successors[0]["watch_id"])
             assert old["candidate_id"] == candidate_id
-            assert old["candidate_invalidated"] and not old["operational"]
-            assert fresh["candidate_id"] != candidate_id and not fresh["operational"]
-            assert not fresh["evidence_applicable"]
+            assert not old["candidate_invalidated"] and not old["operational"]
+            assert old["quality"] == "provisional"
+            assert not old["evidence_applicable"]
+            assert old["source_snapshot_ids"][-1] != original_snapshots[-1]
             assert await call(client, "get_backtest", backtest_id=backtest_id) == report
             changed = await call(
                 client, "summarize_backtest", backtest_id=backtest_id, watch_id=watch_id
             )
             assert changed["partitions"] == summary["partitions"]
             assert not changed["watch"]["operational"]
+            inbox = await call(
+                client,
+                "list_inbox_events",
+                question_id=question["question_id"],
+                limit=100,
+            )
+            updates = [
+                event
+                for event in inbox["events"]
+                if event["event_kind"] == "forecast_issued"
+            ]
+            assert updates and updates[0]["payload"]["quality"] == "provisional"
+            deliveries = workspace.get(
+                f"/v1/webhook-subscriptions/{webhook['subscription_id']}/deliveries"
+            )
+            forecast_delivery = next(
+                delivery
+                for delivery in deliveries["deliveries"]
+                if delivery["event_id"]
+                == next(
+                    event_id
+                    for event_id, payload in received
+                    if payload.get("question_id") == question["question_id"]
+                    and payload.get("event_kind") == "forecast_issued"
+                )
+            )
+            assert forecast_delivery["state"] == "delivered"
+            assert forecast_delivery["attempts"] == 1
+            recovered_question = await call(
+                client, "get_question", question_id=question["question_id"]
+            )
+            assert recovered_question["question_id"] == question["question_id"]
+            assert recovered_question["current_revision"] == 1
+            recovered_references = await call(
+                client,
+                "list_question_references",
+                question_id=question["question_id"],
+                revision=1,
+                limit=5,
+            )
+            assert any(
+                reference["target_type"] == "run"
+                and reference["target_id"] == updated["last_run_id"]
+                for reference in recovered_references["references"]
+            )
             entries = []
             offset = 0
             while True:
@@ -146,8 +223,34 @@ def test_assistant_watch_report_permissions_and_automatic_update(tmp_path):
                 offset = history["next_offset"]
             assert len(entries) >= 3
 
-    with LocalWorkspace(tmp_path) as workspace:
-        asyncio.run(journey(workspace))
+    import json
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from threading import Thread
+
+    received = []
+
+    class Receiver(BaseHTTPRequestHandler):
+        def do_POST(self):
+            event_id = self.headers.get("X-Forecast-Event-Id")
+            payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            received.append((event_id, payload))
+            self.send_response(204)
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Receiver)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        webhook_url = f"http://127.0.0.1:{server.server_port}/updates"
+        with LocalWorkspace(tmp_path) as workspace:
+            asyncio.run(journey(workspace, webhook_url, received))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
 
 
 def test_assistant_corrects_temporal_mapping_and_persists_source_grants(tmp_path):

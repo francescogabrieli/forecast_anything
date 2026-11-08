@@ -133,6 +133,7 @@ def prepare_backtest(
     provider_contracts: dict[str, Capabilities],
     watch_id: str | None = None,
     candidate_id: str | None = None,
+    origin_target_after: datetime | None = None,
 ) -> BacktestPlan:
     """Freeze source/configuration/calendar/membership without I/O or inference."""
     source_revision = SourceRevision.model_validate_json(
@@ -177,9 +178,14 @@ def prepare_backtest(
         splits = build_splits(calendar, selection.horizon)
         positions = {timestamp: index for index, timestamp in enumerate(calendar)}
         for partition in PARTITIONS:
-            for nominal in splits.origins_for(partition, calendar)[
-                : settings.max_origins_per_partition
-            ]:
+            members = splits.origins_for(partition, calendar)
+            if partition == "final" and origin_target_after is not None:
+                members = tuple(
+                    nominal
+                    for nominal in members
+                    if calendar[positions[nominal] + 1] > origin_target_after
+                )
+            for nominal in members[: settings.max_origins_per_partition]:
                 index = positions[nominal]
                 origins.append(
                     PlannedOrigin(
@@ -191,6 +197,16 @@ def prepare_backtest(
                         target_end=calendar[index + selection.horizon],
                     )
                 )
+    if origin_target_after is not None:
+        if (
+            origin_target_after.tzinfo is None
+            or origin_target_after.utcoffset() is None
+        ):
+            raise DomainError("invalid_origin_target_floor", {})
+        origins = [
+            origin.model_copy(update={"ordinal": index})
+            for index, origin in enumerate(origins)
+        ]
     plan = BacktestPlan(
         backtest_id=backtest_id,
         watch_id=watch_id,
@@ -198,6 +214,7 @@ def prepare_backtest(
         archive=archive,
         selection=selection,
         settings=settings,
+        origin_target_after=origin_target_after,
         provider_contracts=provider_contracts,
         frequency=frequency,
         calendar=calendar,
@@ -206,6 +223,13 @@ def prepare_backtest(
         assumptions=(
             "Only supplied revisions are replayed; upstream-discarded vintages cannot be reconstructed.",
             "Frozen 50/25/25 partitions; earliest bounded origins; no tuning or imputation.",
+            *(
+                (
+                    "Requalification final targets occur strictly after the prior qualification snapshot floor.",
+                )
+                if origin_target_after is not None
+                else ()
+            ),
             *(
                 (
                     "backtest-v1 selected seasonal_naive default period=1; comparator uses baseline_period.",

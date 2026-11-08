@@ -77,8 +77,16 @@ export function ContextView({ client, workspaceId, resource }: Props) {
   if (error) return <p role="alert">{error}</p>;
   if (!result) return <p role="status">Caricamento del risultato…</p>;
   if (result.kind === "question") {
-    const { question, references, next_offset } = result.value;
-    return <section>{notice && <p role="status">{notice}</p>}<h2>{question.title}</h2><p>{question.revision.meaning}</p><p>Orizzonte: {question.revision.selection.horizon} · Stato: {question.status}</p><p>ID domanda: {question.question_id}</p><h3>Risultati collegati</h3>{references.length === 0 ? <p>Nessun risultato collegato.</p> : <ul>{references.map(({ reference, applies_to_current_revision }) => <li key={reference.reference_id}>{reference.target_type === "run" || reference.target_type === "backtest" ? <a href={`#/w/${workspaceId}/${reference.target_type === "run" ? "run" : "backtest"}/${encodeURIComponent(reference.target_id)}`}>{reference.target_type} {reference.target_id}</a> : <span>{reference.target_type} {reference.target_id}</span>}{!applies_to_current_revision && " · Riferimento storico: non applicabile alla revisione corrente"}</li>)}</ul>}{offset > 0 && <button onClick={() => setOffset(Math.max(0, offset - 3))}>Precedenti</button>}{next_offset != null && <button onClick={() => setOffset(next_offset)}>Altri risultati</button>}</section>;
+    const { question, references, next_offset, inbox_events, inbox_total_count } = result.value;
+    const deliveryStates = (event: typeof inbox_events[number]) => event.delivery_states ?? [];
+    const deliveryLabels: Record<string, string> = {
+      pending: "Consegna in attesa",
+      delivering: "Consegna in corso",
+      delivered: "Consegnata",
+      delivery_failed: "Consegna fallita",
+      delivery_suppressed_muted: "Consegna soppressa perché la domanda è silenziata",
+    };
+    return <section>{notice && <p role="status">{notice}</p>}<h2>{question.title}</h2><p>{question.revision.meaning}</p><p>Orizzonte: {question.revision.selection.horizon} · Stato: {question.status}</p><p>Notifiche: {question.muted ? "silenziate" : "attive"} · Priorità: {question.priority} (0 massima)</p><p>ID domanda: {question.question_id}</p><h3>Aggiornamenti recenti ({inbox_total_count})</h3>{inbox_events.length === 0 ? <p>Nessun aggiornamento registrato.</p> : <ul>{inbox_events.map(event => <li key={event.event_id}><p>{formatUtc(event.occurred_at)} · {event.summary}</p>{event.payload.quality === "provisional" && <p>Qualità provvisoria</p>}{event.muted && <p>Notifica silenziata al momento dell’evento</p>}{deliveryStates(event).length > 0 && <ul>{deliveryStates(event).map((state, index) => <li key={`${event.event_id}-${index}`}>{deliveryLabels[state] ?? state}</li>)}</ul>}</li>)}</ul>}<h3>Risultati collegati</h3>{references.length === 0 ? <p>Nessun risultato collegato.</p> : <ul>{references.map(({ reference, applies_to_current_revision }) => <li key={reference.reference_id}>{reference.target_type === "run" || reference.target_type === "backtest" ? <a href={`#/w/${workspaceId}/${reference.target_type === "run" ? "run" : "backtest"}/${encodeURIComponent(reference.target_id)}`}>{reference.target_type} {reference.target_id}</a> : <span>{reference.target_type} {reference.target_id}</span>}{!applies_to_current_revision && " · Riferimento storico: non applicabile alla revisione corrente"}</li>)}</ul>}{offset > 0 && <button onClick={() => setOffset(Math.max(0, offset - 3))}>Precedenti</button>}{next_offset != null && <button onClick={() => setOffset(next_offset)}>Altri risultati</button>}</section>;
   }
   if (result.kind === "report") {
     const { summary } = result.value;

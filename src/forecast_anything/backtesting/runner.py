@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from fractions import Fraction
 from math import fsum, isfinite
+from time import monotonic
 
 from pydantic import ValidationError
 
@@ -280,6 +281,7 @@ def execute_backtest(
     plan: BacktestPlan,
     *,
     lease_guard: LeaseGuard | None,
+    max_elapsed_seconds: int | None = None,
 ) -> BacktestReport:
     """Persist before inference, then reuse stable emissions/outcomes on recovery."""
     if runtime.ledger is not store.ledger:
@@ -311,7 +313,16 @@ def execute_backtest(
         runtime.clock,
     )
     outcomes = []
+    started = monotonic()
     for origin in plan.origins:
+        if (
+            max_elapsed_seconds is not None
+            and monotonic() - started >= max_elapsed_seconds
+        ):
+            raise DomainError(
+                "backtest_time_budget_exceeded",
+                {"seconds": max_elapsed_seconds},
+            )
         _check_contracts(runtime, plan)
         outcome = _optional(store.get_origin, plan.backtest_id, origin.ordinal)
         if outcome is None:
@@ -320,6 +331,14 @@ def execute_backtest(
             )
         store.put_origin(outcome, lease_guard=lease_guard)
         outcomes.append(outcome)
+        if (
+            max_elapsed_seconds is not None
+            and monotonic() - started >= max_elapsed_seconds
+        ):
+            raise DomainError(
+                "backtest_time_budget_exceeded",
+                {"seconds": max_elapsed_seconds},
+            )
     _check_contracts(runtime, plan)
     partitions = tuple(partition_score(partition, outcomes) for partition in PARTITIONS)
     report = BacktestReport(

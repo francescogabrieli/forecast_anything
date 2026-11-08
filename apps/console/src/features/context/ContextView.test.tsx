@@ -22,11 +22,25 @@ it("shows the primary forecast with the aligned baseline and explicit truncation
 
 it("renders saved question references and marks historical references", async () => {
   const client = new ApiClient("http://localhost:8000", "token");
-  vi.spyOn(client, "getQuestionPresentation").mockResolvedValue({ question: { question_id: "q", title: "Domanda salvata", status: "open", current_revision: 2, revision: { question_id: "q", revision: 2, meaning: "Prevedere", source_ids: [], selection: { provider: "timestral", horizon: 1 }, created_at: "2026-11-08T00:00:00Z" }, revision_count: 2, reference_count: 1, created_at: "2026-11-08T00:00:00Z", updated_at: "2026-11-08T00:00:00Z" }, references: [{ applies_to_current_revision: false, reference: { question_id: "q", revision: 1, reference_id: "ref", target_type: "run", target_id: "old", note: "", created_at: "2026-11-08T00:00:00Z" } }], next_offset: null });
+  vi.spyOn(client, "getQuestionPresentation").mockResolvedValue({ question: { question_id: "q", title: "Domanda salvata", status: "open", muted: false, priority: 3, current_revision: 2, revision: { question_id: "q", revision: 2, meaning: "Prevedere", source_ids: [], selection: { provider: "timestral", horizon: 1 }, created_at: "2026-11-08T00:00:00Z" }, revision_count: 2, reference_count: 1, created_at: "2026-11-08T00:00:00Z", updated_at: "2026-11-08T00:00:00Z" }, references: [{ applies_to_current_revision: false, reference: { question_id: "q", revision: 1, reference_id: "ref", target_type: "run", target_id: "old", note: "", created_at: "2026-11-08T00:00:00Z" } }], next_offset: null, inbox_events: [], inbox_total_count: 0 });
   render(<ContextView client={client} workspaceId={"a".repeat(32)} resource={{ kind: "question", id: "q" }} />);
   expect(await screen.findByText("Domanda salvata")).toBeVisible();
   expect(screen.getByText(/riferimento storico/i)).toBeVisible();
   expect(screen.getByRole("link", { name: /old/ })).toHaveAttribute("href", `#/w/${"a".repeat(32)}/run/old`);
+});
+
+it("shows question controls and recent provisional or failed delivery updates", async () => {
+  const client = new ApiClient("http://localhost:8000", "token");
+  vi.spyOn(client, "getQuestionPresentation").mockResolvedValue({
+    question: { question_id: "q", title: "Domanda salvata", status: "open", muted: true, priority: 0, current_revision: 1, revision: { question_id: "q", revision: 1, meaning: "Prevedere", source_ids: [], selection: { provider: "timestral", horizon: 1 }, created_at: "2026-11-08T00:00:00Z" }, revision_count: 1, reference_count: 0, created_at: "2026-11-08T00:00:00Z", updated_at: "2026-11-08T00:00:00Z" },
+    references: [], next_offset: null, inbox_total_count: 1,
+    inbox_events: [{ event_id: "event-1", question_id: "q", revision: 1, event_kind: "forecast_issued", transition_id: "run-1", run_id: "run-1", occurred_at: "2026-11-08T00:00:00Z", muted: false, summary: "La previsione resta provvisoria.", payload: { quality: "provisional" }, delivery_states: ["delivery_failed"] }],
+  });
+  render(<ContextView client={client} workspaceId={"a".repeat(32)} resource={{ kind: "question", id: "q" }} />);
+  expect(await screen.findByText("Domanda salvata")).toBeVisible();
+  expect(screen.getByText(/Notifiche: silenziate · Priorità: 0/)).toBeVisible();
+  expect(screen.getByText(/Qualità provvisoria/)).toBeVisible();
+  expect(screen.getByText("Consegna fallita")).toBeVisible();
 });
 
 it("shows backtest chart and equivalent table including excluded origins", async () => {

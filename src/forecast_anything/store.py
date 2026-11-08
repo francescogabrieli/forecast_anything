@@ -47,6 +47,7 @@ MIGRATIONS = (
     "010_worker_runtime.sql",
     "011_persistent_questions.sql",
     "012_workspace_identity.sql",
+    "013_continuity_and_inbox.sql",
 )
 
 
@@ -821,6 +822,12 @@ class Ledger(QuestionStorageMixin, AgentStorageMixin):
                     content,
                 ),
             )
+            for source_id in candidate.source_ids:
+                connection.execute(
+                    """INSERT OR IGNORE INTO source_subscriptions
+                    (source_id, active, created_at, updated_at) VALUES (?, 1, ?, ?)""",
+                    (source_id, now.isoformat(), now.isoformat()),
+                )
         return watch.watch_id
 
     def get_watch(self, watch_id: str) -> Watch:
@@ -860,6 +867,12 @@ class Ledger(QuestionStorageMixin, AgentStorageMixin):
             event["decision"] = event["decision"].model_dump(mode="json")
         if isinstance(event.get("next_due_at"), datetime):
             event["next_due_at"] = event["next_due_at"].isoformat()
+        if isinstance(event.get("requalification_due_at"), datetime):
+            event["requalification_due_at"] = event[
+                "requalification_due_at"
+            ].isoformat()
+        if isinstance(event.get("forecast_horizon_end"), datetime):
+            event["forecast_horizon_end"] = event["forecast_horizon_end"].isoformat()
         event_content = _json(event)
         with self._transaction(lease_guard) as connection:
             previous = connection.execute(

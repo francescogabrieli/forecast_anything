@@ -91,28 +91,44 @@ def run_services(db: Path, host: str, port: int, *, verify_model: bool = False) 
             if stopped:
                 return 0
             fd = listener.fileno()
-            children.append(
-                subprocess.Popen(
-                    [*base, "serve", "--db", str(db), "--socket-fd", str(fd)],
-                    pass_fds=(fd,),
-                    env=env,
-                )
+            api = subprocess.Popen(
+                [*base, "serve", "--db", str(db), "--socket-fd", str(fd)],
+                pass_fds=(fd,),
+                env=env,
             )
+            children.append(api)
         worker = [*base, "worker", "--db", str(db)]
         if verify_model:
             worker.append("--verify-model")
         if stopped:
             return 0
-        children.append(subprocess.Popen(worker, env=env))
+        worker_process = subprocess.Popen(worker, env=env)
+        children.append(worker_process)
         while not stopped:
-            for name, child in zip(("API", "worker"), children, strict=True):
-                code = child.poll()
-                if code is not None:
+            api_code = api.poll()
+            if api_code is not None:
+                print(
+                    f"API stopped (exit {api_code}); stopping services.",
+                    file=sys.stderr,
+                )
+                return 1
+            worker_code = worker_process.poll()
+            if worker_code is not None:
+                if worker_code != 124:
                     print(
-                        f"{name} stopped (exit {code}); stopping services.",
+                        f"worker stopped (exit {worker_code}); stopping services.",
                         file=sys.stderr,
                     )
                     return 1
+                print(
+                    "worker reached its execution deadline; restarting worker.",
+                    file=sys.stderr,
+                )
+                time.sleep(1)
+                if stopped:
+                    break
+                worker_process = subprocess.Popen(worker, env=env)
+                children.append(worker_process)
             time.sleep(0.2)
         return 0
     except OSError as error:

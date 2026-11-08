@@ -92,6 +92,16 @@ def advance_watch(watch: Watch, event: dict, now: datetime) -> Watch:
             eligibility_decision=decision,
             evidence_applicable=qualified,
             reevaluation_required=not qualified,
+            qualification_snapshot_id=(
+                event.get("snapshot_id")
+                or (
+                    watch.source_snapshot_ids[-1] if watch.source_snapshot_ids else None
+                )
+            ),
+            requalification_due_at=None,
+            requalification_reason=None,
+            requalification_new_origins=0,
+            quality_reason=None,
         )
         if "next_due_at" in event:
             try:
@@ -103,6 +113,12 @@ def advance_watch(watch: Watch, event: dict, now: datetime) -> Watch:
             if deadline <= now:
                 raise DomainError("invalid_refresh_deadline", {})
             updates["next_due_at"] = deadline
+        if not qualified and event.get("requalification_due_at") is not None:
+            updates["requalification_due_at"] = TypeAdapter(
+                AwareDatetime
+            ).validate_python(event["requalification_due_at"])
+        if not qualified and event.get("requalification_reason") is not None:
+            updates["requalification_reason"] = event["requalification_reason"]
         if qualified and updates.get("next_due_at", watch.next_due_at) <= now:
             raise DomainError("invalid_refresh_deadline", {})
     elif kind == "insufficient_evidence":
@@ -119,7 +135,213 @@ def advance_watch(watch: Watch, event: dict, now: datetime) -> Watch:
     elif kind == "refresh_expired":
         if now < watch.next_due_at:
             raise DomainError("refresh_not_expired", {})
-        updates = {"quality": "stale", "reevaluation_required": True}
+        updates = {
+            "quality": "stale",
+            "reevaluation_required": True,
+            "quality_reason": "polling_expired",
+        }
+    elif kind == "horizon_expired":
+        if watch.forecast_horizon_end is not None and now <= watch.forecast_horizon_end:
+            raise DomainError("forecast_horizon_not_expired", {})
+        updates = {
+            "quality": "stale",
+            "reevaluation_required": True,
+            "quality_reason": "horizon_expired",
+        }
+    elif kind == "source_unchanged":
+        deadline = TypeAdapter(AwareDatetime).validate_python(event["next_due_at"])
+        if deadline <= now:
+            raise DomainError("invalid_refresh_deadline", {})
+        horizon_end = event.get("forecast_horizon_end", watch.forecast_horizon_end)
+        if horizon_end is not None:
+            horizon_end = TypeAdapter(AwareDatetime).validate_python(horizon_end)
+        expired = horizon_end is not None and now > horizon_end
+        qualified = (
+            watch.eligibility_decision is not None
+            and watch.eligibility_decision.action == "activate"
+            and watch.evidence_applicable
+            and not watch.candidate_invalidated
+        )
+        updates = {
+            "next_due_at": deadline,
+            "quality": "stale" if expired else "usable" if qualified else watch.quality,
+            "lifecycle": (
+                "active"
+                if qualified and not expired and watch.lifecycle != "paused"
+                else watch.lifecycle
+            ),
+            "reevaluation_required": not qualified or expired,
+            "quality_reason": "horizon_expired"
+            if expired
+            else None
+            if qualified
+            else watch.quality_reason,
+        }
+    elif kind == "data_appended":
+        source_ids = watch.candidate.source_ids if watch.candidate else ()
+        if event.get("source_id") not in source_ids:
+            return watch
+        snapshot_id = event.get("snapshot_id")
+        if not isinstance(snapshot_id, str) or not snapshot_id.strip():
+            raise DomainError("invalid_watch_revision", {"field": "snapshot_id"})
+        req_due = (
+            TypeAdapter(AwareDatetime).validate_python(event["requalification_due_at"])
+            if "requalification_due_at" in event
+            else now
+        )
+        updates = dict(
+            lifecycle=(
+                watch.lifecycle
+                if watch.lifecycle in {"unsupported", "paused"}
+                else "evaluating"
+            ),
+            quality="provisional",
+            evidence_applicable=False,
+            reevaluation_required=True,
+            candidate_invalidated=watch.candidate_invalidated,
+            requalification_due_at=req_due,
+            requalification_reason=None,
+            requalification_new_origins=0,
+            quality_reason=None,
+            qualification_snapshot_id=(
+                watch.qualification_snapshot_id
+                or (
+                    watch.source_snapshot_ids[-1]
+                    if watch.eligibility_decision is not None
+                    and watch.eligibility_decision.action == "activate"
+                    and watch.source_snapshot_ids
+                    else None
+                )
+            ),
+            source_snapshot_ids=tuple(
+                dict.fromkeys((*watch.source_snapshot_ids, snapshot_id))
+            ),
+        )
+        if "next_due_at" in event:
+            updates["next_due_at"] = TypeAdapter(AwareDatetime).validate_python(
+                event["next_due_at"]
+            )
+    elif kind == "historical_availability_altered":
+        source_ids = watch.candidate.source_ids if watch.candidate else ()
+        if event.get("source_id") not in source_ids:
+            return watch
+        invalidated = tuple(
+            dict.fromkeys(
+                (
+                    *watch.invalidated_evaluation_ids,
+                    *(
+                        watch.eligibility_decision.evaluation_ids
+                        if watch.eligibility_decision
+                        else ()
+                    ),
+                )
+            )
+        )
+        updates = dict(
+            lifecycle=(
+                watch.lifecycle
+                if watch.lifecycle in {"unsupported", "paused"}
+                else "evaluating"
+            ),
+            quality="provisional",
+            evidence_applicable=False,
+            reevaluation_required=True,
+            invalidated_evaluation_ids=invalidated,
+            candidate_invalidated=True,
+            next_due_at=now,
+            requalification_due_at=now,
+            requalification_reason="historical_availability_altered",
+            quality_reason="historical_availability_altered",
+        )
+    elif kind in {"historical_correction", "historical_deletion", "invalid_append"}:
+        source_ids = watch.candidate.source_ids if watch.candidate else ()
+        if event.get("source_id") not in source_ids:
+            return watch
+        invalidated = tuple(
+            dict.fromkeys(
+                (
+                    *watch.invalidated_evaluation_ids,
+                    *(
+                        watch.eligibility_decision.evaluation_ids
+                        if watch.eligibility_decision
+                        else ()
+                    ),
+                )
+            )
+        )
+        updates = dict(
+            lifecycle=(
+                watch.lifecycle
+                if watch.lifecycle in {"unsupported", "paused"}
+                else "evaluating"
+            ),
+            quality="provisional",
+            evidence_applicable=False,
+            reevaluation_required=True,
+            invalidated_evaluation_ids=invalidated,
+            candidate_invalidated=True,
+            next_due_at=now,
+            requalification_due_at=now,
+            requalification_reason=kind,
+            quality_reason=kind,
+        )
+    elif kind == "run_issued":
+        run_id = event.get("run_id")
+        if not isinstance(run_id, str) or not run_id.strip():
+            raise DomainError("invalid_watch_run", {})
+        horizon_end = TypeAdapter(AwareDatetime).validate_python(
+            event["forecast_horizon_end"]
+        )
+        snapshot_ids = tuple(event.get("snapshot_ids", ()))
+        updates = {
+            "last_run_id": run_id,
+            "forecast_horizon_end": horizon_end,
+            "source_snapshot_ids": tuple(
+                dict.fromkeys((*watch.source_snapshot_ids, *snapshot_ids))
+            ),
+            "quality_reason": None
+            if watch.quality == "usable"
+            else watch.quality_reason,
+        }
+    elif kind == "requalification_waiting":
+        due = TypeAdapter(AwareDatetime).validate_python(
+            event["requalification_due_at"]
+        )
+        if due <= now:
+            raise DomainError("invalid_requalification_deadline", {})
+        count = event.get("new_origins", 0)
+        if type(count) is not int or count < 0:
+            raise DomainError("invalid_requalification_count", {})
+        updates = {
+            "lifecycle": (
+                watch.lifecycle
+                if watch.lifecycle in {"unsupported", "paused"}
+                else "evaluating"
+            ),
+            "quality": "provisional",
+            "evidence_applicable": False,
+            "reevaluation_required": True,
+            "requalification_due_at": due,
+            "requalification_reason": event["reason"],
+            "requalification_new_origins": count,
+        }
+    elif kind == "requalification_scheduled":
+        count = event.get("new_origins", 0)
+        if type(count) is not int or count < 30:
+            raise DomainError("invalid_requalification_count", {})
+        updates = {
+            "lifecycle": (
+                watch.lifecycle
+                if watch.lifecycle in {"unsupported", "paused"}
+                else "evaluating"
+            ),
+            "quality": "provisional",
+            "evidence_applicable": False,
+            "reevaluation_required": True,
+            "requalification_due_at": None,
+            "requalification_reason": "automatic_requalification_scheduled",
+            "requalification_new_origins": count,
+        }
     elif kind == "quality_degraded":
         updates = {"quality": "degraded", "reevaluation_required": True}
     elif kind == "muted":
@@ -127,7 +349,10 @@ def advance_watch(watch: Watch, event: dict, now: datetime) -> Watch:
             raise DomainError("invalid_watch_control", {"field": "muted"})
         updates = {"muted": event["muted"]}
     elif kind == "priority_changed":
-        updates = {"priority": event.get("priority")}
+        priority = event.get("priority")
+        if type(priority) is not int or not 0 <= priority <= 5:
+            raise DomainError("invalid_watch_control", {"field": "priority"})
+        updates = {"priority": priority}
     elif kind == "provider_migration_required":
         updates = dict(
             lifecycle="paused",
@@ -136,6 +361,31 @@ def advance_watch(watch: Watch, event: dict, now: datetime) -> Watch:
             reevaluation_required=True,
             migration_reason="required_provider_migration",
         )
+    elif kind == "source_subscription_revoked":
+        updates = {
+            "lifecycle": "unsupported",
+            "quality": "stale",
+            "reevaluation_required": True,
+            "quality_reason": "source_subscription_revoked",
+        }
+    elif kind == "source_subscription_activated":
+        if watch.quality_reason == "source_subscription_revoked":
+            qualified = (
+                watch.eligibility_decision is not None
+                and watch.eligibility_decision.action == "activate"
+                and watch.evidence_applicable
+                and not watch.candidate_invalidated
+                and (
+                    watch.forecast_horizon_end is None
+                    or now <= watch.forecast_horizon_end
+                )
+            )
+            updates = {
+                "lifecycle": "active" if qualified else "evaluating",
+                "quality": "usable" if qualified else "provisional",
+                "reevaluation_required": not qualified,
+                "quality_reason": None,
+            }
     elif kind == "paused":
         if watch.lifecycle != "unsupported":
             updates = {"lifecycle": "paused"}

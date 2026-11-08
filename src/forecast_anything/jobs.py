@@ -68,6 +68,43 @@ class JobQueue:
             raise DomainError("not_found", {"job_id": job_id})
         return self._decode(row)
 
+    def update_priority(self, job_id: str, priority: int) -> Job:
+        if type(priority) is not int or not 0 <= priority <= 5:
+            raise DomainError("invalid_job_priority", {})
+        with self.ledger._transaction() as connection:
+            connection.execute(
+                "UPDATE jobs SET priority = ? WHERE job_id = ? AND state = 'pending'",
+                (priority, job_id),
+            )
+            if (
+                connection.execute(
+                    "SELECT 1 FROM jobs WHERE job_id = ?", (job_id,)
+                ).fetchone()
+                is None
+            ):
+                raise DomainError("not_found", {"job_id": job_id})
+        return self.get(job_id)
+
+    def reprioritize_pending_watch(
+        self, watch_id: str, priority: int
+    ) -> tuple[str, ...]:
+        if type(priority) is not int or not 0 <= priority <= 5:
+            raise DomainError("invalid_job_priority", {})
+        updated = []
+        with self.ledger._transaction() as connection:
+            rows = connection.execute(
+                "SELECT job_id, payload FROM jobs WHERE state = 'pending'"
+            ).fetchall()
+            for job_id, content in rows:
+                if json.loads(content).get("watch_id") != watch_id:
+                    continue
+                connection.execute(
+                    "UPDATE jobs SET priority = ? WHERE job_id = ?",
+                    (priority, job_id),
+                )
+                updated.append(job_id)
+        return tuple(updated)
+
     def original_payload(self, job_id: str) -> dict:
         """Read detached immutable submission intent, independent of checkpoints."""
         with self.ledger._connection() as connection:
@@ -100,6 +137,9 @@ class JobQueue:
             else 0
         )
         job_id = sha256(key.encode()).hexdigest()
+        priority = payload.get("priority", 3)
+        if type(priority) is not int or not 0 <= priority <= 5:
+            raise DomainError("invalid_job_priority", {})
         row = connection.execute(
             "SELECT job_id, original_payload FROM jobs WHERE logical_key = ?", (key,)
         ).fetchone()
@@ -108,8 +148,9 @@ class JobQueue:
                 raise DomainError("idempotency_conflict", {"key": key})
         else:
             connection.execute(
-                "INSERT INTO jobs VALUES (?, ?, ?, ?, 1, 'pending', NULL, NULL, NULL, ?, NULL)",
-                (job_id, key, content, content, due),
+                "INSERT INTO jobs (job_id, logical_key, original_payload, payload, attempt, state, lease_token, lease_until, owner, next_due_at, result, priority) "
+                "VALUES (?, ?, ?, ?, 1, 'pending', NULL, NULL, NULL, ?, NULL, ?)",
+                (job_id, key, content, content, due, priority),
             )
         row = connection.execute(
             "SELECT job_id, logical_key, payload, attempt, state, lease_token, lease_until FROM jobs WHERE job_id = ?",
@@ -123,21 +164,32 @@ class JobQueue:
             raise DomainError("invalid_lease", {})
         with self.ledger._transaction() as connection:
             row = connection.execute(
-                "SELECT job_id, attempt FROM jobs WHERE next_due_at <= ? AND "
+                "SELECT job_id, attempt, payload FROM jobs WHERE next_due_at <= ? AND "
                 "(state = 'pending' OR (state = 'running' AND lease_until <= ?)) "
-                "ORDER BY next_due_at, rowid LIMIT 1",
+                "ORDER BY priority ASC, next_due_at ASC, rowid ASC LIMIT 1",
                 (stamp, stamp),
             ).fetchone()
             if row is None:
                 return None
             token = uuid4().hex
+            payload = json.loads(row[2])
+            if payload.get("automatic_requalification") and not payload.get(
+                "execution_started_at"
+            ):
+                budget_seconds = payload.get("execution_budget_seconds", 300)
+                if type(budget_seconds) is not int or budget_seconds <= 0:
+                    raise DomainError("invalid_job_execution_budget", {})
+                payload["execution_started_at"] = now.isoformat()
+                payload["execution_deadline_at"] = (
+                    now + timedelta(seconds=budget_seconds)
+                ).isoformat()
             connection.execute(
-                "UPDATE jobs SET state = 'running', owner = ?, lease_token = ?, lease_until = ? WHERE job_id = ?",
-                (owner, token, stamp + ttl_seconds, row[0]),
+                "UPDATE jobs SET payload = ?, state = 'running', owner = ?, lease_token = ?, lease_until = ? WHERE job_id = ?",
+                (_json(payload), owner, token, stamp + ttl_seconds, row[0]),
             )
             connection.execute(
                 "INSERT OR IGNORE INTO job_attempts (job_id, attempt, state) VALUES (?, ?, 'running')",
-                row,
+                row[:2],
             )
         return self.get(row[0])
 

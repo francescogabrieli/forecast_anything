@@ -662,17 +662,24 @@ export namespace WatchGenerated {
   export type ProtocolId1 = string | null;
   export type ReasonCodes = string[];
   export type EvidenceApplicable = boolean;
+  export type ForecastHorizonEnd = string | null;
   export type GraphId1 = string;
   export type GraphVersion = number;
   export type InvalidatedEvaluationIds = string[];
+  export type LastRunId = string | null;
   export type Lifecycle = "candidate" | "evaluating" | "active" | "paused" | "unsupported";
   export type MigrationReason = string | null;
   export type Muted = boolean;
   export type NextDueAt = string;
   export type PolicyVersion1 = string;
   export type Priority = number;
+  export type QualificationSnapshotId = string | null;
   export type Quality = "provisional" | "usable" | "stale" | "degraded";
+  export type QualityReason = string | null;
   export type ReevaluationRequired = boolean;
+  export type RequalificationDueAt = string | null;
+  export type RequalificationNewOrigins = number;
+  export type RequalificationReason = string | null;
   export type SourceSnapshotIds = string[];
   export type SupersedesWatchId = string | null;
   export type WatchId = string;
@@ -689,17 +696,24 @@ export namespace WatchGenerated {
     candidate_invalidated?: CandidateInvalidated;
     eligibility_decision?: EligibilityDecision | null;
     evidence_applicable?: EvidenceApplicable;
+    forecast_horizon_end?: ForecastHorizonEnd;
     graph_id: GraphId1;
     graph_version: GraphVersion;
     invalidated_evaluation_ids?: InvalidatedEvaluationIds;
+    last_run_id?: LastRunId;
     lifecycle: Lifecycle;
     migration_reason?: MigrationReason;
     muted: Muted;
     next_due_at: NextDueAt;
     policy_version: PolicyVersion1;
     priority?: Priority;
+    qualification_snapshot_id?: QualificationSnapshotId;
     quality: Quality;
+    quality_reason?: QualityReason;
     reevaluation_required?: ReevaluationRequired;
+    requalification_due_at?: RequalificationDueAt;
+    requalification_new_origins?: RequalificationNewOrigins;
+    requalification_reason?: RequalificationReason;
     source_snapshot_ids?: SourceSnapshotIds;
     supersedes_watch_id?: SupersedesWatchId;
     watch_id: WatchId;
@@ -836,9 +850,11 @@ export namespace WatchViewGenerated {
   export type ProtocolId1 = string | null;
   export type ReasonCodes = string[];
   export type EvidenceApplicable = boolean;
+  export type ForecastHorizonEnd = string | null;
   export type GraphId1 = string;
   export type GraphVersion = number;
   export type InvalidatedEvaluationIds = string[];
+  export type LastRunId = string | null;
   export type Lifecycle = "candidate" | "evaluating" | "active" | "paused" | "unsupported";
   export type MigrationReason = string | null;
   export type Muted = boolean;
@@ -846,8 +862,13 @@ export namespace WatchViewGenerated {
   export type Operational = boolean;
   export type PolicyVersion1 = string;
   export type Priority = number;
+  export type QualificationSnapshotId = string | null;
   export type Quality = "provisional" | "usable" | "stale" | "degraded";
+  export type QualityReason = string | null;
   export type ReevaluationRequired = boolean;
+  export type RequalificationDueAt = string | null;
+  export type RequalificationNewOrigins = number;
+  export type RequalificationReason = string | null;
   export type SourceSnapshotIds = string[];
   export type SupersedesWatchId = string | null;
   export type WatchId = string;
@@ -858,9 +879,11 @@ export namespace WatchViewGenerated {
     candidate_invalidated?: CandidateInvalidated;
     eligibility_decision?: EligibilityDecision | null;
     evidence_applicable?: EvidenceApplicable;
+    forecast_horizon_end?: ForecastHorizonEnd;
     graph_id: GraphId1;
     graph_version: GraphVersion;
     invalidated_evaluation_ids?: InvalidatedEvaluationIds;
+    last_run_id?: LastRunId;
     lifecycle: Lifecycle;
     migration_reason?: MigrationReason;
     muted: Muted;
@@ -868,8 +891,13 @@ export namespace WatchViewGenerated {
     operational: Operational;
     policy_version: PolicyVersion1;
     priority?: Priority;
+    qualification_snapshot_id?: QualificationSnapshotId;
     quality: Quality;
+    quality_reason?: QualityReason;
     reevaluation_required?: ReevaluationRequired;
+    requalification_due_at?: RequalificationDueAt;
+    requalification_new_origins?: RequalificationNewOrigins;
+    requalification_reason?: RequalificationReason;
     source_snapshot_ids?: SourceSnapshotIds;
     supersedes_watch_id?: SupersedesWatchId;
     watch_id: WatchId;
@@ -1371,10 +1399,14 @@ export namespace QuestionRevisionRequestGenerated {
 export type QuestionRevisionRequest = QuestionRevisionRequestGenerated.QuestionRevisionRequest;
 
 export namespace QuestionTitlePatchGenerated {
+  export type Muted = boolean | null;
+  export type Priority = number | null;
   export type Status = ("open" | "paused" | "resolved") | null;
   export type Title = string | null;
 
   export interface QuestionTitlePatch {
+    muted?: Muted;
+    priority?: Priority;
     status?: Status;
     title?: Title;
   }
@@ -1468,6 +1500,8 @@ export type QuestionRevision = QuestionRevisionGenerated.QuestionRevision;
 export namespace QuestionViewGenerated {
   export type CreatedAt = string;
   export type CurrentRevision = number;
+  export type Muted = boolean;
+  export type Priority = number;
   export type QuestionId = string;
   export type ReferenceCount = number;
   export type CreatedAt1 = string;
@@ -1540,6 +1574,8 @@ export namespace QuestionViewGenerated {
   export interface QuestionView {
     created_at: CreatedAt;
     current_revision: CurrentRevision;
+    muted?: Muted;
+    priority?: Priority;
     question_id: QuestionId;
     reference_count: ReferenceCount;
     revision: QuestionRevision;
@@ -1610,6 +1646,8 @@ export namespace QuestionPageGenerated {
   export type NextOffset = number | null;
   export type CreatedAt = string;
   export type CurrentRevision = number;
+  export type Muted = boolean;
+  export type Priority = number;
   export type QuestionId = string;
   export type ReferenceCount = number;
   export type CreatedAt1 = string;
@@ -1687,6 +1725,8 @@ export namespace QuestionPageGenerated {
   export interface QuestionView {
     created_at: CreatedAt;
     current_revision: CurrentRevision;
+    muted?: Muted;
+    priority?: Priority;
     question_id: QuestionId;
     reference_count: ReferenceCount;
     revision: QuestionRevision;
@@ -2932,15 +2972,58 @@ export namespace BacktestSummaryGenerated {
 export type BacktestSummary = BacktestSummaryGenerated.BacktestSummary;
 
 export namespace QuestionPresentationGenerated {
+  /**
+   * @maxItems 10
+   */
+  export type InboxEvents =
+    | []
+    | [InboxEvent]
+    | [InboxEvent, InboxEvent]
+    | [InboxEvent, InboxEvent, InboxEvent]
+    | [InboxEvent, InboxEvent, InboxEvent, InboxEvent]
+    | [InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent]
+    | [InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent]
+    | [InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent]
+    | [InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent]
+    | [InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent, InboxEvent]
+    | [
+        InboxEvent,
+        InboxEvent,
+        InboxEvent,
+        InboxEvent,
+        InboxEvent,
+        InboxEvent,
+        InboxEvent,
+        InboxEvent,
+        InboxEvent,
+        InboxEvent
+      ];
+  export type DecisionId = string | null;
+  export type DeliveryStates = (
+    "pending" | "delivering" | "delivered" | "delivery_failed" | "delivery_suppressed_muted"
+  )[];
+  export type EventId = string;
+  export type EventKind = string;
+  export type Muted = boolean;
+  export type OccurredAt = string;
+  export type QuestionId = string;
+  export type Revision = number;
+  export type RunId = string | null;
+  export type Summary = string;
+  export type TransitionId = string;
+  export type WatchId = string | null;
+  export type InboxTotalCount = number;
   export type NextOffset = number | null;
   export type CreatedAt = string;
   export type CurrentRevision = number;
-  export type QuestionId = string;
+  export type Muted1 = boolean;
+  export type Priority = number;
+  export type QuestionId1 = string;
   export type ReferenceCount = number;
   export type CreatedAt1 = string;
   export type Meaning = string;
-  export type QuestionId1 = string;
-  export type Revision = number;
+  export type QuestionId2 = string;
+  export type Revision1 = number;
   export type BaselinePeriod = number;
   export type Horizon = number;
   export type JsonValue = unknown;
@@ -3014,25 +3097,47 @@ export namespace QuestionPresentationGenerated {
   export type AppliesToCurrentRevision = boolean;
   export type CreatedAt2 = string;
   export type Note = string;
-  export type QuestionId2 = string;
+  export type QuestionId3 = string;
   export type ReferenceId = string;
-  export type Revision1 = number;
+  export type Revision2 = number;
   export type TargetId = string;
   export type TargetType = "candidate" | "run" | "backtest" | "watch" | "evaluation" | "operation";
   export type SchemaVersion = "question-presentation-v1";
   export type VisualDestination = "question_timeline";
 
   export interface QuestionPresentation {
+    inbox_events: InboxEvents;
+    inbox_total_count: InboxTotalCount;
     next_offset: NextOffset;
     question: QuestionView;
     references: References;
     schema_version?: SchemaVersion;
     visual_destination?: VisualDestination;
   }
+  export interface InboxEvent {
+    decision_id?: DecisionId;
+    delivery_states?: DeliveryStates;
+    event_id: EventId;
+    event_kind: EventKind;
+    muted?: Muted;
+    occurred_at: OccurredAt;
+    payload: Payload;
+    question_id: QuestionId;
+    revision: Revision;
+    run_id?: RunId;
+    summary: Summary;
+    transition_id: TransitionId;
+    watch_id?: WatchId;
+  }
+  export interface Payload {
+    [k: string]: unknown;
+  }
   export interface QuestionView {
     created_at: CreatedAt;
     current_revision: CurrentRevision;
-    question_id: QuestionId;
+    muted?: Muted1;
+    priority?: Priority;
+    question_id: QuestionId1;
     reference_count: ReferenceCount;
     revision: QuestionRevision;
     revision_count: RevisionCount;
@@ -3043,8 +3148,8 @@ export namespace QuestionPresentationGenerated {
   export interface QuestionRevision {
     created_at: CreatedAt1;
     meaning: Meaning;
-    question_id: QuestionId1;
-    revision: Revision;
+    question_id: QuestionId2;
+    revision: Revision1;
     selection: QuestionForecastSelection;
     source_ids: SourceIds;
   }
@@ -3064,9 +3169,9 @@ export namespace QuestionPresentationGenerated {
   export interface QuestionReference {
     created_at: CreatedAt2;
     note: Note;
-    question_id: QuestionId2;
+    question_id: QuestionId3;
     reference_id: ReferenceId;
-    revision: Revision1;
+    revision: Revision2;
     target_id: TargetId;
     target_type: TargetType;
   }

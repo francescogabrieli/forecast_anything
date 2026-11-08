@@ -116,6 +116,42 @@ def test_restart_recovers_pending_job(tmp_path):
     assert Worker(runtime, queue).run_due(T) == ()
 
 
+def test_automatic_requalification_deadline_triggers_worker_timeout_handler(
+    tmp_path, monkeypatch
+):
+    from threading import Event
+    from time import sleep
+
+    ledger, _, runtime = setup(tmp_path)
+    queue = JobQueue(ledger)
+    deadline = T + timedelta(milliseconds=20)
+    job = queue.enqueue(
+        "slow-automatic-requalification",
+        {
+            "kind": "backtest",
+            "automatic_requalification": True,
+            "execution_budget_seconds": 1,
+            "execution_started_at": T.isoformat(),
+            "execution_deadline_at": deadline.isoformat(),
+        },
+    )
+    expired = Event()
+    worker = Worker(
+        runtime,
+        queue,
+        execution_timeout_handler=expired.set,
+    )
+    monkeypatch.setattr(worker, "_execute", lambda *_: sleep(0.06) or {})
+
+    worker.run_due(T)
+
+    assert expired.is_set()
+    assert queue.get(job.job_id).state == "failed"
+    assert queue.history(job.job_id)[0]["error"]["code"] == (
+        "backtest_time_budget_exceeded"
+    )
+
+
 def test_expired_owner_cannot_commit(tmp_path):
     now = [T]
     ledger, provider, runtime = setup(tmp_path, lambda: now[0])
@@ -343,6 +379,852 @@ def test_source_refresh_creates_new_epoch_and_preserves_old_watch(tmp_path):
     )
     assert ledger.discovery_usage(fresh.candidate.epoch_id)[0] == 1
     assert ledger.discovery_usage("original") == (1, 0)
+
+
+def test_append_replay_recovers_run_after_crash_before_enqueue(tmp_path, monkeypatch):
+    from forecast_anything.contracts import (
+        QuestionCreateRequest,
+        QuestionReferenceRequest,
+    )
+    from forecast_anything.operators import register_builtin_operators
+
+    ledger, _, runtime = setup(tmp_path)
+    runtime.operators = register_builtin_operators()
+    csv, registered = registered_watch(tmp_path, ledger, due=T)
+    watch = ledger.get_watch("watch")
+    question = ledger.create_question(
+        QuestionCreateRequest(
+            key="append-crash",
+            title="Sales outlook",
+            meaning="Forecast daily sales",
+            source_ids=("sales",),
+            selection={"provider": "seasonal_naive", "horizon": 1},
+        )
+    )
+    ledger.link_question_reference(
+        question.question_id,
+        QuestionReferenceRequest(
+            key="watch-reference",
+            revision=1,
+            target_type="watch",
+            target_id=watch.watch_id,
+        ),
+    )
+    csv.write_text(
+        "time,value\n2026-10-21,1\n2026-10-22,2\n2026-10-23,3\n2026-10-24,4\n"
+    )
+    queue = JobQueue(ledger)
+    queue.enqueue(
+        f"refresh/sales/{registered.revision}/append-crash",
+        {
+            "kind": "source_refresh",
+            "source_id": "sales",
+            "revision": registered.revision,
+            "as_of": T.isoformat(),
+        },
+    )
+    enqueue = queue.enqueue
+
+    def crash_before_run(key, payload, **kwargs):
+        if key.startswith("watch-run/"):
+            raise KeyboardInterrupt("crash after append transition")
+        return enqueue(key, payload, **kwargs)
+
+    monkeypatch.setattr(queue, "enqueue", crash_before_run)
+    with pytest.raises(KeyboardInterrupt, match="append transition"):
+        Worker(runtime, queue).run_due(T, limit=1)
+    assert (
+        ledger.get_watch(watch.watch_id).source_snapshot_ids[-1]
+        != (watch.source_snapshot_ids[-1])
+    )
+    assert ledger.list_inbox_events(question_id=question.question_id).total_count == 0
+
+    monkeypatch.setattr(queue, "enqueue", enqueue)
+    recovered_at = T + timedelta(seconds=61)
+    ledger.clock = runtime.clock = lambda: recovered_at
+    Worker(runtime, queue).run_due(recovered_at)
+
+    references = ledger.list_question_references(question.question_id, revision=1)
+    run_references = [
+        reference
+        for reference in references.references
+        if reference.target_type == "run"
+    ]
+    assert len(run_references) == 1
+    assert any(
+        event.event_kind == "forecast_issued"
+        for event in ledger.list_inbox_events(question_id=question.question_id).events
+    )
+
+
+def test_historical_correction_keeps_question_linked_to_successor_and_run(tmp_path):
+    from forecast_anything.contracts import (
+        QuestionCreateRequest,
+        QuestionReferenceRequest,
+    )
+    from forecast_anything.operators import register_builtin_operators
+
+    ledger, _, runtime = setup(tmp_path)
+    runtime.operators = register_builtin_operators()
+    csv, registered = registered_watch(tmp_path, ledger, due=T)
+    old = ledger.get_watch("watch")
+    question = ledger.create_question(
+        QuestionCreateRequest(
+            key="correction-continuity",
+            title="Sales outlook",
+            meaning="Forecast daily sales",
+            source_ids=("sales",),
+            selection={"provider": "seasonal_naive", "horizon": 1},
+        )
+    )
+    ledger.link_question_reference(
+        question.question_id,
+        QuestionReferenceRequest(
+            key="old-watch",
+            revision=1,
+            target_type="watch",
+            target_id=old.watch_id,
+        ),
+    )
+    csv.write_text("time,value\n2026-10-21,1\n2026-10-22,99\n2026-10-23,3\n")
+    queue = JobQueue(ledger)
+    queue.enqueue(
+        f"refresh/sales/{registered.revision}/correction",
+        {
+            "kind": "source_refresh",
+            "source_id": "sales",
+            "revision": registered.revision,
+            "as_of": T.isoformat(),
+        },
+    )
+
+    Worker(runtime, queue).run_due(T, limit=20)
+
+    successor = next(
+        watch
+        for watch in ledger.list_watches()
+        if watch.supersedes_watch_id == old.watch_id
+    )
+    references = ledger.list_question_references(question.question_id, revision=1)
+    assert any(
+        reference.target_type == "watch" and reference.target_id == successor.watch_id
+        for reference in references.references
+    )
+    run_references = [
+        reference
+        for reference in references.references
+        if reference.target_type == "run"
+    ]
+    assert run_references
+    run = ledger.get_run(run_references[-1].target_id)
+    assert run.snapshot_ids == (successor.source_snapshot_ids[-1],)
+    event_kinds = {
+        event.event_kind
+        for event in ledger.list_inbox_events(question_id=question.question_id).events
+    }
+    assert "historical_correction" in event_kinds
+    assert "forecast_issued" in event_kinds
+
+
+def test_all_paused_watches_stop_shared_source_polling(tmp_path):
+    from forecast_anything.api.service import Observatory
+    from forecast_anything.contracts import (
+        QuestionCreateRequest,
+        QuestionReferenceRequest,
+        QuestionTitlePatch,
+    )
+
+    ledger, _, runtime = setup(tmp_path)
+    registered_watch(tmp_path, ledger, due=T)
+    question_ids = []
+    for index in range(2):
+        question = ledger.create_question(
+            QuestionCreateRequest(
+                key=f"paused-{index}",
+                title=f"Question {index}",
+                meaning="Forecast daily sales",
+                source_ids=("sales",),
+                selection={"provider": "seasonal_naive", "horizon": 1},
+            )
+        )
+        ledger.link_question_reference(
+            question.question_id,
+            QuestionReferenceRequest(
+                key=f"watch-{index}",
+                revision=1,
+                target_type="watch",
+                target_id="watch",
+            ),
+        )
+        question_ids.append(question.question_id)
+    service = Observatory(ledger, runtime)
+    for question_id in question_ids:
+        service.patch_question(question_id, QuestionTitlePatch(status="paused"))
+
+    Worker(runtime, JobQueue(ledger)).run_due(T)
+
+    with ledger._connection() as connection:
+        assert (
+            connection.execute(
+                "SELECT count(*) FROM jobs WHERE json_extract(payload, '$.kind') = 'source_refresh'"
+            ).fetchone()[0]
+            == 0
+        )
+
+
+def test_source_revocation_notifies_questions_and_suppresses_queued_run(tmp_path):
+    from forecast_anything.api.service import Observatory
+    from forecast_anything.contracts import (
+        QuestionCreateRequest,
+        QuestionReferenceRequest,
+    )
+    from forecast_anything.operators import register_builtin_operators
+
+    ledger, _, runtime = setup(tmp_path)
+    runtime.operators = register_builtin_operators()
+    _, _ = registered_watch(tmp_path, ledger)
+    watch = ledger.get_watch("watch")
+    question = ledger.create_question(
+        QuestionCreateRequest(
+            key="revocation-notice",
+            title="Sales outlook",
+            meaning="Forecast daily sales",
+            source_ids=("sales",),
+            selection={"provider": "seasonal_naive", "horizon": 1},
+        )
+    )
+    ledger.link_question_reference(
+        question.question_id,
+        QuestionReferenceRequest(
+            key="watch-reference",
+            revision=1,
+            target_type="watch",
+            target_id=watch.watch_id,
+        ),
+    )
+    snapshot_id = watch.source_snapshot_ids[-1]
+    queue = JobQueue(ledger)
+    job = queue.enqueue(
+        "queued-run-before-revocation",
+        {
+            "kind": "run",
+            "watch_id": watch.watch_id,
+            "graph": watch.candidate.graph.model_dump(mode="json"),
+            "snapshots": {
+                "sales": ledger.get_snapshot(snapshot_id).model_dump(mode="json")
+            },
+            "as_of": T.isoformat(),
+            "question_links": (
+                {
+                    "question_id": question.question_id,
+                    "revision": 1,
+                    "priority": 3,
+                },
+            ),
+        },
+    )
+
+    Observatory(ledger, runtime).set_source_subscription("sales", active=False)
+    Worker(runtime, queue).run_due(T)
+
+    assert ledger.get_run_by_key(job.emission_key) is None
+    event = ledger.list_inbox_events(question_id=question.question_id).events[0]
+    assert event.event_kind == "source_subscription_revoked"
+    assert queue.get(job.job_id).state == "completed"
+    assert queue.history(job.job_id)[0]["result"]["suppressed"] == "watch_not_active"
+
+
+def test_valid_append_preserves_watch_and_links_new_provisional_run_to_question(
+    tmp_path,
+):
+    from forecast_anything.contracts import (
+        QuestionCreateRequest,
+        QuestionReferenceRequest,
+    )
+    from forecast_anything.sources.catalog import SourceCatalog
+
+    ledger, _, runtime = setup(tmp_path)
+    from forecast_anything.operators import register_builtin_operators
+
+    runtime.operators = register_builtin_operators()
+    csv, registered = registered_watch(tmp_path, ledger, due=T + timedelta(days=1))
+    old = ledger.get_watch("watch")
+    question = ledger.create_question(
+        QuestionCreateRequest(
+            key="saved-sales",
+            title="Sales outlook",
+            meaning="Forecast daily sales",
+            source_ids=("sales",),
+            selection={"provider": "seasonal_naive", "horizon": 1},
+        )
+    )
+    ledger.link_question_reference(
+        question.question_id,
+        QuestionReferenceRequest(
+            key="watch-v1",
+            revision=1,
+            target_type="watch",
+            target_id=old.watch_id,
+        ),
+    )
+    csv.write_text(
+        "time,value\n2026-10-21,1\n2026-10-22,2\n2026-10-23,3\n2026-10-24,4\n"
+    )
+    current_revision = SourceCatalog(ledger.path).get("sales").revision
+    assert current_revision == registered.revision
+
+    queue = JobQueue(ledger)
+    queue.enqueue(
+        f"refresh/sales/{registered.revision}/append",
+        {
+            "kind": "source_refresh",
+            "source_id": "sales",
+            "revision": registered.revision,
+            "as_of": T.isoformat(),
+        },
+    )
+    Worker(runtime, queue).run_due(T)
+
+    watches = ledger.list_watches()
+    updated = ledger.get_watch(old.watch_id)
+    references = ledger.list_question_references(question.question_id, revision=1)
+    run_refs = [ref for ref in references.references if ref.target_type == "run"]
+    assert len(watches) == 1
+    assert updated.candidate_id == old.candidate_id
+    assert updated.quality == "provisional"
+    assert not updated.evidence_applicable
+    assert updated.source_snapshot_ids[-1] != old.source_snapshot_ids[-1]
+    assert len(run_refs) == 1
+    run = ledger.get_run(run_refs[0].target_id)
+    assert run.snapshot_ids
+    events = ledger.list_inbox_events(question_id=question.question_id)
+    forecast_events = [
+        event for event in events.events if event.event_kind == "forecast_issued"
+    ]
+    assert len(forecast_events) == 1
+    assert forecast_events[0].run_id == run.run_id
+
+
+def test_automatic_requalification_uses_30_fresh_origins_and_resolves_question(
+    tmp_path,
+):
+    from forecast_anything.contracts import (
+        QuestionCreateRequest,
+        QuestionReferenceRequest,
+    )
+    from forecast_anything.operators import register_builtin_operators
+
+    ledger, _, runtime = setup(tmp_path)
+    runtime.operators = register_builtin_operators()
+    qualify_watch(tmp_path, ledger)
+    from forecast_anything.sources.catalog import SourceCatalog
+
+    csv = tmp_path / "sales.csv"
+    registered = SourceCatalog(ledger.path).get("sales")
+    original_qualification_snapshot = ledger.get_watch(
+        "watch"
+    ).qualification_snapshot_id
+    question = ledger.create_question(
+        QuestionCreateRequest(
+            key="saved-sales-requal",
+            title="Sales outlook",
+            meaning="Forecast daily sales",
+            source_ids=("sales",),
+            selection={"provider": "seasonal_naive", "horizon": 1},
+        )
+    )
+    ledger.link_question_reference(
+        question.question_id,
+        QuestionReferenceRequest(
+            key="watch-v1",
+            revision=1,
+            target_type="watch",
+            target_id="watch",
+        ),
+    )
+    base = T - timedelta(days=3)
+    csv.write_text(
+        "time,value\n"
+        + "".join(
+            f"{(base + timedelta(days=index)).date().isoformat()},{value}\n"
+            for index, value in enumerate(
+                [1, 2, 3] + [2 if index % 2 == 1 else 5 for index in range(3, 141)]
+            )
+        )
+    )
+    now = T + timedelta(days=141)
+    ledger.clock = lambda: now
+    runtime.clock = lambda: now
+    queue = JobQueue(ledger)
+    queue.enqueue(
+        f"refresh/sales/{registered.revision}/requalify",
+        {
+            "kind": "source_refresh",
+            "source_id": "sales",
+            "revision": registered.revision,
+            "as_of": now.isoformat(),
+        },
+    )
+
+    Worker(runtime, queue).run_due(now, limit=10)
+
+    updated = ledger.get_watch("watch")
+    assert updated.eligibility_decision.action == "activate"
+    assert updated.evidence_applicable is True
+    assert updated.qualification_snapshot_id is not None
+    assert updated.qualification_snapshot_id != original_qualification_snapshot
+    references = ledger.list_question_references(question.question_id, revision=1)
+    reports = [ref for ref in references.references if ref.target_type == "backtest"]
+    assert len(reports) == 1
+    from forecast_anything.backtesting.store import BacktestStore
+
+    plan = BacktestStore(ledger).get_plan(reports[0].target_id)
+    fresh_final = [origin for origin in plan.origins if origin.partition == "final"]
+    assert len(fresh_final) >= 30
+    assert all(origin.target_start > plan.origin_target_after for origin in fresh_final)
+    assert ledger.list_inbox_events(question_id=question.question_id).total_count >= 3
+    with ledger._connection() as connection:
+        budget_count = connection.execute(
+            "SELECT count(*) FROM requalification_budgets WHERE question_id = ?",
+            (question.question_id,),
+        ).fetchone()[0]
+    assert budget_count == 1
+
+
+def _provisional_requalification_case(tmp_path, *, appended_days):
+    from forecast_anything.contracts import (
+        QuestionCreateRequest,
+        QuestionReferenceRequest,
+    )
+    from forecast_anything.operators import register_builtin_operators
+    from forecast_anything.sources.catalog import SourceCatalog
+    from forecast_anything.sources.profiling import ingest_source
+
+    ledger, _, runtime = setup(tmp_path)
+    runtime.operators = register_builtin_operators()
+    qualify_watch(tmp_path, ledger)
+    question = ledger.create_question(
+        QuestionCreateRequest(
+            key=f"requalification-{appended_days}",
+            title="Sales outlook",
+            meaning="Forecast daily sales",
+            source_ids=("sales",),
+            selection={"provider": "seasonal_naive", "horizon": 1},
+        )
+    )
+    ledger.link_question_reference(
+        question.question_id,
+        QuestionReferenceRequest(
+            key="watch-link",
+            revision=1,
+            target_type="watch",
+            target_id="watch",
+        ),
+    )
+    registered = SourceCatalog(ledger.path).get("sales")
+    csv = tmp_path / "sales.csv"
+    base = T - timedelta(days=3)
+    values = [1, 2, 3] + [2 if index % 2 else 5 for index in range(3, appended_days)]
+    csv.write_text(
+        "time,value\n"
+        + "".join(
+            f"{(base + timedelta(days=index)).date().isoformat()},{value}\n"
+            for index, value in enumerate(values)
+        )
+    )
+    now = T + timedelta(days=appended_days)
+    snapshot = ingest_source(registered.spec, now)
+    ledger.put_snapshot(snapshot)
+    ledger.advance_watch(
+        "watch",
+        {
+            "kind": "data_appended",
+            "source_id": "sales",
+            "snapshot_id": snapshot.snapshot_id,
+            "next_due_at": now + timedelta(days=1),
+            "requalification_due_at": now,
+        },
+        now,
+        event_id=f"test-append/{snapshot.snapshot_id}",
+    )
+    return ledger, runtime, question, now
+
+
+def test_requalification_budget_starts_on_first_claim_after_queue_delay(
+    tmp_path, monkeypatch
+):
+    ledger, runtime, _, scheduled_at = _provisional_requalification_case(
+        tmp_path, appended_days=141
+    )
+    queue = JobQueue(ledger)
+    worker = Worker(runtime, queue)
+    worker._schedule_requalifications(scheduled_at)
+    with ledger._connection() as connection:
+        row = connection.execute(
+            "SELECT job_id, payload FROM jobs WHERE json_extract(payload, '$.automatic_requalification') = 1"
+        ).fetchone()
+    job_id, original_payload = row
+    import json
+
+    assert "execution_deadline_at" not in json.loads(original_payload)
+
+    # The durable job waits longer than its 300-second compute budget before
+    # any worker claims it. A crash then lets a second worker reclaim the lease.
+    first_claim_at = scheduled_at + timedelta(seconds=301)
+    ledger.clock = runtime.clock = lambda: first_claim_at
+    observed = []
+
+    def crash_after_claim(job, now):
+        observed.append(job.payload.copy())
+        raise KeyboardInterrupt("worker exited after first claim")
+
+    monkeypatch.setattr(worker, "_execute", crash_after_claim)
+    with pytest.raises(KeyboardInterrupt, match="first claim"):
+        worker.run_due(first_claim_at)
+
+    first_payload = queue.get(job_id).payload
+    expected_deadline = first_claim_at + timedelta(seconds=300)
+    assert first_payload["execution_started_at"] == first_claim_at.isoformat()
+    assert first_payload["execution_deadline_at"] == expected_deadline.isoformat()
+
+    second_claim_at = first_claim_at + timedelta(seconds=61)
+    ledger.clock = runtime.clock = lambda: second_claim_at
+    resumed = Worker(runtime, queue)
+    monkeypatch.setattr(
+        resumed,
+        "_execute",
+        lambda job, now: observed.append(job.payload.copy()) or {"recovered": True},
+    )
+    resumed.run_due(second_claim_at)
+
+    assert observed[1]["execution_deadline_at"] == expected_deadline.isoformat()
+    assert (
+        datetime.fromisoformat(observed[1]["execution_deadline_at"]) > second_claim_at
+    )
+    assert queue.get(job_id).state == "completed"
+
+
+def test_requalification_publication_replays_after_deadline_without_duplicates(
+    tmp_path, monkeypatch
+):
+    from forecast_anything.backtesting.store import BacktestStore
+
+    ledger, runtime, question, scheduled_at = _provisional_requalification_case(
+        tmp_path, appended_days=141
+    )
+    queue = JobQueue(ledger)
+    worker = Worker(runtime, queue)
+    worker._schedule_requalifications(scheduled_at)
+    with ledger._connection() as connection:
+        job_id = connection.execute(
+            "SELECT job_id FROM jobs WHERE json_extract(payload, '$.automatic_requalification') = 1"
+        ).fetchone()[0]
+    job = queue.get(job_id)
+    candidate_id = job.payload["candidate_id"]
+    decision_count_before = len(ledger.eligibility_decisions(candidate_id))
+    original_complete = queue.complete
+
+    def crash_after_publication(*args, **kwargs):
+        raise KeyboardInterrupt("worker exited after decision publication")
+
+    monkeypatch.setattr(queue, "complete", crash_after_publication)
+    with pytest.raises(KeyboardInterrupt, match="decision publication"):
+        worker.run_due(scheduled_at)
+
+    report = BacktestStore(ledger).get_report(job_id)
+    persisted_event_ids = {
+        event.event_id
+        for event in ledger.list_inbox_events(question_id=question.question_id).events
+    }
+    persisted_decisions = ledger.eligibility_decisions(candidate_id)
+    persisted_watch_events = ledger.watch_history("watch")
+    provider_calls = len(runtime.providers["seasonal_naive"].calls)
+    deadline = datetime.fromisoformat(
+        queue.get(job_id).payload["execution_deadline_at"]
+    )
+    replay_at = deadline + timedelta(seconds=1)
+    ledger.clock = runtime.clock = lambda: replay_at
+    monkeypatch.setattr(queue, "complete", original_complete)
+
+    completed = Worker(runtime, queue).run_due(replay_at)
+
+    assert completed == (job_id,)
+    assert queue.get(job_id).state == "completed"
+    assert queue.get(job_id).attempt == 1
+    assert len(queue.history(job_id)) == 1
+    assert queue.history(job_id)[-1]["result"]["report_id"] == report.report_id
+    assert len(runtime.providers["seasonal_naive"].calls) == provider_calls
+    assert len(ledger.eligibility_decisions(candidate_id)) == decision_count_before + 1
+    assert ledger.eligibility_decisions(candidate_id) == persisted_decisions
+    assert {
+        event.event_id
+        for event in ledger.list_inbox_events(question_id=question.question_id).events
+    } == persisted_event_ids
+    final_watch_events = ledger.watch_history("watch")
+    assert len(final_watch_events) == len(persisted_watch_events)
+    assert (
+        sum(
+            entry["event_id"] == f"backtest/{report.report_id}"
+            for entry in final_watch_events
+        )
+        == 1
+    )
+
+
+def test_automatic_requalification_waits_when_fewer_than_30_final_origins_exist(
+    tmp_path,
+):
+    ledger, runtime, question, now = _provisional_requalification_case(
+        tmp_path, appended_days=4
+    )
+    worker = Worker(runtime, JobQueue(ledger))
+
+    worker._schedule_requalifications(now)
+
+    assert ledger.get_watch("watch").requalification_reason == (
+        "insufficient_new_final_origins"
+    )
+    assert ledger.get_watch("watch").requalification_new_origins < 30
+    assert (
+        ledger.list_inbox_events(question_id=question.question_id)
+        .events[0]
+        .payload["reason"]
+        == "insufficient_new_final_origins"
+    )
+    with ledger._connection() as connection:
+        assert (
+            connection.execute(
+                "SELECT count(*) FROM requalification_budgets WHERE question_id = ?",
+                (question.question_id,),
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            connection.execute(
+                "SELECT count(*) FROM jobs WHERE json_extract(payload, '$.automatic_requalification') = 1"
+            ).fetchone()[0]
+            == 0
+        )
+
+
+def test_automatic_requalification_budget_allows_one_job_per_question_in_24_hours(
+    tmp_path,
+):
+    ledger, runtime, question, now = _provisional_requalification_case(
+        tmp_path, appended_days=141
+    )
+    worker = Worker(runtime, JobQueue(ledger))
+
+    worker._schedule_requalifications(now)
+    from forecast_anything.sources.catalog import SourceCatalog
+    from forecast_anything.sources.profiling import ingest_source
+
+    source = SourceCatalog(ledger.path).get("sales")
+    csv = tmp_path / "sales.csv"
+    base = T - timedelta(days=3)
+    csv.write_text(
+        csv.read_text() + f"{(base + timedelta(days=141)).date().isoformat()},2\n"
+    )
+    next_now = now + timedelta(hours=12)
+    next_snapshot = ingest_source(source.spec, next_now)
+    ledger.put_snapshot(next_snapshot)
+    ledger.advance_watch(
+        "watch",
+        {
+            "kind": "data_appended",
+            "source_id": "sales",
+            "snapshot_id": next_snapshot.snapshot_id,
+            "next_due_at": next_now + timedelta(days=1),
+            "requalification_due_at": next_now,
+        },
+        next_now,
+        event_id=f"test-append/{next_snapshot.snapshot_id}",
+    )
+    worker._schedule_requalifications(next_now)
+
+    watch = ledger.get_watch("watch")
+    assert watch.requalification_reason == "automatic_requalification_budget_exhausted"
+    assert watch.requalification_due_at == now + timedelta(hours=24)
+    with ledger._connection() as connection:
+        assert (
+            connection.execute(
+                "SELECT count(*) FROM requalification_budgets WHERE question_id = ?",
+                (question.question_id,),
+            ).fetchone()[0]
+            == 1
+        )
+        assert (
+            connection.execute(
+                "SELECT count(*) FROM jobs WHERE json_extract(payload, '$.automatic_requalification') = 1"
+            ).fetchone()[0]
+            == 1
+        )
+
+
+def test_automatic_requalification_uses_scheduled_snapshot_after_source_changes(
+    tmp_path,
+):
+    from forecast_anything.backtesting.store import BacktestStore
+    from forecast_anything.sources.catalog import SourceCatalog
+
+    ledger, runtime, question, now = _provisional_requalification_case(
+        tmp_path, appended_days=141
+    )
+    worker = Worker(runtime, JobQueue(ledger))
+    worker._schedule_requalifications(now)
+    snapshot_id = ledger.get_watch("watch").source_snapshot_ids[-1]
+    scheduled_snapshot = ledger.get_snapshot(snapshot_id)
+
+    source = SourceCatalog(ledger.path).get("sales")
+    csv = tmp_path / "sales.csv"
+    changed = csv.read_text().replace(",5\n", ",999\n", 1)
+    csv.write_text(changed)
+    assert ",999\n" in csv.read_text()
+    worker.run_due(now, limit=10)
+
+    references = ledger.list_question_references(question.question_id, revision=1)
+    backtest = next(
+        reference
+        for reference in references.references
+        if reference.target_type == "backtest"
+    )
+    plan = BacktestStore(ledger).get_plan(backtest.target_id)
+    assert plan.archive.source_revision == source.revision
+    assert plan.archive.observations == scheduled_snapshot.observations
+    assert plan.archive.captured_at == scheduled_snapshot.as_of
+
+
+def test_automatic_requalification_retries_after_cooldown_even_when_stale(tmp_path):
+    from forecast_anything.contracts import DomainError
+
+    ledger, runtime, question, now = _provisional_requalification_case(
+        tmp_path, appended_days=141
+    )
+    queue = JobQueue(ledger)
+    worker = Worker(runtime, queue)
+    worker._schedule_requalifications(now)
+    with ledger._connection() as connection:
+        job_ids = [
+            row[0]
+            for row in connection.execute(
+                "SELECT job_id FROM jobs WHERE json_extract(payload, '$.automatic_requalification') = 1"
+            ).fetchall()
+        ]
+    first = queue.get(job_ids[0])
+    claimed = queue.claim("failed-requalification", now, 60)
+    assert claimed is not None and claimed.job_id == first.job_id
+    queue.fail(
+        claimed,
+        now,
+        DomainError("backtest_time_budget_exceeded", {"seconds": 300}).model_dump(),
+        max_attempts=1,
+    )
+    worker._record_requalification_failure(claimed, now)
+    next_now = now + timedelta(hours=24)
+    ledger.clock = runtime.clock = lambda: next_now
+    ledger.advance_watch(
+        "watch", {"kind": "horizon_expired"}, next_now, event_id="expired"
+    )
+    assert ledger.get_watch("watch").quality == "stale"
+
+    worker._schedule_requalifications(next_now)
+
+    with ledger._connection() as connection:
+        job_ids = [
+            row[0]
+            for row in connection.execute(
+                "SELECT job_id FROM jobs WHERE json_extract(payload, '$.automatic_requalification') = 1"
+            ).fetchall()
+        ]
+    retries = [queue.get(job_id) for job_id in job_ids]
+    assert len(retries) == 2
+    assert retries[0].job_id != retries[1].job_id
+    assert retries[1].state == "pending"
+    assert ledger.get_watch("watch").requalification_due_at is None
+
+
+def test_pausing_one_question_leaves_shared_source_run_for_another(tmp_path):
+    from forecast_anything.api.service import Observatory
+    from forecast_anything.contracts import (
+        QuestionCreateRequest,
+        QuestionReferenceRequest,
+        QuestionTitlePatch,
+    )
+    from forecast_anything.operators import register_builtin_operators
+
+    ledger, _, runtime = setup(tmp_path)
+    runtime.operators = register_builtin_operators()
+    csv, _ = registered_watch(
+        tmp_path, ledger, templates=("forecast_change", "expected_deviation")
+    )
+    watches = ledger.list_watches()
+    questions = []
+    for index, watch in enumerate(watches):
+        question = ledger.create_question(
+            QuestionCreateRequest(
+                key=f"shared-source-{index}",
+                title=f"Sales outlook {index}",
+                meaning="Forecast daily sales",
+                source_ids=("sales",),
+                selection={"provider": "seasonal_naive", "horizon": 1},
+            )
+        )
+        ledger.link_question_reference(
+            question.question_id,
+            QuestionReferenceRequest(
+                key=f"watch-ref-{index}",
+                revision=1,
+                target_type="watch",
+                target_id=watch.watch_id,
+            ),
+        )
+        questions.append(question)
+    Observatory(ledger, runtime).patch_question(
+        questions[0].question_id, QuestionTitlePatch(status="paused")
+    )
+    assert ledger.get_watch(watches[0].watch_id).lifecycle == "paused"
+    assert ledger.get_watch(watches[1].watch_id).lifecycle != "paused"
+
+    csv.write_text(
+        "time,value\n2026-10-21,1\n2026-10-22,2\n2026-10-23,3\n2026-10-24,4\n"
+    )
+    Worker(runtime, JobQueue(ledger)).run_due(T)
+
+    first_refs = ledger.list_question_references(questions[0].question_id, revision=1)
+    second_refs = ledger.list_question_references(questions[1].question_id, revision=1)
+    assert not any(ref.target_type == "run" for ref in first_refs.references)
+    assert any(ref.target_type == "run" for ref in second_refs.references)
+
+
+def test_source_subscription_revocation_suppresses_queued_refresh(tmp_path):
+    from forecast_anything.api.service import Observatory
+
+    ledger, _, runtime = setup(tmp_path)
+    csv, registered = registered_watch(tmp_path, ledger)
+    before = ledger.get_watch("watch").source_snapshot_ids
+    service = Observatory(ledger, runtime)
+    subscription = service.set_source_subscription("sales", active=False)
+    assert not subscription.active
+    assert ledger.get_watch("watch").lifecycle == "unsupported"
+
+    queue = JobQueue(ledger)
+    job = queue.enqueue(
+        "refresh-after-revocation",
+        {
+            "kind": "source_refresh",
+            "source_id": "sales",
+            "revision": registered.revision,
+            "as_of": T.isoformat(),
+        },
+    )
+    Worker(runtime, queue).run_due(T)
+
+    assert queue.get(job.job_id).state == "completed"
+    assert queue.history(job.job_id)[0]["result"] == {
+        "suppressed": "source_subscription_revoked"
+    }
+    assert ledger.get_watch("watch").source_snapshot_ids == before
+    assert csv.exists()
 
 
 def test_unavailable_source_does_not_publish_empty_snapshot_or_loop(tmp_path):
@@ -764,7 +1646,14 @@ def test_runtime_completed_runs_produce_a_selective_update_summary(tmp_path):
 
 def test_successor_watch_preserves_pause_mute_and_priority_controls(tmp_path):
     ledger, _, runtime = setup(tmp_path)
-    csv, _ = registered_watch(tmp_path, ledger)
+    # The second watch keeps this shared source active while the first is paused.
+    # That lets the test verify inherited controls when another question still
+    # needs the source poll.
+    csv, _ = registered_watch(
+        tmp_path,
+        ledger,
+        templates=("forecast_change", "expected_deviation"),
+    )
     for event in (
         {"kind": "paused"},
         {"kind": "muted", "muted": True},

@@ -1,6 +1,6 @@
 """Submission intent, trusted source binding and worker capture orchestration."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from hashlib import sha256
 
 from ..contracts import (
@@ -8,6 +8,7 @@ from ..contracts import (
     Capabilities,
     ConfiguredRunJobRequest,
     DomainError,
+    QuestionReferenceRequest,
     RunJobRequest,
 )
 from ..sources.profiling import read_observations
@@ -164,6 +165,7 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
             raise DomainError("unsupported_backtest_source", {})
         watch_id = job.payload.get("watch_id")
         candidate_id = job.payload.get("candidate_id")
+        scheduled_snapshot = None
         if watch_id is not None:
             from ..discovery.policy import candidate_backtest_selection
 
@@ -188,9 +190,22 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
                 raise DomainError("unsupported_watch_backtest", {}) from error
             if request.selection != selection:
                 raise DomainError("watch_backtest_selection_mismatch", {})
+            if job.payload.get("automatic_requalification"):
+                snapshot_id = job.payload.get("snapshot_id")
+                if (
+                    not snapshot_id
+                    or not watch.source_snapshot_ids
+                    or watch.source_snapshot_ids[-1] != snapshot_id
+                ):
+                    return {"suppressed": "source_snapshot_superseded"}
+                scheduled_snapshot = runtime.ledger.get_snapshot(snapshot_id)
         contracts = _provider_contracts(runtime, request.selection)
-        observations = read_observations(
-            revision.spec, secret_resolver=secret_resolver, max_rows=100000
+        observations = (
+            scheduled_snapshot.observations
+            if scheduled_snapshot is not None
+            else read_observations(
+                revision.spec, secret_resolver=secret_resolver, max_rows=100000
+            )
         )
         plan = prepare_backtest(
             job.job_id,
@@ -198,12 +213,28 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
             observations,
             request.selection,
             request.settings,
-            now,
+            scheduled_snapshot.as_of if scheduled_snapshot is not None else now,
             provider_contracts=contracts,
             watch_id=watch_id,
             candidate_id=candidate_id,
+            origin_target_after=(
+                datetime.fromisoformat(job.payload["origin_target_after"])
+                if job.payload.get("automatic_requalification")
+                and job.payload.get("origin_target_after")
+                else None
+            ),
         )
-    report = execute_backtest(runtime, store, plan, lease_guard=job.guard)
+    report = execute_backtest(
+        runtime,
+        store,
+        plan,
+        lease_guard=job.guard,
+        max_elapsed_seconds=(
+            job.payload.get("execution_budget_seconds")
+            if job.payload.get("automatic_requalification")
+            else None
+        ),
+    )
     result = {"backtest_id": job.job_id, "report_id": report.report_id}
     if plan.watch_id is not None and plan.candidate_id is not None:
         ledger = runtime.ledger
@@ -229,12 +260,20 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
             )
             current = ledger.get_watch(watch.watch_id)
             decision = previous["event"]["decision"]
+            _publish_requalification_updates(
+                ledger, job, report, plan, decision, current
+            )
             return result | {
                 "watch_id": current.watch_id,
                 "watch_lifecycle": current.lifecycle,
                 "eligibility": decision["action"],
                 "reason_codes": decision["reason_codes"],
             }
+        if job.payload.get("automatic_requalification") and (
+            not watch.source_snapshot_ids
+            or job.payload.get("snapshot_id") != watch.source_snapshot_ids[-1]
+        ):
+            return result | {"suppressed": "source_snapshot_superseded"}
         candidate = ledger.get_candidate(plan.candidate_id)
         if watch.candidate_id != candidate.candidate_id or watch.candidate_invalidated:
             raise DomainError("watch_candidate_invalidated", {})
@@ -261,6 +300,12 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
                 "kind": "evidence_qualified",
                 "decision": decision,
                 "next_due_at": next_due_at,
+                "snapshot_id": plan.actuals_snapshot_id,
+                **(
+                    {"requalification_reason": decision.reason_codes[0]}
+                    if decision.action != "activate" and decision.reason_codes
+                    else {}
+                ),
             },
             now,
             event_id=event_id,
@@ -274,4 +319,64 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
                 "reason_codes": list(decision.reason_codes),
             }
         )
+        _publish_requalification_updates(ledger, job, report, plan, decision, updated)
     return result
+
+
+def _publish_requalification_updates(ledger, job, report, plan, decision, watch):
+    links = tuple(job.payload.get("question_links", ()))
+    if not links:
+        return
+    reason_codes = (
+        decision.reason_codes
+        if hasattr(decision, "reason_codes")
+        else tuple(decision.get("reason_codes", ()))
+    )
+    action = decision.action if hasattr(decision, "action") else decision["action"]
+    for link in links:
+        question_id, revision = link["question_id"], link["revision"]
+        ledger.link_question_reference(
+            question_id,
+            QuestionReferenceRequest(
+                key=f"worker-backtest-{report.report_id}",
+                revision=revision,
+                target_type="backtest",
+                target_id=report.backtest_id,
+                note="Automatic requalification evidence",
+            ),
+            lease_guard=job.guard,
+        )
+        kind = (
+            "requalification_completed"
+            if action == "activate"
+            else "requalification_result"
+        )
+        summary = (
+            "La previsione è stata riqualificata su almeno 30 nuove origini finali indipendenti."
+            if action == "activate"
+            else "La previsione resta provvisoria dopo la riqualifica. Motivi: "
+            + (", ".join(reason_codes) or "evidenza insufficiente")
+            + "."
+        )
+        ledger.record_inbox_event(
+            question_id=question_id,
+            revision=revision,
+            event_kind=kind,
+            transition_id=report.report_id,
+            decision_id=report.report_id,
+            watch_id=watch.watch_id,
+            summary=summary,
+            payload={
+                "action": action,
+                "reason_codes": list(reason_codes),
+                "quality": watch.quality,
+                "evidence_applicable": watch.evidence_applicable,
+                "backtest_id": report.backtest_id,
+                "origin_target_after": (
+                    plan.origin_target_after.isoformat()
+                    if plan.origin_target_after is not None
+                    else None
+                ),
+            },
+            lease_guard=job.guard,
+        )
