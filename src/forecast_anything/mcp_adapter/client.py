@@ -17,12 +17,12 @@ _TIMEOUT_SECONDS = 15.0
 _SEGMENT = r"(?!\.{1,2}(?:/|$))(?:[A-Za-z0-9_.~-]|%[0-9A-Fa-f]{2})+"
 _ROUTES = {
     "GET": re.compile(
-        rf"/v1/(?:capabilities|sources|events|"
+        rf"/v1/(?:capabilities|workspace|sources|events|"
         rf"(?:jobs|candidates|runs|graphs|evaluations)/{_SEGMENT}|"
         rf"snapshots/{_SEGMENT}(?:/(?:summary|series))?|"
         rf"questions(?:/{_SEGMENT}(?:/(?:references|presentation|revisions(?:/{_SEGMENT})?))?)?|"
         rf"operations(?:/{_SEGMENT})?|"
-        rf"backtests/{_SEGMENT}(?:/(?:origins|presentation))?|"
+        rf"(?:backtests|reports)/{_SEGMENT}(?:/(?:origins|presentation))?|"
         rf"watches(?:/{_SEGMENT}(?:/(?:history|changes))?)?|"
         rf"sources/{_SEGMENT}/profile|runs/{_SEGMENT}/(?:evaluations|presentation))"
     ),

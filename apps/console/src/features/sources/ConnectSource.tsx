@@ -4,7 +4,7 @@ import { SourceMappingForm } from "./SourceMappingForm";
 import { ApiError } from "../../api/client";
 import type { SourceProfile, SourceRegistration, SourceSpec } from "../../api/schema.generated";
 
-type SourceClient = Pick<ApiClient, "inspectSource" | "previewSource" | "saveSource">;
+type SourceClient = Pick<ApiClient, "inspectSource" | "previewSource" | "saveSource"> & Partial<Pick<ApiClient, "getSourceConfiguration">>;
 type Props = { client: SourceClient; sourceId: string; onActivated?: (registration: SourceRegistration) => void; onDraftChange?: () => void };
 
 const clarificationLabels: Record<string, string> = {
@@ -59,6 +59,7 @@ export function ConnectSource({ client, sourceId, onActivated, onDraftChange }: 
   const [error, setError] = useState<string>();
   const [message, setMessage] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [hasSecret, setHasSecret] = useState(false);
   const draftVersion = useRef(0);
   const workspaceVersion = useRef(0);
   const requestVersion = useRef(0);
@@ -72,10 +73,16 @@ export function ConnectSource({ client, sourceId, onActivated, onDraftChange }: 
     setMessage(undefined);
     setError(undefined);
     setBusy(false);
+    setLocation(""); setKind("csv"); setRefreshSeconds("3600"); setMappingText(JSON.stringify(initialMapping, null, 2)); setHasSecret(false);
+    if (client.getSourceConfiguration) void client.getSourceConfiguration(sourceId).then(config => {
+      if (!active || version !== draftVersion.current) return;
+      setKind(config.kind); setLocation(config.location); setRefreshSeconds(String(config.refresh_seconds));
+      setMappingText(JSON.stringify(config.mapping, null, 2)); setHasSecret(config.has_secret_ref);
+    }).catch(() => undefined);
     client.inspectSource(sourceId).then((loaded) => {
       if (!active || version !== draftVersion.current) return;
       setProfile(loaded);
-      setMappingText(JSON.stringify(loaded.proposed_mapping, null, 2));
+      if (!client.getSourceConfiguration) setMappingText(JSON.stringify(loaded.proposed_mapping, null, 2));
     }).catch((reason: unknown) => {
       const code = errorCode(reason);
       if (!active || (version !== draftVersion.current && code !== "unauthorized") || ["source_not_found", "not_found"].includes(code)) return;
@@ -111,7 +118,7 @@ export function ConnectSource({ client, sourceId, onActivated, onDraftChange }: 
 
   function sourceSpec(): SourceSpec | undefined {
     const refresh = Number(refreshSeconds);
-    if (!location.trim() || !Number.isInteger(refresh) || refresh <= 0 || !parsedMapping) return undefined;
+    if (hasSecret || !location.trim() || !Number.isInteger(refresh) || refresh <= 0 || !parsedMapping) return undefined;
     return {
       source_id: sourceId,
       kind,
@@ -176,6 +183,7 @@ export function ConnectSource({ client, sourceId, onActivated, onDraftChange }: 
     <section aria-labelledby="connect-source-title">
       <h2 id="connect-source-title">Collega una fonte</h2>
       <p>Controlla l’interpretazione dei dati prima di attivare gli aggiornamenti.</p>
+      {hasSecret && <p>Questa fonte usa una credenziale configurata dall’operatore. La modifica da questa vista è disabilitata per preservarla.</p>}
       <form onSubmit={(event) => { event.preventDefault(); void preview(); }}>
         <label>
           Tipo di fonte

@@ -1,4 +1,10 @@
 import type {
+  BacktestPresentation,
+  ForecastPresentation,
+  OriginPage,
+  QuestionPresentation,
+  QuestionPage,
+  QuestionView,
   EventRecord,
   Candidate,
   EvaluationRecord,
@@ -12,6 +18,7 @@ import type {
   SourceRegistration,
   SourceSpec,
   SourceView,
+  SourceConfiguration,
   WatchView,
 } from "./schema.generated";
 
@@ -29,7 +36,7 @@ export class ApiError extends Error {
 export class ApiClient {
   private readonly origin: string;
 
-  constructor(baseUrl: string, private readonly token: string) {
+  constructor(baseUrl: string, private readonly token: string = "") {
     const url = new URL(baseUrl);
     if (url.search || url.hash || url.username || url.password) {
       throw new Error("The API address must not contain credentials, a query, or a fragment.");
@@ -37,8 +44,32 @@ export class ApiClient {
     this.origin = url.toString().replace(/\/+$/, "");
   }
 
+  async createBrowserSession(): Promise<void> {
+    await this.request("POST", "/v1/browser-session");
+  }
+
+  async revokeBrowserSession(): Promise<void> {
+    await this.request("POST", "/v1/browser-session/revoke");
+  }
+
+  getHealth(): Promise<{ status: string; worker: string; worker_model: string | null }> {
+    return this.request("GET", "/health");
+  }
+
+  getWorkspace(): Promise<{ workspace_id: string }> {
+    return this.request("GET", "/v1/workspace");
+  }
+
+  getCapabilities(): Promise<{ required_provider?: string | null; model_status?: { status?: string } | null }> {
+    return this.request("GET", "/v1/capabilities");
+  }
+
   inspectSource(sourceId: string): Promise<SourceProfile> {
     return this.request("GET", `/v1/sources/${encodeURIComponent(sourceId)}/profile`);
+  }
+
+  getSourceConfiguration(sourceId: string): Promise<SourceConfiguration> {
+    return this.request("GET", `/v1/sources/${encodeURIComponent(sourceId)}/configuration`);
   }
 
   previewSource(spec: SourceSpec): Promise<SourceProfile> {
@@ -59,6 +90,14 @@ export class ApiClient {
 
   getSources(): Promise<SourceView[]> {
     return this.request("GET", "/v1/sources");
+  }
+
+  getQuestions(offset = 0): Promise<QuestionPage> {
+    return this.request("GET", `/v1/questions?offset=${offset}&limit=25`);
+  }
+
+  renameQuestion(questionId: string, title: string): Promise<QuestionView> {
+    return this.request("PATCH", `/v1/questions/${encodeURIComponent(questionId)}`, { title });
   }
 
   async getRecentRuns(limit = 4): Promise<RunRecord[]> {
@@ -84,6 +123,30 @@ export class ApiClient {
 
   getEvents(after = 0, limit = 100): Promise<EventRecord[]> {
     return this.request("GET", `/v1/events?after=${Math.max(0, after)}&limit=${Math.max(1, Math.min(1000, limit))}`);
+  }
+
+  getForecastPresentation(runId: string): Promise<ForecastPresentation> {
+    return this.request("GET", `/v1/runs/${encodeURIComponent(runId)}/presentation`);
+  }
+
+  getQuestionPresentation(questionId: string, offset = 0): Promise<QuestionPresentation> {
+    return this.request("GET", `/v1/questions/${encodeURIComponent(questionId)}/presentation?offset=${offset}&limit=3`);
+  }
+
+  getReportPresentation(reportId: string): Promise<BacktestPresentation> {
+    return this.request("GET", `/v1/reports/${encodeURIComponent(reportId)}/presentation`);
+  }
+
+  getReportOrigins(reportId: string, offset = 0): Promise<OriginPage> {
+    return this.request("GET", `/v1/reports/${encodeURIComponent(reportId)}/origins?offset=${offset}&limit=50`);
+  }
+
+  getBacktestPresentation(backtestId: string): Promise<BacktestPresentation> {
+    return this.request("GET", `/v1/backtests/${encodeURIComponent(backtestId)}/presentation`);
+  }
+
+  getBacktestOrigins(backtestId: string, offset = 0): Promise<OriginPage> {
+    return this.request("GET", `/v1/backtests/${encodeURIComponent(backtestId)}/origins?offset=${offset}&limit=50`);
   }
 
   getRun(runId: string): Promise<RunRecord> {
@@ -144,7 +207,8 @@ export class ApiClient {
 
   private async readEventStream(cursor: number, onEvent: (event: EventRecord) => void, signal: AbortSignal): Promise<number> {
     const response = await fetch(`${this.origin}/v1/events/stream?after=${cursor}&follow=true`, {
-      headers: { Authorization: `Bearer ${this.token}`, Accept: "text/event-stream" },
+      ...(!this.token ? { credentials: "include" as const } : {}),
+      headers: { ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}), Accept: "text/event-stream" },
       signal,
     });
     if (!response.ok) throw await toApiError(response);
@@ -185,8 +249,9 @@ export class ApiClient {
   private async request<T>(method: "GET" | "POST" | "PATCH", path: string, body?: unknown): Promise<T> {
     const response = await fetch(`${this.origin}${path}`, {
       method,
+      ...(!this.token || path === "/v1/browser-session" ? { credentials: "include" as const } : {}),
       headers: {
-        Authorization: `Bearer ${this.token}`,
+        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),

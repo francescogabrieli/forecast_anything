@@ -82,6 +82,8 @@ export function ObservatoryBoard({
   const [scenarioLabel, setScenarioLabel] = useState("Scenario modificato");
   const [scenarioOverridesText, setScenarioOverridesText] = useState("{}");
   const [scenarioBusy, setScenarioBusy] = useState(false);
+  const [scenarioDelta, setScenarioDelta] = useState("0");
+  const [scenarioReview, setScenarioReview] = useState<string>();
   const watchesRef = useRef<Watch[]>([]);
   const eventsRef = useRef<EventRecord[]>([]);
   const runRef = useRef<RunRecord | undefined>(undefined);
@@ -160,6 +162,7 @@ export function ObservatoryBoard({
           }),
         );
         setScenarioOverridesText(JSON.stringify(overrides, null, 2));
+        setScenarioReview(undefined); setScenarioDelta("0");
         setWatch(
           watchesRef.current.find((item) => item.graph_id === loaded.graph_id),
         );
@@ -221,7 +224,7 @@ export function ObservatoryBoard({
               if (!active) return;
               setEvents((current) => mergeEvents(current, [event]));
               if (event.kind === "run_completed") {
-                void openRun(event.run_id);
+                setStatus(`Nuovo risultato disponibile: ${event.run_id}. Aprilo dalla cronologia.`);
                 void refreshWatches().catch((reason: unknown) => {
                   if (active)
                     setError(
@@ -283,6 +286,10 @@ export function ObservatoryBoard({
       );
       return;
     }
+    if (scenarioReview !== scenarioOverridesText) {
+      setScenarioReview(scenarioOverridesText);
+      return;
+    }
     setScenarioBusy(true);
     try {
       const scenario = await client.createScenario({
@@ -333,6 +340,23 @@ export function ObservatoryBoard({
     }
   }
 
+  const scenarioChanges: { source: string; index: number; before: string; after: string }[] = [];
+  if (scenarioReview && run) {
+    try {
+      const proposed = JSON.parse(scenarioReview) as Record<string, Snapshot>;
+      const bindings = sourceBindings(events, run.run_id);
+      for (const [source, snapshot] of Object.entries(proposed)) {
+        const before = snapshots.find(item => item.snapshot_id === bindings[source])?.observations ?? [];
+        const after = Array.isArray(snapshot?.observations) ? snapshot.observations : [];
+        for (let index = 0; index < Math.max(before.length, after.length); index++) {
+          const left = JSON.stringify(before[index] ?? null);
+          const right = JSON.stringify(after[index] ?? null);
+          if (left !== right) scenarioChanges.push({ source, index, before: left, after: right });
+        }
+      }
+    } catch { /* The core validates the complete proposal on submission. */ }
+  }
+
   return (
     <div className="observatory-board">
       {error && (
@@ -378,7 +402,7 @@ export function ObservatoryBoard({
           <div>
             <h2 id="scenario-builder-title">Prova uno scenario</h2>
             <p className="muted">
-              Modifica lo snapshot JSON; l’originale resta immutato. Le
+              Proponi una variazione; l’originale resta immutato. Le
               assunzioni dello scenario restano etichettate come ipotesi.
             </p>
           </div>
@@ -390,20 +414,28 @@ export function ObservatoryBoard({
                 onChange={(event) => setScenarioLabel(event.target.value)}
               />
             </label>
-            <label>
-              Snapshot ipotetici per fonte
-              <textarea
-                rows={10}
-                spellCheck={false}
-                value={scenarioOverridesText}
-                onChange={(event) => setScenarioOverridesText(event.target.value)}
-              />
+            <label>Variazione da applicare ai valori osservati
+              <input type="number" value={scenarioDelta} onChange={event => setScenarioDelta(event.target.value)} />
             </label>
+            <button type="button" onClick={() => {
+              const delta = Number(scenarioDelta);
+              if (!Number.isFinite(delta)) return;
+              const bindings = sourceBindings(eventsRef.current, run.run_id);
+              const overrides = Object.fromEntries(Object.entries(bindings).flatMap(([sourceId, snapshotId]) => {
+                const snapshot = snapshots.find(item => item.snapshot_id === snapshotId);
+                return snapshot ? [[sourceId, { ...snapshot, observations: snapshot.observations.map(item => ({ ...item, value: item.value == null ? null : item.value + delta })) }]] : [];
+              }));
+              setScenarioOverridesText(JSON.stringify(overrides, null, 2)); setScenarioReview(undefined);
+            }}>Applica alla proposta</button>
+            <details><summary>Opzioni avanzate: JSON degli snapshot</summary><label>Snapshot ipotetici per fonte
+              <textarea rows={10} spellCheck={false} value={scenarioOverridesText} onChange={(event) => { setScenarioOverridesText(event.target.value); setScenarioReview(undefined); }} />
+            </label></details>
+            {scenarioReview && <section aria-label="Modifiche proposte"><h3>Modifiche proposte</h3><p>{scenarioChanges.length} osservazioni modificate. Controlla la proposta prima dell’invio.</p>{scenarioChanges.length > 0 && <div className="table-scroll"><table><thead><tr><th>Fonte e riga</th><th>Prima</th><th>Dopo</th></tr></thead><tbody>{scenarioChanges.slice(0, 100).map(change => <tr key={`${change.source}-${change.index}`}><td>{change.source} · {change.index + 1}</td><td><code>{change.before}</code></td><td><code>{change.after}</code></td></tr>)}</tbody></table></div>}{scenarioChanges.length > 100 && <p>Mostrate 100 modifiche; la proposta completa è disponibile sotto.</p>}<details><summary>Proposta completa</summary><pre>{scenarioReview}</pre></details></section>}
             <button
               type="submit"
               disabled={scenarioBusy || scenarioOverridesText === "{}"}
             >
-              {scenarioBusy ? "Calcolo scenario…" : "Crea scenario"}
+              {scenarioBusy ? "Calcolo scenario…" : scenarioReview === scenarioOverridesText ? "Conferma e crea scenario" : "Mostra modifiche proposte"}
             </button>
           </form>
         </section>

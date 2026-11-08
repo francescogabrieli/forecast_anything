@@ -46,6 +46,7 @@ class ForecastPresentation(Contract):
     visual_destination: Literal["time_series"] = "time_series"
     run_id: Identifier
     primary_node_id: Identifier | None = None
+    baseline_node_id: Identifier | None = None
     graph_id: Identifier
     graph_version: Annotated[int, Field(ge=1, strict=True)]
     as_of: AwareDatetime
@@ -279,7 +280,16 @@ def present_run(run: RunRecord) -> ForecastPresentation:
 
     selected = set()
     primary_id = run.primary_node_id or ("model" if "model" in run.results else None)
-    baseline = run.results.get("baseline") if primary_id != "baseline" else None
+    baseline_id = (
+        "baseline"
+        if run.graph_id.startswith("configured-")
+        and primary_id == "model"
+        and primary_id in run.results
+        and "baseline" in run.results
+        and run.actual_provider.get("baseline") == "seasonal_naive"
+        else None
+    )
+    baseline = run.results.get(baseline_id) if baseline_id else None
     if primary_id in run.results and baseline is not None:
         baseline_series = {
             (s, baseline.units[i]): i for i, s in enumerate(baseline.series_ids)
@@ -318,6 +328,7 @@ def present_run(run: RunRecord) -> ForecastPresentation:
     return ForecastPresentation(
         run_id=run.run_id,
         primary_node_id=primary_id,
+        baseline_node_id=baseline_id,
         graph_id=run.graph_id,
         graph_version=run.graph_version,
         as_of=run.as_of,

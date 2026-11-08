@@ -19,6 +19,7 @@ from forecast_anything.mcp_adapter.config import McpConfig
 
 ROOT = Path(__file__).resolve().parents[2]
 NAMES = {
+    "get_browser_link",
     "create_operation",
     "update_operation",
     "list_operations",
@@ -1586,3 +1587,51 @@ def test_guided_confirmation_lost_response_recovers_grant_only_in_original_sessi
             )
 
     asyncio.run(check())
+
+
+def test_browser_link_is_bound_to_stored_workspace_and_contains_no_credentials(
+    monkeypatch,
+):
+    seen = []
+
+    def respond(request):
+        seen.append(request.url.path)
+        if request.url.path == "/v1/workspace":
+            return httpx.Response(200, json={"workspace_id": "a" * 32})
+        if request.url.path == "/v1/runs/run-1/presentation":
+            return httpx.Response(200, json={"run_id": "run-1"})
+        return httpx.Response(404, json={})
+
+    async def check():
+        async with connected(monkeypatch, respond) as client:
+            result = payload(
+                await client.call_tool(
+                    "get_browser_link",
+                    {
+                        "kind": "run",
+                        "resource_id": "run-1",
+                        "browser_url": "http://127.0.0.1:4173",
+                    },
+                )
+            )
+            assert result["ok"]
+            assert (
+                result["data"]["url"]
+                == f"http://127.0.0.1:4173/#/w/{'a' * 32}/run/run-1"
+            )
+            assert "private-token" not in json.dumps(result)
+            bad = payload(
+                await client.call_tool(
+                    "get_browser_link",
+                    {
+                        "kind": "run",
+                        "resource_id": "run-1",
+                        "browser_url": "https://evil.example/?token=secret",
+                    },
+                )
+            )
+            assert bad["code"] == "invalid_browser_url"
+            assert "secret" not in json.dumps(bad)
+
+    asyncio.run(check())
+    assert seen == ["/v1/workspace", "/v1/runs/run-1/presentation"]

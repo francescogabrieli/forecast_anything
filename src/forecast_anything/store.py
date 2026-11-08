@@ -46,6 +46,7 @@ MIGRATIONS = (
     "009_worker_liveness.sql",
     "010_worker_runtime.sql",
     "011_persistent_questions.sql",
+    "012_workspace_identity.sql",
 )
 
 
@@ -77,6 +78,13 @@ class Ledger(QuestionStorageMixin, AgentStorageMixin):
             yield connection
         finally:
             connection.close()
+
+    def workspace_id(self) -> str:
+        """Return this ledger's stable, non-secret identity."""
+        with self._connection() as connection:
+            return connection.execute(
+                "SELECT workspace_id FROM workspace_identity WHERE singleton = 1"
+            ).fetchone()[0]
 
     def update_worker_heartbeat(
         self, worker_id: str, now: datetime, *, model_status: str | None = None

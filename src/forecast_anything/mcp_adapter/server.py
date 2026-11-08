@@ -12,7 +12,8 @@ import json
 import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Literal, TypeVar
+from urllib.parse import quote, urlsplit
 from uuid import uuid4
 
 from mcp import types
@@ -74,6 +75,7 @@ from .arguments import (
     BacktestPresentationArguments,
     BacktestReadArguments,
     BacktestSummaryArguments,
+    BrowserLinkArguments,
     CandidateArguments,
     ConfiguredForecastArguments,
     ConfirmCsvArguments,
@@ -159,6 +161,13 @@ class Envelope(Contract, Generic[T]):
     errors: list[InputErrors] | None = None
 
 
+class BrowserLink(Contract):
+    kind: Literal["run", "question", "report"]
+    resource_id: str
+    workspace_id: str
+    url: str
+
+
 class DiagnosticPermissions(Contract):
     csv_roots: int
     readable_csv_roots: int
@@ -220,6 +229,12 @@ class _Tool:
 
 
 _TOOLS = (
+    _Tool(
+        "get_browser_link",
+        BrowserLinkArguments,
+        BrowserLink,
+        "Create a credential-free local browser link for an existing question, run or backtest report in this workspace.",
+    ),
     _Tool(
         "get_diagnostics",
         NoArguments,
@@ -610,6 +625,55 @@ async def _delegate(
     adapter_session: str,
 ):
     name = tool.name
+    if name == "get_browser_link":
+        try:
+            base = urlsplit(arguments.browser_url)
+            if (
+                base.scheme not in {"http", "https"}
+                or base.hostname not in {"localhost", "127.0.0.1", "::1"}
+                or base.username is not None
+                or base.password is not None
+                or base.query
+                or base.fragment
+                or base.path not in {"", "/"}
+                or (base.port is not None and not 1 <= base.port <= 65535)
+            ):
+                raise ValueError
+        except (ValueError, TypeError):
+            raise McpConfigError("invalid_browser_url") from None
+        resource_id = arguments.resource_id
+        if resource_id in {".", ".."} or "/" in resource_id or "\\" in resource_id:
+            raise McpConfigError("invalid_request")
+        workspace = await client.request("GET", "/v1/workspace")
+        workspace_id = workspace.get("workspace_id")
+        if (
+            not isinstance(workspace_id, str)
+            or len(workspace_id) != 32
+            or any(c not in "0123456789abcdef" for c in workspace_id)
+        ):
+            raise CoreRequestError("invalid_response")
+        resource = {"run": "runs", "question": "questions", "report": "reports"}[
+            arguments.kind
+        ]
+        item = await client.request(
+            "GET", f"/v1/{resource}/{encode_identifier(resource_id)}/presentation"
+        )
+        actual = (
+            item.get("run_id")
+            if arguments.kind == "run"
+            else item.get("question", {}).get("question_id")
+            if arguments.kind == "question"
+            else item.get("summary", {}).get("report_id")
+        )
+        if actual != resource_id:
+            raise CoreRequestError("invalid_response")
+        root = arguments.browser_url.rstrip("/")
+        return BrowserLink(
+            kind=arguments.kind,
+            resource_id=resource_id,
+            workspace_id=workspace_id,
+            url=f"{root}/#/w/{workspace_id}/{arguments.kind}/{quote(resource_id, safe='')}",
+        )
     if name == "get_diagnostics":
         return await asyncio.to_thread(
             diagnose,

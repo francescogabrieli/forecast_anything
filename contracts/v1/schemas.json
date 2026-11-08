@@ -3542,6 +3542,19 @@
         "title": "As Of",
         "type": "string"
       },
+      "baseline_node_id": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Baseline Node Id"
+      },
       "graph_id": {
         "minLength": 1,
         "title": "Graph Id",
@@ -8154,6 +8167,56 @@
     "title": "SnapshotSummary",
     "type": "object"
   },
+  "SourceConfiguration": {
+    "$defs": {
+      "JsonValue": {}
+    },
+    "additionalProperties": false,
+    "properties": {
+      "has_secret_ref": {
+        "title": "Has Secret Ref",
+        "type": "boolean"
+      },
+      "kind": {
+        "enum": [
+          "csv",
+          "http_json"
+        ],
+        "title": "Kind",
+        "type": "string"
+      },
+      "location": {
+        "title": "Location",
+        "type": "string"
+      },
+      "mapping": {
+        "additionalProperties": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "title": "Mapping",
+        "type": "object"
+      },
+      "refresh_seconds": {
+        "title": "Refresh Seconds",
+        "type": "integer"
+      },
+      "source_id": {
+        "minLength": 1,
+        "title": "Source Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "source_id",
+      "kind",
+      "location",
+      "mapping",
+      "refresh_seconds",
+      "has_secret_ref"
+    ],
+    "title": "SourceConfiguration",
+    "type": "object"
+  },
   "SourceField": {
     "additionalProperties": false,
     "properties": {
@@ -11340,6 +11403,21 @@
       "operational"
     ],
     "title": "WatchView",
+    "type": "object"
+  },
+  "WorkspaceIdentity": {
+    "additionalProperties": false,
+    "properties": {
+      "workspace_id": {
+        "pattern": "^[0-9a-f]{32}$",
+        "title": "Workspace Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "workspace_id"
+    ],
+    "title": "WorkspaceIdentity",
     "type": "object"
   },
   "_ErrorPayload": {

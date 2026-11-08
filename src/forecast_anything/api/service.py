@@ -915,6 +915,9 @@ class Observatory:
         )
         return self.job(job.job_id)
 
+    def report_by_id(self, report_id):
+        return BacktestStore(self.ledger).get_report_by_id(report_id)
+
     def backtest(self, backtest_id):
         return BacktestStore(self.ledger).get_report(backtest_id)
 

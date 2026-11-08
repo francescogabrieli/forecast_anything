@@ -25,20 +25,33 @@ def test_long_forecast_keeps_primary_and_aligned_baseline():
     run = RunRecord(
         primary_node_id="model",
         run_id="run",
-        graph_id="graph",
+        graph_id="configured-example",
         graph_version=1,
         as_of=now,
         snapshot_ids=(),
-        requested_provider={"baseline": "baseline", "model": "model"},
-        actual_provider={"baseline": "baseline", "model": "model"},
+        requested_provider={"baseline": "seasonal_naive", "model": "model"},
+        actual_provider={"baseline": "seasonal_naive", "model": "model"},
         state="succeeded",
-        results={"baseline": forecast("baseline"), "model": forecast("model")},
+        results={"baseline": forecast("seasonal_naive"), "model": forecast("model")},
         evidence_ids=(),
         scenario_id=None,
         parent_run_id=None,
     )
     presentation = present_run(run)
     assert presentation.primary_node_id == "model"
+    assert presentation.baseline_node_id == "baseline"
+    unrelated = run.model_copy(update={"primary_node_id": "other"})
+    assert present_run(unrelated).baseline_node_id is None
+    without_baseline = run.model_copy(
+        update={"results": {"model": run.results["model"]}}
+    )
+    assert present_run(without_baseline).baseline_node_id is None
+    arbitrary_graph = run.model_copy(update={"graph_id": "user-defined"})
+    assert present_run(arbitrary_graph).baseline_node_id is None
+    missing_primary = run.model_copy(
+        update={"results": {"baseline": run.results["baseline"]}}
+    )
+    assert present_run(missing_primary).baseline_node_id is None
     assert len(presentation.points) == 64
     assert presentation.total_point_count == 160
     assert presentation.truncated

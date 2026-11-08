@@ -119,6 +119,7 @@ describe("ConnectSource", () => {
     fireEvent.change(screen.getByLabelText("Percorso o URL"), { target: { value: "/data/sales.csv" } });
     fireEvent.click(screen.getByRole("button", { name: "Analizza fonte" }));
     rerender(<ConnectSource client={currentClient} sourceId="current" />);
+    fireEvent.change(screen.getByLabelText("Percorso o URL"), { target: { value: "/data/current.csv" } });
     fireEvent.click(screen.getByRole("button", { name: "Analizza fonte" }));
     await act(async () => rejectOld(new ApiError(401, "unauthorized", {})));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -200,4 +201,17 @@ describe("ConnectSource", () => {
     expect(activated).not.toHaveBeenCalled();
     expect(screen.queryByText(/fonte attiva/i)).not.toBeInTheDocument();
   });
+});
+
+it("loads the registered configuration and preserves a source credential", async () => {
+  const client = {
+    inspectSource: vi.fn().mockResolvedValue(profile()), previewSource: vi.fn(), saveSource: vi.fn(),
+    getSourceConfiguration: vi.fn().mockResolvedValue({ source_id: "sales", kind: "csv", location: "/data/actual.csv", mapping: completeMapping, refresh_seconds: 90, has_secret_ref: true }),
+  };
+  render(<ConnectSource client={client} sourceId="sales" />);
+  await waitFor(() => expect(screen.getByLabelText("Percorso o URL")).toHaveValue("/data/actual.csv"));
+  expect(screen.getByLabelText("Aggiorna ogni (secondi)")).toHaveValue(90);
+  expect(screen.getByLabelText("Unità — campo")).toHaveValue("count");
+  expect(screen.getByRole("button", { name: "Attiva fonte" })).toBeDisabled();
+  expect(screen.getByText(/credenziale configurata/)).toBeVisible();
 });

@@ -32,6 +32,26 @@ def test_question_revisions_and_references_survive_mcp_reconnect(tmp_path):
             )
             question = await call(client, "create_question", **create)
             assert question["current_revision"] == 1
+            for kind, resource_id in (
+                ("run", run["run_id"]),
+                ("question", question["question_id"]),
+            ):
+                link = await call(
+                    client,
+                    "get_browser_link",
+                    kind=kind,
+                    resource_id=resource_id,
+                    browser_url="http://127.0.0.1:4173",
+                )
+                assert (
+                    link["url"]
+                    == f"http://127.0.0.1:4173/#/w/{link['workspace_id']}/{kind}/{resource_id}"
+                )
+                assert (
+                    link["workspace_id"]
+                    == workspace.get("/v1/workspace")["workspace_id"]
+                )
+                assert workspace.token not in str(link)
             reference = await call(
                 client,
                 "link_question_reference",

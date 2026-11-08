@@ -140,6 +140,10 @@ class SnapshotSeriesPage(Contract):
     next_offset: Annotated[int, Field(ge=0, strict=True)] | None
 
 
+class WorkspaceIdentity(Contract):
+    workspace_id: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{32}$")]
+
+
 class SourceSpec(Contract):
     """Registered source configuration. Mapping is explicit; see profiling module.
 
@@ -578,6 +582,15 @@ class SourceView(Contract):
     revision: Identifier
     kind: Literal["csv", "http_json"]
     refresh_seconds: int
+
+
+class SourceConfiguration(Contract):
+    source_id: Identifier
+    kind: Literal["csv", "http_json"]
+    location: str = Field(repr=False)
+    mapping: dict[str, JsonValue]
+    refresh_seconds: int
+    has_secret_ref: bool
 
 
 class SourceRegistration(SourceView):
