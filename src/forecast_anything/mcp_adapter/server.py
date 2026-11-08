@@ -1204,6 +1204,7 @@ def create_server(config: McpConfig) -> MCPServer:
         on_list_resources=list_resources,
         on_read_resource=read_resource,
     )
+    server.extensions["io.modelcontextprotocol/ui"] = {}
     server.add_request_handler("tools/call", types.CallToolRequestParams, call_tool)
     return server
 

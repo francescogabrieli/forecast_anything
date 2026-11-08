@@ -304,7 +304,9 @@ class LocalWorkspace:
         return response.json()
 
     @asynccontextmanager
-    async def client(self, *, source_ids=(), token=None, extensions=None):
+    async def client(
+        self, *, source_ids=(), token=None, extensions=None, mode="legacy"
+    ):
         from mcp import Client
         from mcp.client.stdio import StdioServerParameters, stdio_client
 
@@ -336,7 +338,7 @@ class LocalWorkspace:
                 # Force initialize negotiation; the direct/in-memory SDK path is never used.
                 async with Client(
                     stdio_client(parameters, errlog=log),
-                    mode="legacy",
+                    mode=mode,
                     extensions=extensions,
                     read_timeout_seconds=8,
                 ) as client:

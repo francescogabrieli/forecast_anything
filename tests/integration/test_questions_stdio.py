@@ -255,8 +255,12 @@ def test_context_view_resource_and_text_fallback_over_stdio(tmp_path):
             ],
         ):
             async with workspace.client(
-                source_ids=["sales"], extensions=extensions
+                source_ids=["sales"], extensions=extensions, mode="auto"
             ) as reconnected:
+                assert (
+                    "io.modelcontextprotocol/ui"
+                    in reconnected.server_capabilities.extensions
+                )
                 result = await reconnected.call_tool(
                     "open_context_view",
                     {
