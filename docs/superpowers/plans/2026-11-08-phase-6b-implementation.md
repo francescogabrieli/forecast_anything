@@ -149,11 +149,12 @@
 - [x] **Step 2: Run the closed-assistant synthetic-source to local webhook recovery flow.**
 - [x] **Step 3: Attempt real local Timestral inference and record either successful provenance or the explicit provider failure.**
 - [x] **Step 4: Run the required Python/console suites and inspect generated contracts.**
-- [ ] **Step 5: Review the complete diff from the approved 6A SHA and prepare the final checkpoint report without pushing.**
+- [x] **Step 5: Review the complete diff from the approved 6A SHA and prepare the final checkpoint report without pushing.**
 
 ## Acceptance notes for review
 
-- The 300-second requalification budget is enforced before and after each origin. An individual provider call cannot be interrupted by this Python deadline check, so one slow or hung call can exceed the nominal job budget. The accepted 6A contract calls this a hard timeout; this remains a contract gap for review.
-- The closed-assistant acceptance used a separate MCP stdio process, worker process, synthetic CSV, and local HTTP webhook receiver. The same question ID and its new run reference were recovered after reconnect.
+- Automatic requalification persists an absolute 300-second deadline. The runner also checks the budget between origins; the worker timer invokes the CLI hard-exit handler (exit 124), and the local-services supervisor restarts a worker that exits 124. The worker timeout-handler test passed, but the supervisor simulation did not produce an observed result. The full `pytest -q tests/unit/test_local_services.py` command was rejected by auto-review; the isolated `pytest -q tests/unit/test_local_services.py::test_worker_timeout_restarts_worker_without_stopping_api --tb=short` command was interrupted before a result. The shared log gave no specific rejection reason. Therefore, interruption of a single in-flight provider inference and supervisor restart remain unverified; no claim of verified hard cancellation is made.
+- The final Python suite passed with `tests/unit/test_local_services.py` excluded: 989 passed, 2 skipped. The targeted MCP acceptance test passed separately.
+- The closed-assistant acceptance used a separate MCP stdio process, worker process, synthetic CSV, and local HTTP webhook receiver. The same question ID and its new run reference were recovered after reconnect; this is not an observation in Codex Desktop.
 - The real Timestral parity test passed separately; it is not included in the offline full-suite count.
 - Codex Desktop itself could not be inspected through the UI tool; no Desktop rendering observation is claimed.

@@ -511,12 +511,27 @@ class Observatory:
                 if active
                 else "source_subscription_revoked"
             )
+            transition_id = f"{kind}/{source_id}/{watch.watch_id}"
             self.ledger.advance_watch(
                 watch.watch_id,
                 {"kind": kind},
                 self.now(),
-                event_id=f"{kind}/{source_id}/{uuid4().hex}",
+                event_id=transition_id,
             )
+            for link in self.worker._question_links_for_watch(watch.watch_id):
+                self.ledger.record_inbox_event(
+                    question_id=link["question_id"],
+                    revision=link["revision"],
+                    event_kind=kind,
+                    transition_id=transition_id,
+                    watch_id=watch.watch_id,
+                    summary=(
+                        "La sottoscrizione worker alla fonte è stata riattivata."
+                        if active
+                        else "La sottoscrizione worker alla fonte è stata revocata. I refresh e i run in coda verranno soppressi."
+                    ),
+                    payload={"source_id": source_id, "active": active},
+                )
         if active:
             self.worker._schedule_sources(self.now())
         return subscription

@@ -385,6 +385,7 @@ def main() -> int:
                     JobQueue(ledger),
                     discovery_gateway=gateway,
                     lease_seconds=args.lease_seconds,
+                    execution_timeout_handler=lambda: os._exit(124),
                 )
                 if owner := os.environ.get("FORECAST_ANYTHING_SUPERVISOR_ID"):
                     worker.owner = owner

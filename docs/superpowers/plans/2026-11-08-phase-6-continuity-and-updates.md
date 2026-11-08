@@ -17,9 +17,10 @@
   - Spostamento di `continuity-v1` a proposta futura.
   - Matrice controlli (in coda, in esecuzione, chained) e semantica fonti condivise.
   - Limiti e regole del budget di riqualifica (< 30 origini, budget esaurito) e gestione webhook (crash, deduplicazione, 3 tentativi con 2 attese).
-- [x] **6B: Implementazione aggiornamenti, controlli, inbox e webhook** (implementazione e acceptance consegnate per revisione; nessun push)
+- [x] **6B: Implementazione aggiornamenti, controlli, inbox e webhook** (correzioni di revisione completate e checkpoint locale pronto per revisione; nessun push)
   - Modelli ledger e migrazioni per Inbox, Outbox webhook, campo `requalification_due_at` e sottoscrizioni fonti.
   - Implementazione aggiornamenti post-append con stato provvisorio e scheduling riqualifica.
   - Endpoint e tool MCP per gestione controlli (Pausa, Mute, Priorità), consultazione Inbox e configurazione Webhook.
-  - Verificati scenari deterministici, retry/crash webhook, Timestral reale e journey end-to-end con assistente chiuso, receiver locale e recupero della stessa domanda.
-  - Limite da sottoporre alla revisione: il budget di 300 secondi è cooperativo tra origini e non interrompe un'inferenza provider già in esecuzione; il contratto 6A lo definisce invece timeout rigido. Osservazione Codex Desktop non disponibile tramite il tool UI.
+  - Verificati scenari deterministici, retry/crash webhook, Timestral reale e journey end-to-end con assistente chiuso via MCP stdio, receiver locale e recupero della stessa domanda.
+  - Il budget di 300 secondi ha una scadenza assoluta persistita, un timer di processo che termina il worker e il riavvio del worker nel supervisore. Il test del callback di timeout del worker è passato; l'esecuzione del test del supervisore è stata bloccata prima di un risultato. Il controllo tra origini non dimostra l'interruzione di una singola inferenza già in corso: né tale interruzione né il riavvio sono dichiarati verificati.
+  - Osservazione Codex Desktop non disponibile tramite il tool UI; la prova MCP stdio non è una prova UI Desktop.

@@ -7,7 +7,7 @@ import json
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from hashlib import sha256
-from threading import Event, Thread
+from threading import Event, Thread, Timer
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 from uuid import uuid4
@@ -55,6 +55,7 @@ class Worker:
         secret_resolver: SecretResolver | None = None,
         discovery_gateway=None,
         lease_seconds: int = 60,
+        execution_timeout_handler=None,
     ):
         if runtime.ledger.path.resolve() != queue.ledger.path.resolve():
             raise DomainError("queue_ledger_mismatch", {})
@@ -66,6 +67,7 @@ class Worker:
         self.catalog = SourceCatalog(runtime.ledger.path)
         self.secret_resolver = secret_resolver
         self.discovery_gateway = discovery_gateway
+        self.execution_timeout_handler = execution_timeout_handler
 
     @contextmanager
     def _lease(self, job: Job):
@@ -132,7 +134,7 @@ class Worker:
                 break
             with self._lease(job):
                 try:
-                    result = self._execute(job, self._now(now))
+                    result = self._execute_with_budget(job, self._now(now))
                 except Exception as error:
                     details = (
                         error.model_dump()
@@ -193,6 +195,42 @@ class Worker:
             self._schedule_requalifications(self._now(now))
         return tuple(completed)
 
+    def _execute_with_budget(self, job: Job, now: datetime):
+        if not job.payload.get("automatic_requalification"):
+            return self._execute(job, now)
+        deadline_text = job.payload.get("execution_deadline_at")
+        remaining = (
+            (datetime.fromisoformat(deadline_text) - now).total_seconds()
+            if deadline_text
+            else float(job.payload.get("execution_budget_seconds", 300))
+        )
+        if remaining <= 0:
+            raise DomainError(
+                "backtest_time_budget_exceeded",
+                {"seconds": job.payload.get("execution_budget_seconds", 300)},
+            )
+
+        expired = Event()
+
+        def on_timeout():
+            expired.set()
+            if self.execution_timeout_handler is not None:
+                self.execution_timeout_handler()
+
+        timer = Timer(remaining, on_timeout)
+        timer.daemon = True
+        timer.start()
+        try:
+            result = self._execute(job, now)
+        finally:
+            timer.cancel()
+        if expired.is_set():
+            raise DomainError(
+                "backtest_time_budget_exceeded",
+                {"seconds": job.payload.get("execution_budget_seconds", 300)},
+            )
+        return result
+
     def _execute(self, job: Job, now: datetime) -> dict | None:
         payload = job.payload
         context = provider_epoch_context(self.runtime)
@@ -206,11 +244,24 @@ class Worker:
                 {"provider": self.runtime.required_provider},
             )
         if payload.get("kind") == "backtest":
-            if payload.get("automatic_requalification") and payload.get("watch_id"):
+            if payload.get("watch_id"):
                 watch = self.runtime.ledger.get_watch(payload["watch_id"])
                 if watch.lifecycle in {"paused", "unsupported"}:
                     return {
                         "suppressed": "watch_not_active",
+                        "watch_id": watch.watch_id,
+                    }
+                if watch.candidate_invalidated:
+                    return {
+                        "suppressed": "watch_candidate_invalidated",
+                        "watch_id": watch.watch_id,
+                    }
+                if payload.get("automatic_requalification") and (
+                    not watch.source_snapshot_ids
+                    or payload.get("snapshot_id") != watch.source_snapshot_ids[-1]
+                ):
+                    return {
+                        "suppressed": "source_snapshot_superseded",
                         "watch_id": watch.watch_id,
                     }
             return execute_backtest_job(
@@ -228,6 +279,11 @@ class Worker:
                 watch = self.runtime.ledger.get_watch(watch_id)
                 if watch.lifecycle in {"paused", "unsupported"}:
                     return {"suppressed": "watch_not_active", "watch_id": watch_id}
+                if watch.candidate_invalidated:
+                    return {
+                        "suppressed": "watch_candidate_invalidated",
+                        "watch_id": watch_id,
+                    }
             run = self.runtime.run(
                 GraphSpec.model_validate(payload["graph"]),
                 {
@@ -288,6 +344,14 @@ class Worker:
         attempt = ledger.begin_webhook_delivery(
             job.payload["delivery_id"], now, lease_guard=job.guard
         )
+        if attempt["state"] == "pending":
+            self.queue.checkpoint(
+                job,
+                job.payload,
+                now,
+                next_due_at=datetime.fromisoformat(attempt["next_attempt_at"]),
+            )
+            return None
         if attempt["state"] != "delivering":
             return {
                 "delivery_id": job.payload["delivery_id"],
@@ -351,6 +415,75 @@ class Worker:
             for link in self.runtime.ledger.question_links_for_watch(watch_id)
             if link["status"] == "open"
         )
+
+    def _queue_watch_run(self, watch, snapshot, links, *, lease_guard=None):
+        if watch.candidate is None or watch.lifecycle in {"paused", "unsupported"}:
+            return None
+        priorities = [watch.priority, *(link["priority"] for link in links)]
+        return self.queue.enqueue(
+            f"watch-run/{watch.watch_id}/{snapshot.snapshot_id}",
+            {
+                "kind": "run",
+                "watch_id": watch.watch_id,
+                "graph": watch.candidate.graph.model_dump(mode="json"),
+                "snapshots": {
+                    watch.candidate.source_ids[0]: snapshot.model_dump(mode="json")
+                },
+                "as_of": snapshot.as_of.isoformat(),
+                "previous_run_id": watch.last_run_id,
+                "snapshot_id": snapshot.snapshot_id,
+                "question_links": links,
+                "priority": min(priorities),
+            },
+            lease_guard=lease_guard,
+        )
+
+    def _queue_watch_rediscovery(
+        self, watch, snapshot, profile, links, *, lease_guard=None
+    ):
+        return self.queue.enqueue(
+            f"rediscover/{watch.watch_id}/{snapshot.snapshot_id}",
+            {
+                "kind": "discover_refresh",
+                "watch_id": watch.watch_id,
+                "snapshot_id": snapshot.snapshot_id,
+                "profile": profile,
+                "question_links": links,
+            },
+            lease_guard=lease_guard,
+        )
+
+    def _record_source_transition(
+        self, watch, event, transition_id: str, links, *, lease_guard=None
+    ):
+        kind = event["kind"]
+        summaries = {
+            "historical_availability_altered": "È cambiata la disponibilità storica di un dato. La qualifica precedente è stata invalidata e un nuovo candidato è in preparazione.",
+            "historical_correction": "La fonte ha corretto un dato passato. La qualifica precedente è stata invalidata e un nuovo candidato è in preparazione.",
+            "historical_deletion": "La fonte ha rimosso un dato storico. La qualifica precedente è stata invalidata e un nuovo candidato è in preparazione.",
+            "invalid_append": "La nuova riga non è un append valido. La qualifica precedente è stata invalidata e un nuovo candidato è in preparazione.",
+            "source_revised": "È cambiata la mappatura o la revisione della fonte. La qualifica precedente è stata invalidata e un nuovo candidato è in preparazione.",
+        }
+        for link in links:
+            self.runtime.ledger.record_inbox_event(
+                question_id=link["question_id"],
+                revision=link["revision"],
+                event_kind=kind,
+                transition_id=transition_id,
+                watch_id=watch.watch_id,
+                summary=summaries.get(
+                    kind,
+                    "La fonte è cambiata e la domanda richiede una nuova valutazione.",
+                ),
+                payload={
+                    "source_id": event.get("source_id"),
+                    "reason": kind,
+                    "quality": "provisional",
+                    "evidence_applicable": False,
+                    "candidate_invalidated": True,
+                },
+                lease_guard=lease_guard,
+            )
 
     def _publish_watch_run(self, run, payload: dict, job: Job) -> None:
         ledger = self.runtime.ledger
@@ -531,7 +664,7 @@ class Worker:
         for watch in watches:
             if (
                 watch.watch_id in superseded
-                or watch.lifecycle == "unsupported"
+                or watch.lifecycle in {"unsupported", "paused"}
                 or watch.migration_reason is not None
                 or watch.next_due_at > now
             ):
@@ -635,11 +768,10 @@ class Worker:
             if (
                 watch.lifecycle in {"paused", "unsupported"}
                 or watch.candidate_invalidated
-                or watch.quality != "provisional"
+                or watch.quality not in {"provisional", "stale"}
                 or watch.requalification_due_at is None
                 or watch.requalification_due_at > now
                 or not watch.source_snapshot_ids
-                or watch.qualification_snapshot_id is None
             ):
                 continue
             links = self._question_links_for_watch(watch.watch_id)
@@ -650,22 +782,26 @@ class Worker:
                     raise DomainError("unsupported_watch_backtest", {})
                 source_id = watch.candidate.source_ids[0]
                 revision = self.catalog.get(source_id)
-                qualification_snapshot = ledger.get_snapshot(
-                    watch.qualification_snapshot_id
+                qualification_snapshot = (
+                    ledger.get_snapshot(watch.qualification_snapshot_id)
+                    if watch.qualification_snapshot_id is not None
+                    else None
                 )
                 latest_snapshot = ledger.get_snapshot(watch.source_snapshot_ids[-1])
-                origin_floor = max(
-                    (
-                        row.event_time
-                        for row in qualification_snapshot.observations
-                        if row.available_at <= qualification_snapshot.as_of
-                    ),
-                    default=None,
+                origin_floor = (
+                    max(
+                        (
+                            row.event_time
+                            for row in qualification_snapshot.observations
+                            if row.available_at <= qualification_snapshot.as_of
+                        ),
+                        default=None,
+                    )
+                    if qualification_snapshot is not None
+                    else None
                 )
-                if origin_floor is None:
-                    raise DomainError("insufficient_qualification_history", {})
                 selection = candidate_backtest_selection(watch.candidate)
-                settings = BacktestSettings(max_origins_per_partition=50)
+                settings = BacktestSettings(max_origins_per_partition=30)
                 contracts = _provider_contracts(self.runtime, selection)
                 preview = prepare_backtest(
                     "requalification-preview",
@@ -732,6 +868,7 @@ class Worker:
                     "qualification_snapshot_id": watch.qualification_snapshot_id,
                     "source_snapshot_id": latest_snapshot.snapshot_id,
                     "questions": [link["question_id"] for link in eligible],
+                    "budget_window": int(now.timestamp() // 86400),
                 }
             )
             request = BacktestJobRequest(
@@ -755,6 +892,7 @@ class Worker:
                         for link in eligible
                     ),
                     "execution_budget_seconds": 300,
+                    "execution_deadline_at": (now + timedelta(seconds=300)).isoformat(),
                 }
             )
             with ledger._transaction() as connection:
@@ -865,14 +1003,22 @@ class Worker:
                 profile = inspect_source(
                     registered.spec, secret_resolver=self.secret_resolver
                 )
+                if not self.runtime.ledger.get_source_subscription(
+                    payload["source_id"]
+                ).active:
+                    return {"suppressed": "source_subscription_revoked"}
                 self.runtime.ledger.put_snapshot(snap, lease_guard=job.guard)
                 payload = {
                     **payload,
                     "snapshot_id": snap.snapshot_id,
                     "profile": profile.model_dump(mode="json"),
                 }
-                self.queue.checkpoint(job, payload, self.runtime.clock())
+                job = self.queue.checkpoint(job, payload, self.runtime.clock())
             snap = self.runtime.ledger.get_snapshot(payload["snapshot_id"])
+            if not self.runtime.ledger.get_source_subscription(
+                payload["source_id"]
+            ).active:
+                return {"suppressed": "source_subscription_revoked"}
         except Exception:
             self._source_status(
                 job,
@@ -893,13 +1039,63 @@ class Worker:
             raise
         watches = self.runtime.ledger.list_watches()
         superseded = {w.supersedes_watch_id for w in watches}
+        if "question_links_by_watch" not in payload:
+            payload = {
+                **payload,
+                "question_links_by_watch": {
+                    watch.watch_id: list(self._question_links_for_watch(watch.watch_id))
+                    for watch in watches
+                    if payload["source_id"] in watch.candidate.source_ids
+                },
+            }
+            job = self.queue.checkpoint(job, payload, self.runtime.clock())
         for watch in watches:
             if (
                 watch.watch_id in superseded
                 or payload["source_id"] not in watch.candidate.source_ids
-                or snap.snapshot_id in watch.source_snapshot_ids
                 or watch.lifecycle == "unsupported"
             ):
+                continue
+            links = tuple(payload["question_links_by_watch"].get(watch.watch_id, ()))
+            if snap.snapshot_id in watch.source_snapshot_ids:
+                if watch.source_snapshot_ids[-1] == snap.snapshot_id:
+                    event_id_prefix = "snapshot/"
+                    history = self.runtime.ledger.watch_history(watch.watch_id)
+                    append_transition = next(
+                        (
+                            entry
+                            for entry in history
+                            if entry["event_id"] == f"append/{snap.snapshot_id}"
+                        ),
+                        None,
+                    )
+                    correction_transition = next(
+                        (
+                            entry
+                            for entry in history
+                            if entry["event_id"].startswith(event_id_prefix)
+                            and entry["event_id"].endswith(f"/{snap.snapshot_id}")
+                        ),
+                        None,
+                    )
+                    if append_transition is not None:
+                        self._queue_watch_run(watch, snap, links, lease_guard=job.guard)
+                    elif correction_transition is not None:
+                        event = correction_transition["event"]
+                        self._record_source_transition(
+                            watch,
+                            event,
+                            correction_transition["event_id"],
+                            links,
+                            lease_guard=job.guard,
+                        )
+                        self._queue_watch_rediscovery(
+                            watch,
+                            snap,
+                            payload["profile"],
+                            links,
+                            lease_guard=job.guard,
+                        )
                 continue
             previous = (
                 self.runtime.ledger.get_snapshot(watch.source_snapshot_ids[-1])
@@ -980,32 +1176,7 @@ class Worker:
                         event_id=f"append/{snap.snapshot_id}",
                         lease_guard=job.guard,
                     )
-                    if watch.lifecycle != "paused":
-                        links = self._question_links_for_watch(watch.watch_id)
-                        self.queue.enqueue(
-                            f"watch-run/{watch.watch_id}/{snap.snapshot_id}",
-                            {
-                                "kind": "run",
-                                "watch_id": watch.watch_id,
-                                "graph": watch.candidate.graph.model_dump(mode="json"),
-                                "snapshots": {
-                                    payload["source_id"]: snap.model_dump(mode="json")
-                                },
-                                "as_of": snap.as_of.isoformat(),
-                                "previous_run_id": watch.last_run_id,
-                                "snapshot_id": snap.snapshot_id,
-                                "question_links": links,
-                                "priority": min(
-                                    [
-                                        watch.priority,
-                                        *(link["priority"] for link in links),
-                                    ]
-                                )
-                                if links
-                                else watch.priority,
-                            },
-                            lease_guard=job.guard,
-                        )
+                    self._queue_watch_run(watch, snap, links, lease_guard=job.guard)
                     continue
 
             if change is None:
@@ -1027,21 +1198,26 @@ class Worker:
             event = {"kind": event_kind, "source_id": payload["source_id"]}
             if event_kind == "source_revised":
                 event["revision"] = snap.snapshot_id
+            transition_id = f"snapshot/{transition_reason}/{snap.snapshot_id}"
             self.runtime.ledger.advance_watch(
                 watch.watch_id,
                 event,
                 now,
-                event_id=f"snapshot/{transition_reason}/{snap.snapshot_id}",
+                event_id=transition_id,
                 lease_guard=job.guard,
             )
-            self.queue.enqueue(
-                f"rediscover/{watch.watch_id}/{snap.snapshot_id}",
-                {
-                    "kind": "discover_refresh",
-                    "watch_id": watch.watch_id,
-                    "snapshot_id": snap.snapshot_id,
-                    "profile": payload["profile"],
-                },
+            self._record_source_transition(
+                watch,
+                event,
+                transition_id,
+                links,
+                lease_guard=job.guard,
+            )
+            self._queue_watch_rediscovery(
+                watch,
+                snap,
+                payload["profile"],
+                links,
                 lease_guard=job.guard,
             )
         self._source_status(
@@ -1067,6 +1243,10 @@ class Worker:
             raise
         if not subscription.active or old.lifecycle == "unsupported":
             return {"suppressed": "watch_or_source_inactive"}
+        links = tuple(
+            job.payload.get("question_links")
+            or self._question_links_for_watch(old.watch_id)
+        )
         profile = SourceProfile.model_validate(job.payload["profile"])
         snap = ledger.get_snapshot(job.payload["snapshot_id"])
         epoch_id = _digest(
@@ -1128,8 +1308,16 @@ class Worker:
                     + timedelta(
                         seconds=self.catalog.get(profile.source_id).spec.refresh_seconds
                     ),
+                    source_snapshot_ids=(snap.snapshot_id,),
                     supersedes_watch_id=old.watch_id,
-                ).model_copy(update={"muted": old.muted, "priority": old.priority}),
+                ).model_copy(
+                    update={
+                        "muted": old.muted,
+                        "priority": old.priority,
+                        "requalification_due_at": now,
+                        "qualification_snapshot_id": None,
+                    }
+                ),
                 now=now,
                 lease_guard=job.guard,
             )
@@ -1145,15 +1333,35 @@ class Worker:
                 event_id="inherited/pause",
                 lease_guard=job.guard,
             )
+        successor = ledger.get_watch(watch_id)
+        for link in links:
+            ledger.link_question_reference(
+                link["question_id"],
+                QuestionReferenceRequest(
+                    key=f"worker-successor-candidate-{candidate.candidate_id}",
+                    revision=link["revision"],
+                    target_type="candidate",
+                    target_id=candidate.candidate_id,
+                    note="Candidate after a source revision",
+                ),
+                lease_guard=job.guard,
+            )
+            ledger.link_question_reference(
+                link["question_id"],
+                QuestionReferenceRequest(
+                    key=f"worker-successor-watch-{watch_id}",
+                    revision=link["revision"],
+                    target_type="watch",
+                    target_id=watch_id,
+                    note="Watch for the revised source candidate",
+                ),
+                lease_guard=job.guard,
+            )
         if candidate.executable:
-            self.queue.enqueue(
-                f"evaluate/{candidate.candidate_id}/{snap.snapshot_id}",
-                {
-                    "kind": "run",
-                    "graph": candidate.graph.model_dump(mode="json"),
-                    "snapshots": {profile.source_id: snap.model_dump(mode="json")},
-                    "as_of": snap.as_of.isoformat(),
-                },
+            self._queue_watch_run(
+                successor,
+                snap,
+                links,
                 lease_guard=job.guard,
             )
         return {

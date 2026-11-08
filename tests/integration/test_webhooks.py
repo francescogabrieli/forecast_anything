@@ -235,6 +235,65 @@ def test_crash_recovery_reuses_same_event_id(tmp_path, monkeypatch):
     assert _delivery(ledger, subscription.subscription_id).attempts == 2
 
 
+def test_crash_after_retry_commit_reschedules_pending_webhook(tmp_path, monkeypatch):
+    import forecast_anything.worker as worker_module
+
+    ledger, runtime, now, _, subscription, event = _setup(tmp_path)
+    sent = []
+
+    class NoResponse:
+        def open(self, request, timeout):
+            sent.append(request.get_header("X-forecast-event-id"))
+            raise HTTPError(request.full_url, 503, "unavailable", {}, None)
+
+    monkeypatch.setattr(worker_module, "build_opener", lambda *args: NoResponse())
+    queue = JobQueue(ledger)
+    with ledger._connection() as connection:
+        job_id = connection.execute(
+            "SELECT job_id FROM jobs WHERE json_extract(payload, '$.kind') = 'webhook_delivery'"
+        ).fetchone()[0]
+    job = queue.get(job_id)
+    Worker(runtime, queue).run_due(now[0])
+    first_retry = _delivery(ledger, subscription.subscription_id)
+    now[0] = first_retry.next_attempt_at
+
+    fail = queue.fail
+
+    def crash_after_second_outbox_commit(claimed, *args, **kwargs):
+        if claimed.job_id == job.job_id:
+            raise KeyboardInterrupt("crash after webhook retry state commit")
+        return fail(claimed, *args, **kwargs)
+
+    monkeypatch.setattr(queue, "fail", crash_after_second_outbox_commit)
+    with pytest.raises(KeyboardInterrupt, match="retry state commit"):
+        Worker(runtime, queue, lease_seconds=60).run_due(now[0])
+    second_retry = _delivery(ledger, subscription.subscription_id)
+    assert second_retry.attempts == 2
+    assert second_retry.state == "pending"
+    assert len(sent) == 2
+
+    monkeypatch.setattr(queue, "fail", fail)
+    now[0] += timedelta(seconds=61)
+    Worker(runtime, queue, lease_seconds=60).run_due(now[0])
+    recovered = queue.get(job.job_id)
+    assert recovered.state == "pending"
+    assert recovered.lease_until is None
+    with ledger._connection() as connection:
+        next_due = connection.execute(
+            "SELECT next_due_at FROM jobs WHERE job_id = ?", (job.job_id,)
+        ).fetchone()[0]
+    assert (
+        datetime.fromtimestamp(next_due, timezone.utc) == second_retry.next_attempt_at
+    )
+    assert len(sent) == 2
+
+    now[0] = second_retry.next_attempt_at
+    Worker(runtime, queue).run_due(now[0])
+    assert _delivery(ledger, subscription.subscription_id).attempts == 3
+    assert _delivery(ledger, subscription.subscription_id).state == "delivery_failed"
+    assert sent == [event.event_id, event.event_id, event.event_id]
+
+
 def test_local_webhook_acceptance_survives_ledger_reopen(tmp_path):
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
     from threading import Thread

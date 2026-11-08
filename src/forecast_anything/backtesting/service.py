@@ -165,6 +165,7 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
             raise DomainError("unsupported_backtest_source", {})
         watch_id = job.payload.get("watch_id")
         candidate_id = job.payload.get("candidate_id")
+        scheduled_snapshot = None
         if watch_id is not None:
             from ..discovery.policy import candidate_backtest_selection
 
@@ -189,9 +190,22 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
                 raise DomainError("unsupported_watch_backtest", {}) from error
             if request.selection != selection:
                 raise DomainError("watch_backtest_selection_mismatch", {})
+            if job.payload.get("automatic_requalification"):
+                snapshot_id = job.payload.get("snapshot_id")
+                if (
+                    not snapshot_id
+                    or not watch.source_snapshot_ids
+                    or watch.source_snapshot_ids[-1] != snapshot_id
+                ):
+                    return {"suppressed": "source_snapshot_superseded"}
+                scheduled_snapshot = runtime.ledger.get_snapshot(snapshot_id)
         contracts = _provider_contracts(runtime, request.selection)
-        observations = read_observations(
-            revision.spec, secret_resolver=secret_resolver, max_rows=100000
+        observations = (
+            scheduled_snapshot.observations
+            if scheduled_snapshot is not None
+            else read_observations(
+                revision.spec, secret_resolver=secret_resolver, max_rows=100000
+            )
         )
         plan = prepare_backtest(
             job.job_id,
@@ -199,13 +213,14 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
             observations,
             request.selection,
             request.settings,
-            now,
+            scheduled_snapshot.as_of if scheduled_snapshot is not None else now,
             provider_contracts=contracts,
             watch_id=watch_id,
             candidate_id=candidate_id,
             origin_target_after=(
                 datetime.fromisoformat(job.payload["origin_target_after"])
                 if job.payload.get("automatic_requalification")
+                and job.payload.get("origin_target_after")
                 else None
             ),
         )
@@ -224,6 +239,11 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
     if plan.watch_id is not None and plan.candidate_id is not None:
         ledger = runtime.ledger
         watch = ledger.get_watch(plan.watch_id)
+        if (
+            job.payload.get("automatic_requalification")
+            and job.payload.get("snapshot_id") != watch.source_snapshot_ids[-1]
+        ):
+            return result | {"suppressed": "source_snapshot_superseded"}
         event_id = f"backtest/{report.report_id}"
         previous = next(
             (
