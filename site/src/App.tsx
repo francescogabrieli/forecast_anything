@@ -195,8 +195,24 @@ function Install() {
       <p className="annotation mb-3">From the repository root</p>
       <p className="mb-4 text-sm text-muted">Requires macOS, Python 3.12+, uv, the Codex CLI on PATH, and a checkout kept at a stable path.</p>
       <pre className="command-block" tabIndex={0} aria-label="Local setup commands"><code>{commands}</code></pre>
-      <p className="mt-4 text-sm text-muted">Want a browser view? The <a className="inline-link" href="./docs/quickstart.md">optional console</a> lets you inspect saved questions and runs.</p>
     </div>
+    <details className="evidence console-preview md:col-span-6 lg:col-span-12">
+      <summary>Preview the optional console</summary>
+      <figure className="pb-5">
+        <div className="aspect-[36/25] overflow-hidden rounded-lg border border-rule">
+          <img src="./console-preview.webp" width="1440" height="1946" loading="lazy"
+            className="h-full w-full object-cover object-top"
+            alt="Forecast Anything console showing a dependency graph and a recorded Timestral forecast." />
+        </div>
+        <figcaption className="mt-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 text-sm text-muted">
+          <span>Timestral forecast on synthetic data in the local console.</span>
+          <span className="flex flex-wrap gap-x-5 gap-y-1">
+            <a className="inline-link" href="./console-preview.webp">Open full screenshot <span aria-hidden="true">↗</span></a>
+            <a className="inline-link" href="./docs/quickstart.md">Console setup guide <span aria-hidden="true">↗</span></a>
+          </span>
+        </figcaption>
+      </figure>
+    </details>
   </section>;
 }
 

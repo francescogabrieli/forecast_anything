@@ -66,6 +66,9 @@ h2 { @apply text-chapter font-semibold; line-height: 1.04; letter-spacing: -.048
 .target-rule { stroke: #ac9d89; stroke-dasharray: 2 4; }
 .cutoff-rule { stroke: var(--color-accent); stroke-width: 1.7; stroke-dasharray: 5 4; }
 .observed-line { fill: none; stroke: var(--color-ink); stroke-width: 1.5; stroke-linejoin: round; }
+.forecast-extension { stroke-width: 1.6; stroke-dasharray: 4 3; }
+.baseline-extension { stroke: var(--color-muted); }
+.timestral-extension { stroke: var(--color-accent-ink); }
 .forecast-point { fill: var(--color-accent); stroke: var(--color-accent-ink); stroke-width: 1.4; }
 .baseline-point { fill: var(--color-paper); stroke: var(--color-ink); stroke-width: 1.6; }
 .legend, .value-list dt { @apply inline-flex items-center gap-2; }
