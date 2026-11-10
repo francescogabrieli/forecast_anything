@@ -53,6 +53,11 @@ The guided setup reuses a workspace's saved choice. The ledger rejects a differe
 choosing a different checkpoint so jobs, watches and evidence retain their
 original model. Keep both workspaces on distinct ports if running them together.
 
+Version 0.1.1 migrates an existing ledger to schema 14. Before upgrading a
+workspace you may need to roll back, stop its service and back up the workspace
+configuration and ledger together. Restore that backup when using an older
+runtime that supports only schema 13.
+
 ## Operate the service
 
 ```sh

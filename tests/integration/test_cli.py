@@ -242,3 +242,23 @@ def test_product_run_rejects_checkpoint_conflicting_with_ledger(tmp_path, monkey
     worker = cli("worker", "--once", "--db", db)
     assert worker.returncode == 2
     assert json.loads(worker.stderr)["code"] == "workspace_model_conflict"
+
+
+def test_first_worker_open_honors_initialized_workspace_checkpoint(
+    tmp_path, monkeypatch
+):
+    workspace = tmp_path / "workspace"
+    result = cli(
+        "init",
+        "--workspace",
+        workspace,
+        "--csv-root",
+        tmp_path,
+        "--timestral-model",
+        "123m",
+    )
+    assert result.returncode == 0
+    monkeypatch.setenv("FORECAST_ANYTHING_TIMESTRAL_MODEL", "28m")
+    worker = cli("worker", "--once", "--db", workspace / "state.db")
+    assert worker.returncode == 2
+    assert json.loads(worker.stderr)["code"] == "workspace_model_conflict"

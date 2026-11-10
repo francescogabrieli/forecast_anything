@@ -14,6 +14,7 @@ from .providers.configuration import (
     TIMESTRAL_MODELS,
 )
 from .sources.catalog import SourceCatalog
+from .store import Ledger
 
 
 def create_workspace(
@@ -42,9 +43,15 @@ def create_workspace(
     if timestral_model is not None:
         config["timestral_model"] = timestral_model
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as file:
-        json.dump(config, file, indent=2)
-        file.write("\n")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as file:
+            checkpoint, _ = TIMESTRAL_MODELS[timestral_model or DEFAULT_TIMESTRAL_MODEL]
+            Ledger(Path(config["db"])).bind_forecast_checkpoint(checkpoint)
+            json.dump(config, file, indent=2)
+            file.write("\n")
+    except (DomainError, OSError, sqlite3.Error):
+        path.unlink(missing_ok=True)
+        raise
     return path
 
 

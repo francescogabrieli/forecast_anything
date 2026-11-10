@@ -226,7 +226,7 @@ def main() -> int:
         except DomainError as error:
             print(error.model_dump_json(), file=sys.stderr)
             return 2
-        except (OSError, ValueError):
+        except (OSError, ValueError, sqlite3.Error):
             print(
                 json.dumps(
                     {
@@ -298,7 +298,10 @@ def main() -> int:
                 "Workspace config already exists; it was not changed.", file=sys.stderr
             )
             return 2
-        except (OSError, ValueError) as error:
+        except DomainError as error:
+            print(error.model_dump_json(), file=sys.stderr)
+            return 2
+        except (OSError, ValueError, sqlite3.Error) as error:
             print(f"Workspace configuration error: {error}", file=sys.stderr)
             return 2
     if args.command == "up":
