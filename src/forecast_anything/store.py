@@ -48,6 +48,7 @@ MIGRATIONS = (
     "011_persistent_questions.sql",
     "012_workspace_identity.sql",
     "013_continuity_and_inbox.sql",
+    "014_workspace_forecast_checkpoint.sql",
 )
 
 
@@ -86,6 +87,26 @@ class Ledger(QuestionStorageMixin, AgentStorageMixin):
             return connection.execute(
                 "SELECT workspace_id FROM workspace_identity WHERE singleton = 1"
             ).fetchone()[0]
+
+    def bind_forecast_checkpoint(self, checkpoint: str) -> None:
+        """Set the product model once before a process can serve or run forecasts."""
+        with self._transaction() as connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO workspace_forecast_checkpoint VALUES (1, ?)",
+                (checkpoint,),
+            )
+            existing = connection.execute(
+                "SELECT checkpoint FROM workspace_forecast_checkpoint WHERE singleton = 1"
+            ).fetchone()[0]
+            if existing != checkpoint:
+                raise DomainError(
+                    "workspace_model_conflict",
+                    {
+                        "checkpoint": existing,
+                        "requested_checkpoint": checkpoint,
+                        "recovery": "Use the workspace's original model or create a separate workspace.",
+                    },
+                )
 
     def resource_identity(self, kind: str, resource_id: str) -> str:
         """Check a stored identity without loading its potentially large content."""

@@ -32,6 +32,15 @@ GROUPS = {
         "solar": ("solar/H", 24, 24),
     },
 }
+INPUT_SHA256 = {
+    "car_parts_with_missing": "78ea2e9ed786061c2c2c723f265bd61dcba8b316a0a6b9d39366ccf1ca26245a",
+    "hospital": "761494d348761856659fc901d9c509b6564af87fc9e1b165c703cec6086e332e",
+    "jena_weather": "b2cc351f93268eea352a08cdd76d836711535c6cb157a7f3cf338d9b4db9c700",
+    "m4_hourly": "44f0f708d4ab5f8008fb7d656c02b6990752cf8009ea2655f97cb01fadde5bb2",
+    "saugeenday": "94d1adf6571e606c8d22784253335b38cb23854983b9c374d04285a233f8d0e7",
+    "solar": "16d10540595200124ac0d8d3f46e6d27951ce53ca3d0782cb2453e1afbba86f8",
+    "us_births": "c72c9ec4a8840eb79d876aaec0dd4ca0ea57fd53d264039bd9cd4b0e5c667b13",
+}
 CONTEXT = 512
 SERIES_PER_DATASET = 12
 ORIGINS_PER_SERIES = 4
@@ -84,6 +93,11 @@ def _point_forecast(forecaster, context, horizon):
 def compare(data, model, recent_context=None):
     import torch
 
+    for dataset, expected in INPUT_SHA256.items():
+        with (data / f"{dataset}.arrow").open("rb") as source:
+            digest = hashlib.file_digest(source, "sha256").hexdigest()
+        if digest != expected:
+            raise ValueError(f"Input SHA-256 mismatch for {dataset}")
     torch.set_num_threads(THREADS)
     provider = pinned_timestral_provider(model)
     start = perf_counter()
@@ -136,6 +150,7 @@ def compare(data, model, recent_context=None):
             print(f"{model} {dataset}: {len(observations)} windows", file=sys.stderr)
     return {
         "dataset_revision": DATASET_REVISION,
+        "input_sha256": INPUT_SHA256,
         "provider_revision": provider.capabilities().provider_revision,
         "load_seconds": load_seconds,
         "threads": THREADS,

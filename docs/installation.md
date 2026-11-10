@@ -49,7 +49,7 @@ workspace="$HOME/Library/Application Support/Forecast Anything/workspace-123m"
 For foreground operation, pass `--timestral-model 123m` to `init`, then use
 `model prepare --config PATH` and `up --config PATH --verify-model` with that
 workspace's configuration. MCP `get_capabilities` reports the active checkpoint.
-The guided setup reuses a workspace's saved choice. Use a new workspace when
+The guided setup reuses a workspace's saved choice. The ledger rejects a different checkpoint even when opened directly with `--db`. Use a new workspace when
 choosing a different checkpoint so jobs, watches and evidence retain their
 original model. Keep both workspaces on distinct ports if running them together.
 
@@ -75,7 +75,7 @@ The worker holds an OS lock keyed to the canonical ledger path, including one-sh
 | Wrong process on port or `port_in_use` | Stop the process occupying that port, or choose another port for a new workspace. Retry setup with the existing workspace after freeing the configured port. |
 | Invalid config or rejected authentication | Use the same private config for setup, service and Codex. Restore it from backup if malformed. Restart the MCP adapter after changes. |
 | Worker stale or already running | Stop the other worker or supervisor for the same ledger. Start one service and check its logs. |
-| Model missing, incompatible or unloadable | Run `model status`. Reinstall the pinned dependencies if needed, run `model prepare` with the intended cache, then restart the service. |
+| Model missing, incompatible or unloadable | Run `model status --config PATH`. Reinstall the pinned dependencies if needed, run `model prepare --config PATH` with the intended cache, then restart the service. |
 | Source permissions missing | Copy CSV files into an approved root. For a source already registered, use `permissions grant SOURCE_ID --config "$workspace_config"` and reopen the adapter. |
 | Runtime version mismatch | Use the same installed wheel for the service and MCP. |
 | Codex registration conflict | Review the existing entry or choose a different `--codex-name`. Unrelated entries remain available. |

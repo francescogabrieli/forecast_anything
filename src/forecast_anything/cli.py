@@ -33,6 +33,14 @@ def _stop_continuous_worker(signum, frame):
     raise KeyboardInterrupt
 
 
+def _forecast_ledger(path, providers):
+    ledger = Ledger(path)
+    provider = providers.get("timestral")
+    if provider is not None:
+        ledger.bind_forecast_checkpoint(provider.checkpoint)
+    return ledger
+
+
 def _run(args):
     origin = datetime.fromisoformat(args.as_of)
     if origin.tzinfo is None or origin.utcoffset() is None:
@@ -68,7 +76,7 @@ def _run(args):
         ).encode()
     ).hexdigest()
     return Runtime(
-        Ledger(args.db),
+        _forecast_ledger(args.db, providers),
         providers,
         {},
         lambda: datetime.now(timezone.utc),
@@ -347,10 +355,11 @@ def main() -> int:
                 worker_lock(args.db) if args.command == "worker" else nullcontext()
             )
             with ownership:
-                ledger = Ledger(args.db)
+                providers = configured_providers()
+                ledger = _forecast_ledger(args.db, providers)
                 runtime = Runtime(
                     ledger,
-                    configured_providers(),
+                    providers,
                     register_builtin_operators(),
                     lambda: datetime.now(timezone.utc),
                     required_provider="timestral",

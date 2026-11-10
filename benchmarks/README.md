@@ -46,10 +46,12 @@ Every run must request `baseline`; the API raises structured `baseline_required`
 ## Local checkpoint comparison
 
 `compare_timestral.py` runs an independent sample of GIFT-Eval and requires
-PyArrow in the benchmark environment. The pinned dataset revision, file
-subdirectories, periods, horizons and development/holdout assignment are in
-the script. Download `data-00000-of-00001.arrow` from each subdirectory at that
-revision and save it as `<dataset>.arrow` in an ignored data directory.
+PyArrow 26.0.1 in the benchmark environment. The script records the pinned
+[Salesforce/GiftEval revision](https://huggingface.co/datasets/Salesforce/GiftEval/tree/30841734ac5cfddbd0c3bad6d09d2b6b32becbb0),
+file subdirectories, periods, horizons and development/holdout assignment.
+Download `data-00000-of-00001.arrow` from each subdirectory at that revision and
+save it as `<dataset>.arrow` in an ignored data directory. The runner verifies
+each SHA-256 before loading model weights.
 
 After preparing both checkpoints explicitly:
 
