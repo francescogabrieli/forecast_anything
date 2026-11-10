@@ -51,3 +51,49 @@ def test_workspace_sets_same_mcp_and_api_configuration(tmp_path, monkeypatch):
     assert mcp.workspace_token == config["token"]
     assert mcp.api_url == "http://127.0.0.1:8123"
     assert mcp.csv_roots == (root.resolve(),)
+
+
+def test_workspace_pins_selected_timestral_model(tmp_path, monkeypatch):
+    from forecast_anything.providers.configuration import configured_providers
+
+    path = create_workspace(
+        tmp_path / "workspace", tmp_path, 8123, timestral_model="123m"
+    )
+    config = load_workspace(path)
+    assert config["timestral_model"] == "123m"
+    monkeypatch.setenv("FORECAST_ANYTHING_TIMESTRAL_MODEL", "28m")
+    apply_workspace(config)
+    provider = configured_providers()["timestral"]
+    assert provider.checkpoint == "mistralai/Timestral-123M"
+    assert provider.revision == "5a147287addda85f6acd8da3fb8858fe9af7e8f7"
+
+
+def test_legacy_workspace_keeps_the_default_model(tmp_path, monkeypatch):
+    from forecast_anything.providers.configuration import configured_providers
+
+    path = create_workspace(tmp_path / "workspace", tmp_path, 8123)
+    monkeypatch.setenv("FORECAST_ANYTHING_TIMESTRAL_MODEL", "123m")
+    apply_workspace(load_workspace(path))
+    assert configured_providers()["timestral"].checkpoint == "mistralai/Timestral-28M"
+
+
+def test_model_status_reads_selected_workspace(tmp_path, monkeypatch, capsys):
+    import json
+    import sys
+
+    from forecast_anything.cli import main
+
+    path = create_workspace(
+        tmp_path / "workspace", tmp_path, 8123, timestral_model="123m"
+    )
+    monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path / "empty-cache"))
+    monkeypatch.setattr(
+        sys, "argv", ["forecast-anything", "model", "status", "--config", str(path)]
+    )
+    assert main() == 1
+    status = json.loads(capsys.readouterr().out)
+    assert status["checkpoint"] == "mistralai/Timestral-123M"
+    assert (
+        status["prepare_command"]
+        == "forecast-anything model prepare --timestral-model 123m"
+    )

@@ -16,7 +16,7 @@ from pathlib import Path
 from .contracts import DomainError
 from .diagnostics import diagnose_workspace
 from .local_services import local_lock, reserve_port, worker_lock
-from .providers.configuration import configured_providers
+from .providers.configuration import DEFAULT_TIMESTRAL_MODEL, configured_providers
 from .workspace_config import create_workspace, load_workspace
 
 
@@ -310,7 +310,17 @@ class LaunchAgent:
             return self.inspect()
 
 
-def setup(workspace, csv_root, port, codex_bin, codex_name, prepare_model, executable):
+def setup(
+    workspace,
+    csv_root,
+    port,
+    codex_bin,
+    codex_name,
+    prepare_model,
+    executable,
+    *,
+    timestral_model=None,
+):
     if sys.platform != "darwin":
         raise DomainError(
             "macos_login_service_required",
@@ -341,6 +351,15 @@ def setup(workspace, csv_root, port, codex_bin, codex_name, prepare_model, execu
             _codex_entry(codex, name, executable, config_path)
         if config_path.exists():
             config = load_workspace(config_path)
+            selected_model = config.get("timestral_model", DEFAULT_TIMESTRAL_MODEL)
+            if timestral_model is not None and timestral_model != selected_model:
+                raise DomainError(
+                    "workspace_model_conflict",
+                    {
+                        "model": selected_model,
+                        "recovery": "Choose a new workspace to use a different checkpoint.",
+                    },
+                )
             if port is not None and port != config["port"]:
                 raise DomainError(
                     "workspace_port_conflict",
@@ -360,8 +379,14 @@ def setup(workspace, csv_root, port, codex_bin, codex_name, prepare_model, execu
             root = csv_root or workspace / "sources"
             if csv_root is None:
                 root.mkdir(exist_ok=True, mode=0o700)
-            create_workspace(workspace, root, port if port is not None else 8000)
-        provider = configured_providers()["timestral"]
+            selected_model = timestral_model or DEFAULT_TIMESTRAL_MODEL
+            create_workspace(
+                workspace,
+                root,
+                port if port is not None else 8000,
+                timestral_model=timestral_model,
+            )
+        provider = configured_providers(selected_model)["timestral"]
         if prepare_model:
             provider.prepare_model()
         else:

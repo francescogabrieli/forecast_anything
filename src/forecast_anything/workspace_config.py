@@ -8,13 +8,26 @@ from http.client import HTTPConnection, HTTPException
 from pathlib import Path
 
 from .contracts import DomainError
+from .providers.configuration import (
+    DEFAULT_TIMESTRAL_MODEL,
+    TIMESTRAL_MODEL_ENV,
+    TIMESTRAL_MODELS,
+)
 from .sources.catalog import SourceCatalog
 
 
-def create_workspace(directory: Path, csv_root: Path, port: int) -> Path:
+def create_workspace(
+    directory: Path,
+    csv_root: Path,
+    port: int,
+    *,
+    timestral_model: str | None = None,
+) -> Path:
     root = csv_root.resolve(strict=True)
     if not root.is_dir() or type(port) is not int or not 1 <= port <= 65535:
         raise ValueError("invalid workspace configuration")
+    if timestral_model is not None and timestral_model not in TIMESTRAL_MODELS:
+        raise ValueError("invalid Timestral model")
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     directory = directory.resolve(strict=True)
     path = directory / "config.json"
@@ -26,6 +39,8 @@ def create_workspace(directory: Path, csv_root: Path, port: int) -> Path:
         "csv_roots": [str(root)],
         "source_ids": [],
     }
+    if timestral_model is not None:
+        config["timestral_model"] = timestral_model
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as file:
         json.dump(config, file, indent=2)
@@ -38,7 +53,7 @@ def load_workspace(path: Path) -> dict:
         if path.stat().st_size > 65536:
             raise ValueError
         config = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(config, dict) or set(config) != {
+        if not isinstance(config, dict) or set(config) - {"timestral_model"} != {
             "version",
             "db",
             "port",
@@ -46,6 +61,11 @@ def load_workspace(path: Path) -> dict:
             "csv_roots",
             "source_ids",
         }:
+            raise ValueError
+        if (
+            config.get("timestral_model", DEFAULT_TIMESTRAL_MODEL)
+            not in TIMESTRAL_MODELS
+        ):
             raise ValueError
         if type(config["version"]) is not int or config["version"] != 1:
             raise ValueError
@@ -80,6 +100,7 @@ def load_workspace(path: Path) -> dict:
 def apply_workspace(config: dict) -> None:
     os.environ.update(
         {
+            TIMESTRAL_MODEL_ENV: config.get("timestral_model", DEFAULT_TIMESTRAL_MODEL),
             "FORECAST_ANYTHING_WORKSPACE_TOKEN": config["token"],
             "FORECAST_ANYTHING_MCP_API_URL": f"http://127.0.0.1:{config['port']}",
             "FORECAST_ANYTHING_MCP_CSV_ROOTS": json.dumps(config["csv_roots"]),

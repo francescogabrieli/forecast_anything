@@ -42,3 +42,45 @@ Additional lineage includes dataset, benchmark provider name, actual provider ID
 ## Pending model gate
 
 Every run must request `baseline`; the API raises structured `baseline_required` before preparation if it is omitted, and the CLI emits the JSON error on stderr with exit code 2. Baseline operation does not import Timestral or fetch weights. Requesting `timestral` currently records `pending_license` and leaves its comparison undefined; this is an explicit non-executing gate. The report remains `pending_model_comparison`, even after a successful baseline run. Baseline-only evidence does not complete Plan 02 M4 or establish event calibration/general model performance. After the M1 license/parity gate is authorized, extending the harness to issue real model forecasts must preserve these frozen origins, context snapshots and inputs. Put model and baseline nodes in the same run to use M3's relative metric; separate runs require a matched origin/input join and unmatched comparisons must stay undefined. Do not change the frozen public choices based on this holdout's results.
+
+## Local checkpoint comparison
+
+`compare_timestral.py` runs an independent sample of GIFT-Eval and requires
+PyArrow in the benchmark environment. The pinned dataset revision, file
+subdirectories, periods, horizons and development/holdout assignment are in
+the script. Download `data-00000-of-00001.arrow` from each subdirectory at that
+revision and save it as `<dataset>.arrow` in an ignored data directory.
+
+After preparing both checkpoints explicitly:
+
+```sh
+forecast-anything model prepare --timestral-model 28m
+forecast-anything model prepare --timestral-model 123m
+python -m benchmarks.compare_timestral --data .local/gift-eval --model 28m --output .local/gift-eval/28m.json
+python -m benchmarks.compare_timestral --data .local/gift-eval --model 123m --output .local/gift-eval/123m.json
+python -m benchmarks.compare_timestral --data .local/gift-eval --model 28m --recent-context 128 --output .local/gift-eval/28m-two-windows.json
+```
+
+The local CPU fp32 run used four threads and 223 paired, non-overlapping target
+windows across seven datasets. The maximum input context was 512 steps. The
+two-window candidate averaged the point forecasts from 128 and 512 steps
+where both were available. Each model was scored on the same finite target
+cells as the seasonal reference. Seasonal scaling used only the context
+available at each origin. Lower MASE is better.
+
+| Reserved dataset | Windows | Seasonal reference | 28M | 123M | 28M, two windows |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Jena weather | 48 | 0.8607 | 0.7177 | 0.6566 | 0.8504 |
+| Saugeen daily flow | 4 | 1.9901 | 0.9566 | 0.9761 | 0.9570 |
+| US daily births | 4 | 1.7884 | 1.2833 | 1.1603 | 1.3145 |
+| Hourly solar | 48 | 0.7990 | 0.9454 | 1.0163 | 0.9266 |
+| Mean across datasets | 104 | 1.3596 | 0.9758 | 0.9524 | 1.0121 |
+
+The 123M reduced the reserved mean by 2.4% and improved two of four datasets.
+Median inference took 12.0 ms for the 28M and 37.6 ms for the 123M. Peak
+process RSS was 440 MiB and 1,166 MiB respectively. The 28M with two windows
+increased the reserved mean by 3.7%, with 21.5 ms median inference. These
+measurements describe a local sample and a custom protocol. Two reserved
+datasets contain one series each. The experiment used public series and
+did not independently establish their absence from checkpoint pretraining.
+The product keeps the 28M as default and offers the 123M as an explicit choice.

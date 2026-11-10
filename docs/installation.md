@@ -34,6 +34,25 @@ The default port is 8000. To use a different free port, set `--port` when creati
 
 For the step-by-step Desktop and logout/reboot checks, use the [acceptance procedure](research/phase-1-local-setup.md#desktop-and-login-cycle-manual-acceptance). In Codex Desktop, open the MCP settings and confirm the returned name is enabled. Restart the app if it was already running when you registered the entry. Ask it to call `get_diagnostics` on that named MCP server. A ready response means the adapter can reach the local API with its workspace credentials and the worker has loaded Timestral. The [assistant workflow](implementation/mcp.md) shows how to map an authorized CSV and submit a forecast.
 
+## Choose a Timestral checkpoint
+
+New workspaces use Timestral-28M by default. To use Timestral-123M, review the
+[pinned weights terms](https://huggingface.co/mistralai/Timestral-123M/blob/5a147287addda85f6acd8da3fb8858fe9af7e8f7/LICENSE)
+and create a workspace with its own directory and free port:
+
+```sh
+workspace="$HOME/Library/Application Support/Forecast Anything/workspace-123m"
+"$forecast_cli" setup --workspace "$workspace" --port 8001 --timestral-model 123m --prepare-model
+"$forecast_cli" model status --config "$workspace/config.json"
+```
+
+For foreground operation, pass `--timestral-model 123m` to `init`, then use
+`model prepare --config PATH` and `up --config PATH --verify-model` with that
+workspace's configuration. MCP `get_capabilities` reports the active checkpoint.
+The guided setup reuses a workspace's saved choice. Use a new workspace when
+choosing a different checkpoint so jobs, watches and evidence retain their
+original model. Keep both workspaces on distinct ports if running them together.
+
 ## Operate the service
 
 ```sh

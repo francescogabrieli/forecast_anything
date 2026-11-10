@@ -19,7 +19,8 @@ Source: https://github.com/google/fonts/tree/main/ofl/ibmplexsans.
 
 The optional Timestral integration has separate code and model-weight terms:
 - Source: mistralai/timestral, Apache-2.0, pinned in integrations/models.lock.json.
-- Weights: mistralai/Timestral-28M, Modified MIT, separately pinned in that lock.
+- Weights: mistralai/Timestral-28M and mistralai/Timestral-123M, Modified MIT,
+  separately pinned in that lock.
   An owner-authorized local CPU parity run and benchmark are recorded separately;
   each user/deployment must assess its own weight-license applicability. Model
   weights are not licensed by the project's Apache-2.0 LICENSE.
