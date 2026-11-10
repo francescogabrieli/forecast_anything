@@ -34,6 +34,30 @@ The default port is 8000. To use a different free port, set `--port` when creati
 
 For the step-by-step Desktop and logout/reboot checks, use the [acceptance procedure](research/phase-1-local-setup.md#desktop-and-login-cycle-manual-acceptance). In Codex Desktop, open the MCP settings and confirm the returned name is enabled. Restart the app if it was already running when you registered the entry. Ask it to call `get_diagnostics` on that named MCP server. A ready response means the adapter can reach the local API with its workspace credentials and the worker has loaded Timestral. The [assistant workflow](implementation/mcp.md) shows how to map an authorized CSV and submit a forecast.
 
+## Choose a Timestral checkpoint
+
+New workspaces use Timestral-28M by default. To use Timestral-123M, review the
+[pinned weights terms](https://huggingface.co/mistralai/Timestral-123M/blob/5a147287addda85f6acd8da3fb8858fe9af7e8f7/LICENSE)
+and create a workspace with its own directory and free port:
+
+```sh
+workspace="$HOME/Library/Application Support/Forecast Anything/workspace-123m"
+"$forecast_cli" setup --workspace "$workspace" --port 8001 --timestral-model 123m --prepare-model
+"$forecast_cli" model status --config "$workspace/config.json"
+```
+
+For foreground operation, pass `--timestral-model 123m` to `init`, then use
+`model prepare --config PATH` and `up --config PATH --verify-model` with that
+workspace's configuration. MCP `get_capabilities` reports the active checkpoint.
+The guided setup reuses a workspace's saved choice. The ledger rejects a different checkpoint even when opened directly with `--db`. Use a new workspace when
+choosing a different checkpoint so jobs, watches and evidence retain their
+original model. Keep both workspaces on distinct ports if running them together.
+
+Version 0.1.1 migrates an existing ledger to schema 14. Before upgrading a
+workspace you may need to roll back, stop its service and back up the workspace
+configuration and ledger together. Restore that backup when using an older
+runtime that supports only schema 13.
+
 ## Operate the service
 
 ```sh
@@ -56,7 +80,7 @@ The worker holds an OS lock keyed to the canonical ledger path, including one-sh
 | Wrong process on port or `port_in_use` | Stop the process occupying that port, or choose another port for a new workspace. Retry setup with the existing workspace after freeing the configured port. |
 | Invalid config or rejected authentication | Use the same private config for setup, service and Codex. Restore it from backup if malformed. Restart the MCP adapter after changes. |
 | Worker stale or already running | Stop the other worker or supervisor for the same ledger. Start one service and check its logs. |
-| Model missing, incompatible or unloadable | Run `model status`. Reinstall the pinned dependencies if needed, run `model prepare` with the intended cache, then restart the service. |
+| Model missing, incompatible or unloadable | Run `model status --config PATH`. Reinstall the pinned dependencies if needed, run `model prepare --config PATH` with the intended cache, then restart the service. |
 | Source permissions missing | Copy CSV files into an approved root. For a source already registered, use `permissions grant SOURCE_ID --config "$workspace_config"` and reopen the adapter. |
 | Runtime version mismatch | Use the same installed wheel for the service and MCP. |
 | Codex registration conflict | Review the existing entry or choose a different `--codex-name`. Unrelated entries remain available. |

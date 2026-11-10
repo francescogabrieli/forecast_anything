@@ -176,7 +176,7 @@ def diagnose(
                 )
             if model in {"weights_missing", "model_not_prepared", "model_load_failed"}:
                 recovery.append(
-                    "Run forecast-anything model prepare for the service cache, then restart the service."
+                    "Run forecast-anything model prepare --config /absolute/path/to/config.json for the workspace, then restart the service."
                 )
             elif model in {
                 "missing_dependency",

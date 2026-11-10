@@ -18,6 +18,14 @@
       "downloaded_to_local_cache": true,
       "included_in_repository": false
     },
+    "alternative_weights": {
+      "123m": {
+        "repo": "mistralai/Timestral-123M",
+        "revision": "5a147287addda85f6acd8da3fb8858fe9af7e8f7",
+        "license": "Modified MIT",
+        "license_url": "https://huggingface.co/mistralai/Timestral-123M/blob/5a147287addda85f6acd8da3fb8858fe9af7e8f7/LICENSE"
+      }
+    },
     "environment": {
       "python": "3.14.0",
       "python_requirement": ">=3.12",

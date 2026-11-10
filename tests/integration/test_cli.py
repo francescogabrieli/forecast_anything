@@ -216,3 +216,49 @@ def test_cli_requires_prepared_model_without_fallback(tmp_path, monkeypatch):
     assert result.returncode == 2
     assert json.loads(result.stderr)["code"] == "model_not_prepared"
     assert not result.stdout
+
+
+def test_product_run_rejects_checkpoint_conflicting_with_ledger(tmp_path, monkeypatch):
+    db = tmp_path / "workspace.db"
+    monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path / "empty-cache"))
+    args = (
+        "run",
+        ROOT / "examples/minimal/graph.json",
+        "--data",
+        ROOT / "examples/minimal/observations.csv",
+        "--as-of",
+        "2026-10-26T00:00:00Z",
+        "--db",
+        db,
+    )
+    monkeypatch.setenv("FORECAST_ANYTHING_TIMESTRAL_MODEL", "123m")
+    assert json.loads(cli(*args).stderr)["code"] == "model_not_prepared"
+
+    monkeypatch.setenv("FORECAST_ANYTHING_TIMESTRAL_MODEL", "28m")
+    result = cli(*args)
+    assert result.returncode == 2
+    assert json.loads(result.stderr)["code"] == "workspace_model_conflict"
+
+    worker = cli("worker", "--once", "--db", db)
+    assert worker.returncode == 2
+    assert json.loads(worker.stderr)["code"] == "workspace_model_conflict"
+
+
+def test_first_worker_open_honors_initialized_workspace_checkpoint(
+    tmp_path, monkeypatch
+):
+    workspace = tmp_path / "workspace"
+    result = cli(
+        "init",
+        "--workspace",
+        workspace,
+        "--csv-root",
+        tmp_path,
+        "--timestral-model",
+        "123m",
+    )
+    assert result.returncode == 0
+    monkeypatch.setenv("FORECAST_ANYTHING_TIMESTRAL_MODEL", "28m")
+    worker = cli("worker", "--once", "--db", workspace / "state.db")
+    assert worker.returncode == 2
+    assert json.loads(worker.stderr)["code"] == "workspace_model_conflict"

@@ -20,7 +20,14 @@ from .base import frequency_step, observation_grid
 class TimestralProvider:
     """One lazily loaded checkpoint per provider/worker, with immutable provenance."""
 
-    def __init__(self, checkpoint: str, revision: str, code_revision: str):
+    def __init__(
+        self,
+        checkpoint: str,
+        revision: str,
+        code_revision: str,
+        *,
+        prepare_command: str = "forecast-anything model prepare",
+    ):
         if not all(
             isinstance(v, str) and v.strip()
             for v in (checkpoint, revision, code_revision)
@@ -29,6 +36,7 @@ class TimestralProvider:
         self._checkpoint = checkpoint
         self._revision = revision
         self._code_revision = code_revision
+        self._prepare_command = prepare_command
         self._forecaster = None
         self._load_lock = Lock()
 
@@ -124,7 +132,7 @@ class TimestralProvider:
             "status": status,
             "cached": cached if dependency_error is None else False,
             "ready": self._forecaster is not None and dependency_error is None,
-            "prepare_command": "forecast-anything model prepare",
+            "prepare_command": self._prepare_command,
             "install_command": "uv sync --locked --extra dev --extra mcp",
             "weights_license": "Modified MIT; global consolidated monthly revenue above USD 20 million requires a separate license",
             "weights_license_url": f"https://huggingface.co/{self.checkpoint}/blob/{self.revision}/LICENSE",
@@ -139,7 +147,7 @@ class TimestralProvider:
                 else "model_code_revision_mismatch",
                 {
                     "expected": self.code_revision,
-                    "setup": "Install the pinned forecast-anything dependencies, then run forecast-anything model prepare",
+                    "setup": f"Install the pinned forecast-anything dependencies, then run {self._prepare_command}",
                 },
             )
 
@@ -159,7 +167,7 @@ class TimestralProvider:
                 raise DomainError(
                     "model_preparation_failed",
                     {
-                        "prepare_command": "forecast-anything model prepare",
+                        "prepare_command": self._prepare_command,
                         "error_type": type(error).__name__,
                     },
                 ) from error
@@ -178,7 +186,7 @@ class TimestralProvider:
                     raise DomainError(
                         "model_not_prepared",
                         {
-                            "prepare_command": "forecast-anything model prepare",
+                            "prepare_command": self._prepare_command,
                             "checkpoint": self.checkpoint,
                             "revision": self.revision,
                         },
@@ -196,7 +204,7 @@ class TimestralProvider:
                     raise DomainError(
                         "model_load_failed",
                         {
-                            "prepare_command": "forecast-anything model prepare",
+                            "prepare_command": self._prepare_command,
                             "error_type": type(error).__name__,
                         },
                     ) from error

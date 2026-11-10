@@ -18,7 +18,12 @@ from pydantic import ValidationError
 from .connectors.csv import load_csv
 from .contracts import DomainError, GraphSpec
 from .graph import SourceConfig, parse_node_config
-from .providers.configuration import configured_providers
+from .providers.configuration import (
+    DEFAULT_TIMESTRAL_MODEL,
+    TIMESTRAL_CHECKPOINT,
+    TIMESTRAL_MODELS,
+    configured_providers,
+)
 from .runtime import Runtime
 from .store import Ledger
 from .temporal import freeze
@@ -26,6 +31,14 @@ from .temporal import freeze
 
 def _stop_continuous_worker(signum, frame):
     raise KeyboardInterrupt
+
+
+def _forecast_ledger(path, providers):
+    ledger = Ledger(path)
+    provider = providers.get("timestral")
+    if provider is not None:
+        ledger.bind_forecast_checkpoint(provider.checkpoint)
+    return ledger
 
 
 def _run(args):
@@ -53,14 +66,18 @@ def _run(args):
     }
     if args.primary_node_id is not None:
         content["primary_node_id"] = args.primary_node_id
+    providers = configured_providers()
+    provider = providers.get("timestral")
+    if provider is not None and provider.checkpoint != TIMESTRAL_CHECKPOINT:
+        content["provider_revision"] = provider.capabilities().provider_revision
     key = sha256(
         json.dumps(
             content, sort_keys=True, separators=(",", ":"), allow_nan=False
         ).encode()
     ).hexdigest()
     return Runtime(
-        Ledger(args.db),
-        configured_providers(),
+        _forecast_ledger(args.db, providers),
+        providers,
         {},
         lambda: datetime.now(timezone.utc),
         required_provider="timestral",
@@ -82,13 +99,17 @@ def main() -> int:
         "model", help="Check or explicitly prepare pinned local Timestral"
     )
     model_actions = model.add_subparsers(dest="model_action", required=True)
-    model_actions.add_parser(
+    model_status = model_actions.add_parser(
         "status", help="Inspect dependency provenance and local cache without loading"
     )
-    model_actions.add_parser(
+    model_prepare = model_actions.add_parser(
         "prepare",
         help="Download pinned weights if needed and load on CPU; review the Modified MIT weights license",
     )
+    for action in (model_status, model_prepare):
+        target_model = action.add_mutually_exclusive_group()
+        target_model.add_argument("--config", type=Path)
+        target_model.add_argument("--timestral-model", choices=TIMESTRAL_MODELS)
     show = commands.add_parser("show", help="Read a stored immutable emission")
     show.add_argument("run_id")
     show.add_argument("--db", type=Path, required=True)
@@ -108,6 +129,7 @@ def main() -> int:
     init.add_argument("--workspace", type=Path, required=True)
     init.add_argument("--csv-root", type=Path, required=True)
     init.add_argument("--port", type=int, default=8000)
+    init.add_argument("--timestral-model", choices=TIMESTRAL_MODELS)
     up = commands.add_parser("up", help="Run the local API and worker together")
     target = up.add_mutually_exclusive_group(required=True)
     target.add_argument("--db", type=Path)
@@ -131,6 +153,7 @@ def main() -> int:
     setup.add_argument("--port", type=int)
     setup.add_argument("--codex-bin", default="codex")
     setup.add_argument("--codex-name")
+    setup.add_argument("--timestral-model", choices=TIMESTRAL_MODELS)
     setup.add_argument(
         "--prepare-model",
         action="store_true",
@@ -194,6 +217,7 @@ def main() -> int:
                     args.codex_name,
                     args.prepare_model,
                     executable,
+                    timestral_model=args.timestral_model,
                 )
             elif args.command == "service":
                 result = LaunchAgent(args.config, executable).run(args.action)
@@ -202,7 +226,7 @@ def main() -> int:
         except DomainError as error:
             print(error.model_dump_json(), file=sys.stderr)
             return 2
-        except (OSError, ValueError):
+        except (OSError, ValueError, sqlite3.Error):
             print(
                 json.dumps(
                     {
@@ -244,7 +268,12 @@ def main() -> int:
 
         try:
             if args.command == "init":
-                path = create_workspace(args.workspace, args.csv_root, args.port)
+                path = create_workspace(
+                    args.workspace,
+                    args.csv_root,
+                    args.port,
+                    timestral_model=args.timestral_model,
+                )
                 print(json.dumps({"config": str(path)}))
                 return 0
             if getattr(args, "config", None):
@@ -269,7 +298,10 @@ def main() -> int:
                 "Workspace config already exists; it was not changed.", file=sys.stderr
             )
             return 2
-        except (OSError, ValueError) as error:
+        except DomainError as error:
+            print(error.model_dump_json(), file=sys.stderr)
+            return 2
+        except (OSError, ValueError, sqlite3.Error) as error:
             print(f"Workspace configuration error: {error}", file=sys.stderr)
             return 2
     if args.command == "up":
@@ -303,7 +335,14 @@ def main() -> int:
         return run_stdio()
     try:
         if args.command == "model":
-            provider = configured_providers()["timestral"]
+            from .workspace_config import load_workspace
+
+            selected_model = args.timestral_model
+            if args.config is not None:
+                selected_model = load_workspace(args.config).get(
+                    "timestral_model", DEFAULT_TIMESTRAL_MODEL
+                )
+            provider = configured_providers(selected_model)["timestral"]
             result = (
                 provider.prepare_model()
                 if args.model_action == "prepare"
@@ -319,10 +358,11 @@ def main() -> int:
                 worker_lock(args.db) if args.command == "worker" else nullcontext()
             )
             with ownership:
-                ledger = Ledger(args.db)
+                providers = configured_providers()
+                ledger = _forecast_ledger(args.db, providers)
                 runtime = Runtime(
                     ledger,
-                    configured_providers(),
+                    providers,
                     register_builtin_operators(),
                     lambda: datetime.now(timezone.utc),
                     required_provider="timestral",
