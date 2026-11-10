@@ -2,7 +2,7 @@
 
 This repository is preparing a release candidate. The project name, public owner and publishing destinations remain provisional. Do not infer that a registry package, container image, support address or public deployment exists.
 
-Use the [capability matrix](docs/capabilities.md) to distinguish implemented behavior from the [roadmap](docs/roadmap.md). Small contributions with a reproducible example and explicit limits are welcome. Report suspected vulnerabilities through [SECURITY](SECURITY.md), and keep secrets and private observations out of issues and fixtures.
+The assistant connected over MCP is the main product interface; the site explains setup and the console remains optional. Use the [capability and compatibility matrix](docs/capabilities.md) to distinguish implemented behavior from the [roadmap](docs/roadmap.md). Small contributions with a reproducible example and explicit limits are welcome. Report suspected vulnerabilities through [SECURITY](SECURITY.md), and keep secrets and private observations out of issues and fixtures.
 
 ## Set up and check the core
 
@@ -21,6 +21,10 @@ uv build
 CI targets Python 3.12 and 3.14 and retains both extras on Python validation commands. MCP integration tests launch real loopback API, worker and stdio processes; the artifact test builds a wheel and installs its locked MCP dependency set in a temporary environment outside the checkout. Keep network/cache access and local socket binding available for those checks. SDK-dependent modules skip explicitly without the optional extra; ordinary CLI/missing-extra coverage remains runnable. See the [MCP guide](docs/implementation/mcp.md) for the tool catalog, root/source permissions, reconnect behavior and output bounds. The SDK is the reference client. The local Desktop acceptance scope is documented separately in the [recorded checks](docs/research/desktop-assistant-acceptance.md).
 
 Keep dependency locks and generated contracts synchronized with intentional changes. Do not hand-edit generated schemas or use a skipped model test as evidence that the provider works. The Timestral real-model test is gated; see [its acceptance conditions](docs/implementation/timestral.md). Routine tests require neither model weights nor paid API calls.
+
+## Reproduce the site demo
+
+The [release demo guide](docs/release-demo.md) documents the checked-in synthetic CSV, local Timestral requirements, MCP stdio journey, generated record and accuracy limits. To preview the static site without starting an API or running inference, use the [site preview instructions](site/README.md). The page retains its recorded content without JavaScript. When changing the demo schema or values, update its source fixture, assumptions, sanitized `site/demo-data.json` record and focused checks together. The static HTML is generated from React; run the browser checks described in the site preview instructions.
 
 ## Console and browser checks
 

@@ -680,5 +680,200 @@
       ],
       "baseline_period": 3
     }
-  ]
+  ],
+  "journey": {
+    "schema_version": 1,
+    "generated_at": "2026-11-09T09:40:51.982164+00:00",
+    "interface": "official MCP Python SDK over stdio",
+    "sdk_version": "2.3.0",
+    "source": {
+      "id": "demand",
+      "fixture": "examples/release-demo/observations.csv",
+      "fixture_sha256": "8c13c1e16ac46e1ec9b62785035ba52d3aa4f51268593d5e37616000434bab27",
+      "snapshot_id": "5be928f372298567b1844c48cc2e36528bd09543b71264782b047fb52d71131a",
+      "snapshot_as_of": "2026-10-23T00:00:00Z",
+      "observation_count": 296,
+      "event_time_start": "2026-01-01T00:00:00Z",
+      "event_time_end": "2026-10-23T00:00:00Z",
+      "synthetic": true,
+      "assumptions": [
+        "All values are hand-authored synthetic counts; they are not sales records or a benchmark dataset.",
+        "Event timestamps and publication timestamps use daily UTC buckets; availability equals event time only by synthetic assumption.",
+        "The series alternates 1 and 3 to make a deterministic toy fixture; it has no represented customer, inventory, calendar or causal process.",
+        "The added 2026-10-24 value is a synthetic later observation appended only after the initial forecast and question have been recorded."
+      ]
+    },
+    "forecast": {
+      "job_id": "3e2a5b301555f701816f323354bc59d295b5fb3c75520b56cd002cb39b1df075",
+      "run_id": "ff66ccf8e568170951c6f24e2eb9382d12aa2a1cafceb88ac20c1e8a122d06cf",
+      "state": "completed",
+      "as_of": "2026-10-23T00:00:00Z",
+      "provider": "timestral",
+      "provider_revision": "mistralai/Timestral-28M@49b26409ac87b5935539a5d8ffe7f397b720db47;code=a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
+      "forecast": [
+        {
+          "time": "2026-10-24T00:00:00Z",
+          "value": 1.0128295421600342,
+          "unit": "orders"
+        }
+      ],
+      "baseline_provider": "seasonal_naive",
+      "baseline_forecast": [
+        {
+          "time": "2026-10-24T00:00:00Z",
+          "value": 3.0,
+          "unit": "orders"
+        }
+      ]
+    },
+    "historical_comparison": {
+      "backtest_id": "0a6bfb9ee5613c1f7704dae2d057b18d0c342eae91b91ede3247588fe3e4870b",
+      "status": "completed",
+      "origin_count": 90,
+      "partitions": [
+        {
+          "partition": "exploration",
+          "planned": 30,
+          "matched_count": 30,
+          "model_mae": 0.26940266688664755,
+          "baseline_mae": 2.0,
+          "relative_mae": 0.13470133344332377,
+          "relative_mae_reason": null
+        },
+        {
+          "partition": "selection",
+          "planned": 30,
+          "matched_count": 30,
+          "model_mae": 0.007905646165211996,
+          "baseline_mae": 2.0,
+          "relative_mae": 0.003952823082605998,
+          "relative_mae_reason": null
+        },
+        {
+          "partition": "final",
+          "planned": 30,
+          "matched_count": 30,
+          "model_mae": 0.009475994110107421,
+          "baseline_mae": 2.0,
+          "relative_mae": 0.004737997055053711,
+          "relative_mae_reason": null
+        }
+      ],
+      "interpretation_limit": "These scores describe only the recorded matched cells; they do not establish future accuracy or statistical significance."
+    },
+    "question": {
+      "id": "d5b8f6fcb6c14d7ef478177febdc44d7c3c6445c54378819bd2a365c1a0b20bb",
+      "title": "The next daily demand point",
+      "revision": 1,
+      "recovered_after_mcp_reconnect": true,
+      "references": [
+        "run",
+        "watch",
+        "run"
+      ],
+      "exact_browser_link": "http://127.0.0.1:4173/#/w/0fa6c44a6d24be34a5e7e54187a9ecfc/question/d5b8f6fcb6c14d7ef478177febdc44d7c3c6445c54378819bd2a365c1a0b20bb",
+      "context_view_tool_returned": true
+    },
+    "worker_update": {
+      "source_update_state": "processed_by_independent_worker",
+      "run_id": "c9126611b3a3925829999ec0a49e02548a80bed8128e38d05540a1c3240590a1",
+      "source_snapshot_id": "b9645a3b8c75c50ee0f7783b4bf4d8d11ff3c71096234a0b63211535a142646a",
+      "observation": {
+        "time": "2026-10-24",
+        "value": 7,
+        "published": "2026-10-24",
+        "unit": "orders"
+      },
+      "event_id": "d510e01f927dbeffa263b50b420e4843eabb94fcad01ae8bb7a18c00bddc893b",
+      "event_kind": "forecast_issued",
+      "quality": "provisional",
+      "reason": "insufficient_new_final_origins",
+      "requalification_new_origins": 1,
+      "change_summary": {
+        "previous_run_id": "ff66ccf8e568170951c6f24e2eb9382d12aa2a1cafceb88ac20c1e8a122d06cf",
+        "current_run_id": "c9126611b3a3925829999ec0a49e02548a80bed8128e38d05540a1c3240590a1",
+        "changes": [],
+        "added_targets": [
+          {
+            "node_id": "forecast",
+            "series_id": "demand",
+            "timestamp": "2026-10-25T00:00:00+00:00"
+          },
+          {
+            "node_id": "question",
+            "series_id": "demand",
+            "timestamp": "2026-10-25T00:00:00+00:00"
+          },
+          {
+            "node_id": "reference",
+            "series_id": "demand",
+            "timestamp": "2026-10-25T00:00:00+00:00"
+          }
+        ],
+        "removed_targets": [
+          {
+            "node_id": "forecast",
+            "series_id": "demand",
+            "timestamp": "2026-10-24T00:00:00+00:00"
+          },
+          {
+            "node_id": "question",
+            "series_id": "demand",
+            "timestamp": "2026-10-24T00:00:00+00:00"
+          },
+          {
+            "node_id": "reference",
+            "series_id": "demand",
+            "timestamp": "2026-10-24T00:00:00+00:00"
+          }
+        ],
+        "common_target_count": 0,
+        "incomparable": [],
+        "new_snapshot_ids": [
+          "b9645a3b8c75c50ee0f7783b4bf4d8d11ff3c71096234a0b63211535a142646a"
+        ],
+        "new_evidence_ids": [],
+        "explanation": "Observed forecast differences at common targets and newly available input snapshots; input dependencies do not establish causal effects.",
+        "watch_id": "7a32578b22bf55c2add9e7b82b0a0eb285973abc9c4913aba0d4d56225693fc9",
+        "candidate_id": "35064620c264c3fa1b65d064dff9322707497e6f29a496f0bf9c12fa96521a3e",
+        "template_id": "expected_deviation",
+        "question": "Registered expected_deviation question for demand.",
+        "dependencies": [
+          "demand"
+        ]
+      },
+      "webhook_state": "delivered",
+      "webhook_attempts": 1,
+      "received_while_mcp_disconnected": true,
+      "provisional_notice": {
+        "status": "provisional",
+        "reason": "insufficient_new_final_origins"
+      }
+    },
+    "timings": {
+      "automation_seconds_to_first_forecast": 11.673,
+      "automation_end_to_end_seconds": 73.34,
+      "mcp_reconnect_recovery_seconds": 0.712,
+      "disconnected_processing_seconds": 61.604
+    },
+    "manual_steps_before_first_forecast": [
+      "Install the pinned Python dependencies and MCP extra.",
+      "Review the separate Timestral weights license and prepare the pinned model.",
+      "Review and explicitly approve the synthetic CSV mapping and UTC cutoff; the runner records this declared approval.",
+      "Choose a fresh private workspace path and run the reproduction command."
+    ],
+    "provenance": {
+      "model": "mistralai/Timestral-28M@49b26409ac87b5935539a5d8ffe7f397b720db47;code=a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
+      "weights_revision": "49b26409ac87b5935539a5d8ffe7f397b720db47",
+      "code_revision": "a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
+      "model_device": "cpu",
+      "model_dtype": "float32",
+      "baseline": "seasonal_naive; independent comparator, not a silent fallback",
+      "dataset": "hand-authored synthetic CSV; no external data source"
+    },
+    "limits": [
+      "Synthetic values and a historical comparison on this fixture do not establish real-world accuracy or provider superiority.",
+      "No prepared model weights are included in the wheel or source archive."
+    ]
+  }
 }

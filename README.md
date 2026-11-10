@@ -2,13 +2,15 @@
 
 Connect explicit data sources, compose forecasts in a **Future Graph**, and inspect what changed, which inputs were available, and which results have evidence behind them.
 
-Forecast Anything is an open-source forecasting infrastructure under development, with an **MCP-first product direction**: use it through your own assistant, with a website for setup and examples and an optional console for graphs and evidence. The local stdio MCP adapter is implemented and tested with the official Python SDK; the supported Desktop MCP workflow has [recorded acceptance](docs/research/desktop-assistant-acceptance.md), and the [local site source](site/README.md) is ready for review before publication. [The console](apps/console/) is optional. See the [product direction](docs/superpowers/specs/2026-10-29-mcp-first-product-design.md).
+Forecast Anything is a local predictive observatory. The **assistant connected over MCP is the main interface**: ask a question, keep its forecast and evidence, and return after new data arrives. The public site explains setup and shows a [reproducible synthetic journey](docs/release-demo.md); contextual views expose exact results and their evidence. [The advanced console](apps/console/) is optional. The local stdio adapter is tested with the official Python SDK; host-specific acceptance is tracked separately in the [MCP compatibility matrix](docs/capabilities.md) and [Desktop record](docs/research/desktop-assistant-acceptance.md).
 
 The current implementation is a local forecasting observatory. The Python runtime validates typed graphs, freezes point-in-time inputs, records immutable forecasts in SQLite, and evaluates them against later observations. A React console uses the same authenticated API. The working name, public owner, package registry and domain remain provisional; this checkout prepares a release candidate and does not identify a published package or hosted service.
 
-## Connect Codex on macOS
+## Connect your assistant
 
-Install the local wheel and its locked MCP dependencies, then run `forecast-anything setup --prepare-model`. The setup command starts the workspace service and registers the stdio adapter with Codex. See the [installation guide](docs/installation.md) for the artifact, lifecycle and recovery steps.
+Install the local wheel and its locked MCP dependencies, prepare the pinned local Timestral model, and connect the stdio server to your assistant. On macOS, `forecast-anything setup --prepare-model` starts the workspace service and registers Codex. For another MCP client, follow the [MCP connection guide](docs/implementation/mcp.md). Then ask for a CSV preview, confirm its explicit time and unit assumptions, and submit the first forecast. The [quickstart](docs/quickstart.md) and [installation guide](docs/installation.md) walk through the same path.
+
+The [release demo](docs/release-demo.md) reproduces a synthetic CSV, historical Timestral-versus-baseline comparison, saved question, disconnected worker update and change explanation. Its scores do not establish predictive accuracy.
 
 ## Try a local Timestral forecast
 

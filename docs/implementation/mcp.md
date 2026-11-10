@@ -1,8 +1,19 @@
 # Local MCP adapter
 
-The stdio adapter (installed with the optional MCP extra) exposes the existing authenticated API to an MCP client. It registers mapped CSV sources, submits existing executable candidates or explicit configured forecasts, submits bounded historical backtests, manages recurring-question watches, reads immutable results and submits single-run evaluations. The API owns graphs, snapshots, jobs, computation, watch scheduling and evidence; MCP creates no second ledger.
+Forecast Anything is used through the assistant connected to the local **MCP stdio adapter**. Context views and the optional console help inspect a result; they are not required to ask the question or submit the forecast. The adapter exposes the authenticated local API to an MCP client: it registers mapped CSV sources, submits executable candidates or configured forecasts, compares historical origins, manages recurring questions and watches, and reads immutable evidence. The API owns graphs, snapshots, jobs, computation, scheduling and the ledger.
 
-The reference client is the official Python `mcp==2.3.0` SDK, locked in `uv.lock`. Real subprocess tests exercise stdio, loopback HTTP and an independent worker, including an installed wheel outside the checkout. A separate configured-forecast smoke used Codex CLI as an MCP client; Desktop MCP reads/reconnect were owner-confirmed. Historical library fixtures use a seasonal baseline; the current product requires Timestral and has a separate genuine-model acceptance record. Neither synthetic fixture establishes general predictive quality.
+The reference client is the official Python `mcp==2.3.0` SDK, locked in `uv.lock`. Real subprocess tests exercise stdio, loopback HTTP and an independent worker, including an installed wheel outside the checkout. A separate configured-forecast smoke used Codex CLI as an MCP client. SDK protocol execution, local browser routes, the MCP Apps reference host and Codex Desktop are tracked separately in the [compatibility matrix](../capabilities.md): Desktop's embedded rendering remains unverified. The current product requires pinned Timestral; the synthetic journey does not establish general predictive quality.
+
+## Get the first result
+
+The same first-result path works in the Codex setup and a generic MCP stdio host:
+
+1. Install the local artifact and locked MCP dependencies. For Codex on macOS, follow the [guided installation](../installation.md) to prepare Timestral, start the workspace service and register the client. For another MCP host, follow the [stdio configuration](#private-workspace-configuration) below to prepare the model and connect the client.
+2. If you are running the workspace in the foreground, start the API and independent worker with `forecast-anything up --config /absolute/path/to/config.json --verify-model`. Keep that process or the guided macOS service running so accepted work can finish after the assistant disconnects.
+3. In the assistant, check `get_diagnostics` and `get_capabilities`. Ask it to preview a CSV that the runtime can read, resolve event time, availability, revision, series, unit, cadence, timezone and missing-value meaning, and confirm the exact mapping and cutoff with `confirm_csv_source`.
+4. Poll the returned discovery job, inspect its frozen snapshot and executable Timestral candidate, and create a saved question. Submit the candidate against its exact snapshot and origin with a new stable key. Poll `get_job`, then read the completed run and call `open_context_view` with the question or run ID for its exact browser route.
+
+For recurring updates, link a watch to the saved question and qualify it with a candidate-bound backtest. Keep the `source_id`, snapshot, job, question, watch and run IDs; after reconnect, use them to recover the same record. The checked-in [reproducible demo](../release-demo.md) performs this journey with synthetic observations and records a worker update while its MCP client is closed.
 
 ## Install and operate
 
