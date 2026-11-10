@@ -4,7 +4,7 @@ The guided route uses a macOS user LaunchAgent, an installed wheel, a local SQLi
 
 ## Install the local artifact
 
-Obtain the wheel, `requirements-mcp.txt` and `SHA256SUMS` from the same reviewed build. Run the following from a directory holding the wheel, source archive, requirements file and checksum manifest. Use a new, stable environment path for each version and keep it available to launchd and Codex.
+Obtain the wheel, source archive, `uv.lock`, `requirements-mcp.txt` and `SHA256SUMS` from the same reviewed build. Run the following from a directory holding those files. Use a new, stable environment path for each version and keep it available to launchd and Codex.
 
 ```sh
 shasum -a 256 -c SHA256SUMS
@@ -15,7 +15,7 @@ uv pip install --no-deps --python "$runtime/bin/python" forecast_anything-0.1.1-
 forecast_cli="$runtime/bin/forecast-anything"
 ```
 
-Build locally from the reviewed source with `uv build --out-dir dist` and `uv export --locked --no-dev --extra mcp --no-emit-project --format requirements-txt --output-file dist/requirements-mcp.txt`. Run `(cd dist && shasum -a 256 *.whl *.tar.gz requirements-mcp.txt > SHA256SUMS)`. The source archive excludes local environments, frontend dependencies and browser test outputs. The wheel installs the runtime and MCP uses the locked dependencies. A console build is a separate optional path.
+Build locally from the reviewed source with `uv build --out-dir dist` and `uv export --locked --no-dev --extra mcp --no-emit-project --format requirements-txt --output-file dist/requirements-mcp.txt`. Copy the reviewed `uv.lock` to `dist/uv.lock`, then run `(cd dist && shasum -a 256 *.whl *.tar.gz uv.lock requirements-mcp.txt > SHA256SUMS)`. The source archive excludes local environments, frontend dependencies and test outputs. The wheel installs the runtime and MCP uses the exported locked dependency set. A console build is a separate optional path.
 
 ## Set up the workspace and Codex
 

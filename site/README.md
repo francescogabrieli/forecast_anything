@@ -1,15 +1,25 @@
-# Preview the public site
+# Forecast Anything site
 
-From the repository root, run:
+The public site is a separate Vite project. React renders its TSX components to HTML at build time; the static output needs no API, browser JavaScript, model weights, or console dependencies. A small client script adds one-time section reveals and a chart replay when motion is enabled. All forecast data and the native evidence disclosure remain available without that script.
+
+From the repository root, with Node 24.5 or later:
 
 ```sh
-python3 -m http.server 4174 --bind 127.0.0.1 --directory site
+npm --prefix site ci
+npm --prefix site run build
+npm --prefix site run preview -- --host 127.0.0.1 --port 4176
 ```
 
-Open [the local preview](http://127.0.0.1:4174/). No build, API server, third-party font request or model download is required.
+Open [the local preview](http://127.0.0.1:4176/). The generated site is in `site/dist/`; serve that directory with any static HTTP server. For development, use `npm --prefix site run dev`.
 
-The explorer shows recorded values from three synthetic fixtures, with the forecast cutoff, units, assumptions and record IDs. If JavaScript or the data request is unavailable, the retail example is still readable. When outputs change, rerun the corresponding fixture with `scripts/run_example.py` and refresh both `demo-data.json` and the HTML fallback.
+The chart reads its observed values from the checked-in [synthetic CSV](../examples/release-demo/observations.csv) and the forecast, baseline and successor from [the recorded run](demo-data.json). The readout and update table use the same record. See the [demo guide](../docs/release-demo.md) for reproduction and limitations. The hero photograph is by Nenad Stojković (Shixart1985). The site uses a resized copy, displayed with a crop and monochrome treatment. [Original photograph on Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Shelves_stocked_with_boxes_and_carts_in_a_spacious_warehouse_environment_during_daylight_hours.jpg) · [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/).
 
-The responsive SVG plot uses the line chart from Taste Skill; the console tour uses current production-build captures of Home and Observatory against the isolated, seeded E2E backend. The public UI follows the repository’s [Linear design reference](../DESIGN.md), imported with `npx getdesign@latest add linear.app`. It uses the specified system font fallback. The site is prepared for local review; it has not been published.
+The fonts are bundled locally under the [SIL Open Font License](src/fonts/OFL.txt).
 
-The recorded explorer now uses genuine local Timestral runs, with a separate seasonal reference in the data file. Producing new records requires prepared model weights; viewing the static files does not. Displayed values use three decimal places while the data file retains full precision. Baseline data/HTML before this update were retained privately under `.local/site-baseline-before-timestral/`. This site source is still local and unpublished.
+With the preview running, use the console’s existing Playwright installation for browser checks (the console itself does not need to run):
+
+```sh
+node site/scripts/check.mjs apps/console/node_modules/playwright/index.mjs /tmp/forecast-site-screens
+```
+
+The check covers five viewports, recorded values, links within the static output, and the keyboard path with JavaScript disabled. Pass a local path to `axe.min.js` as the third argument to also check accessibility rules. Set `SITE_URL` to test an alternate preview address.

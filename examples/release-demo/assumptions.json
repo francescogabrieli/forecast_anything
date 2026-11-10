@@ -1,0 +1,24 @@
+{
+  "title": "Synthetic daily demand with one later observation",
+  "source_id": "demand",
+  "synthetic": true,
+  "timezone": "UTC",
+  "cadence": "daily",
+  "frequency": "1d",
+  "unit": "orders",
+  "available_at_policy": "same_as_event_time_by_synthetic_assumption",
+  "initial_cutoff": "2026-10-23",
+  "initial_as_of": "2026-10-23T00:00:00Z",
+  "worker_observation": {
+    "time": "2026-10-24",
+    "value": 7,
+    "published": "2026-10-24"
+  },
+  "historical_origins_per_partition": 30,
+  "assumptions": [
+    "All values are hand-authored synthetic counts; they are not sales records or a benchmark dataset.",
+    "Event timestamps and publication timestamps use daily UTC buckets; availability equals event time only by synthetic assumption.",
+    "The series alternates 1 and 3 to make a deterministic toy fixture; it has no represented customer, inventory, calendar or causal process.",
+    "The added 2026-10-24 value is a synthetic later observation appended only after the initial forecast and question have been recorded."
+  ]
+}

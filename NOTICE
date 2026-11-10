@@ -7,15 +7,15 @@ decision. This notice does not assign copyright ownership or grant trademark
 rights in the working name.
 
 Third-party software retains its own copyright and license terms. The Python
-dependency inventory is in pyproject.toml and uv.lock. The console and optional
+dependency inventory is in pyproject.toml and uv.lock. The console, public site and optional
 agent inventories are in their package.json and package-lock.json files.
 Retain applicable third-party notices when redistributing their artifacts;
 this file is not a complete third-party license inventory or SBOM.
 
-The console bundles IBM Plex Sans (weights 400, 500 and 600), distributed
-through Google Fonts under the SIL Open Font License 1.1. The font's copyright
-and complete license are retained in apps/console/public/fonts/OFL.txt and
-served with the console. Source: https://github.com/google/fonts/tree/main/ofl/ibmplexsans.
+The console and static site include IBM Plex Sans, distributed through Google
+Fonts under the SIL Open Font License 1.1. The font copyright and complete license
+are retained in apps/console/public/fonts/OFL.txt and site/src/fonts/OFL.txt.
+Source: https://github.com/google/fonts/tree/main/ofl/ibmplexsans.
 
 The optional Timestral integration has separate code and model-weight terms:
 - Source: mistralai/timestral, Apache-2.0, pinned in integrations/models.lock.json.

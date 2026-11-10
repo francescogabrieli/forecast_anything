@@ -1,7 +1,6 @@
 """A 320-row synthetic CSV remains usable through bounded MCP projections."""
 
 import asyncio
-import json
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -10,6 +9,19 @@ import pytest
 pytest.importorskip("mcp", reason="install the optional mcp extra")
 
 from mcp_processes import LocalWorkspace, call, poll_job, source_spec
+
+
+def _contains_exact_csv_value(payload, values):
+    text_values = {str(value) for value in values}
+    if isinstance(payload, dict):
+        return any(_contains_exact_csv_value(item, values) for item in payload.values())
+    if isinstance(payload, (list, tuple)):
+        return any(_contains_exact_csv_value(item, values) for item in payload)
+    if isinstance(payload, bool):
+        return False
+    if isinstance(payload, (int, float)):
+        return payload in values
+    return isinstance(payload, str) and payload in text_values
 
 
 def test_320_row_csv_summary_paging_and_stored_snapshot_forecast(tmp_path):
@@ -35,8 +47,8 @@ def test_320_row_csv_summary_paging_and_stored_snapshot_forecast(tmp_path):
             assert summary["observation_count"] == 320
             assert summary["series_count"] == 1
             assert summary["missing_count"] == 0
-            serialized = json.dumps(summary, ensure_ascii=False)
-            assert all(str(value) not in serialized for value in values)
+            # Check exact scalar leakage rather than substrings in random IDs or dates.
+            assert not _contains_exact_csv_value(summary, values)
 
             series_page = await call(
                 client,
@@ -49,10 +61,7 @@ def test_320_row_csv_summary_paging_and_stored_snapshot_forecast(tmp_path):
             assert series_page["series"][0]["series_id"] == "large"
             assert series_page["series"][0]["observation_count"] == 320
             assert series_page["series"][0]["revision_count"] == 1
-            assert all(
-                str(value) not in json.dumps(series_page, ensure_ascii=False)
-                for value in values
-            )
+            assert not _contains_exact_csv_value(series_page, values)
 
             accepted = await call(
                 client,
