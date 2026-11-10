@@ -59,15 +59,40 @@ try {
 
   const motionPage = await browser.newPage({ reducedMotion: 'no-preference' });
   await motionPage.goto(base);
+  const hero = motionPage.locator('.chart-preview');
+  await motionPage.waitForFunction(() =>
+    document.querySelector('.chart-preview [data-reveal="history"]').getAnimations().length === 1
+  );
+  assert.equal(await hero.locator('.forecast-extension').count(), 2);
+
   const replay = motionPage.getByRole('button', { name: 'Replay forecast' });
   await replay.press('Enter');
-  const active = await motionPage.locator('#demo svg[data-forecast-chart]:visible .cutoff-rule').evaluate(el => el.getAnimations().length);
-  assert.equal(active, 1, 'keyboard activation starts the cutoff highlight');
+  const chart = motionPage.locator('#demo svg[data-forecast-chart]:visible');
+  const frames = await chart.evaluate(svg => {
+    const history = svg.querySelector('[data-reveal="history"]');
+    const forecast = svg.querySelector('[data-reveal="forecast"]');
+    const animations = [history.getAnimations()[0], forecast.getAnimations()[0]];
+    animations.forEach(animation => animation.pause());
+    const widthsAt = time => {
+      animations.forEach(animation => { animation.currentTime = time; });
+      return [history, forecast].map(mask => parseFloat(getComputedStyle(mask).width));
+    };
+    return { history: widthsAt(310), forecast: widthsAt(780), end: widthsAt(1000) };
+  });
+  assert.ok(frames.history[0] > 0 && frames.history[0] < frames.end[0]);
+  assert.equal(frames.history[1], 0);
+  assert.equal(frames.forecast[0], frames.end[0]);
+  assert.ok(frames.forecast[1] > 0 && frames.forecast[1] < frames.end[1]);
+  await replay.press('Enter');
+  const restarted = await chart.locator('[data-reveal="history"]').evaluate(mask =>
+    mask.getAnimations().filter(animation => animation.playState === 'running').length
+  );
+  assert.equal(restarted, 1);
   await motionPage.emulateMedia({ reducedMotion: 'reduce' });
   await replay.waitFor({ state: 'hidden' });
   assert.equal(await motionPage.evaluate(() => document.getAnimations().length), 0);
   await motionPage.close();
-  console.log('OK chart replay and reduced motion');
+  console.log('OK history reveal, forecast continuation, hero autoplay and reduced motion');
 
   const page = await browser.newPage({ javaScriptEnabled: false });
   const response = await page.goto(base);
@@ -80,10 +105,20 @@ try {
   assert.notEqual(await page.locator(':focus').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
   await page.keyboard.press('Enter');
   assert.equal(new URL(page.url()).hash, '#main');
-  const evidence = page.locator('summary');
+  const evidence = page.locator('#update details summary');
   await evidence.focus();
   await page.keyboard.press('Enter');
-  assert.equal(await page.locator('details').getAttribute('open'), '');
+  assert.equal(await page.locator('#update details').getAttribute('open'), '');
+  const consolePreview = page.locator('.console-preview');
+  const consoleImage = consolePreview.getByRole('img');
+  assert.equal(await consoleImage.isVisible(), false);
+  await consolePreview.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await consolePreview.getAttribute('open'), '');
+  assert.equal(await consoleImage.isVisible(), true);
+  const screenshot = await page.request.get(new URL(await consoleImage.getAttribute('src'), base).href);
+  assert.equal(screenshot.status(), 200);
+  assert.match(screenshot.headers()['content-type'], /^image\/webp/);
   for (const point of [record.forecast.forecast[0], record.forecast.baseline_forecast[0]]) {
     assert.ok((await page.locator('#demo').innerText()).includes(point.value.toFixed(3)));
   }
