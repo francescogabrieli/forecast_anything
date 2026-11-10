@@ -776,7 +776,6 @@ class Worker:
                 payload={
                     "reason": reason,
                     "new_final_origins": new_origins,
-                    "requalification_due_at": due_at.isoformat(),
                     "quality": current.quality,
                 },
             )

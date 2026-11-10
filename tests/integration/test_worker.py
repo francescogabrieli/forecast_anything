@@ -324,6 +324,65 @@ def registered_watch(
     return csv, registered
 
 
+def test_requalification_wait_retry_does_not_rewrite_inbox_transition(tmp_path):
+    from forecast_anything.contracts import (
+        QuestionCreateRequest,
+        QuestionReferenceRequest,
+    )
+
+    ledger, _, runtime = setup(tmp_path)
+    registered_watch(tmp_path, ledger)
+    watch = ledger.get_watch("watch")
+    question = ledger.create_question(
+        QuestionCreateRequest(
+            key="requalification-wait",
+            title="Sales outlook",
+            meaning="Forecast daily sales",
+            source_ids=("sales",),
+            selection={"provider": "seasonal_naive", "horizon": 1},
+        )
+    )
+    ledger.link_question_reference(
+        question.question_id,
+        QuestionReferenceRequest(
+            key="watch-reference",
+            revision=1,
+            target_type="watch",
+            target_id=watch.watch_id,
+        ),
+    )
+    worker = Worker(runtime, JobQueue(ledger))
+    reason = "insufficient_new_final_origins"
+
+    worker._wait_for_requalification(
+        watch,
+        worker._question_links_for_watch(watch.watch_id),
+        T,
+        reason=reason,
+        new_origins=1,
+        due_at=T + timedelta(seconds=60),
+    )
+    current = ledger.get_watch(watch.watch_id)
+    worker._wait_for_requalification(
+        current,
+        worker._question_links_for_watch(watch.watch_id),
+        T + timedelta(seconds=61),
+        reason=reason,
+        new_origins=1,
+        due_at=T + timedelta(seconds=121),
+    )
+
+    inbox = ledger.list_inbox_events(
+        question_id=question.question_id, offset=0, limit=10
+    )
+    assert inbox.total_count == 1
+    assert inbox.events[0].event_kind == "requalification_waiting"
+    assert "requalification_due_at" not in inbox.events[0].payload
+    assert ledger.get_watch(watch.watch_id).requalification_due_at == T + timedelta(
+        seconds=121
+    )
+
+
 def test_due_watch_expires_before_resume_and_coalesces_source_refresh(tmp_path):
     ledger, _, runtime = setup(tmp_path)
     _, registered = registered_watch(tmp_path, ledger)
