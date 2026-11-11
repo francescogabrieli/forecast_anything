@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import timezone
+from datetime import UTC
 from hashlib import sha256
 from math import isfinite
 from typing import Annotated, Literal
@@ -27,7 +27,7 @@ from ..contracts import (
 )
 
 UTCDatetime = Annotated[
-    AwareDatetime, AfterValidator(lambda value: value.astimezone(timezone.utc))
+    AwareDatetime, AfterValidator(lambda value: value.astimezone(UTC))
 ]
 Partition = Literal["exploration", "selection", "final"]
 NonnegativeInt = Annotated[int, Field(ge=0, strict=True)]
@@ -74,8 +74,8 @@ class ObservationArchive(FrozenContract):
             Observation(
                 **{
                     **row.model_dump(),
-                    "event_time": row.event_time.astimezone(timezone.utc),
-                    "available_at": row.available_at.astimezone(timezone.utc),
+                    "event_time": row.event_time.astimezone(UTC),
+                    "available_at": row.available_at.astimezone(UTC),
                     "value": 0.0 if row.value == 0 else row.value,
                 }
             )

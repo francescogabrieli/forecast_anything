@@ -1,7 +1,7 @@
 """Durable operation reservation, namespaced queueing, and replay behavior."""
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,7 +14,7 @@ from forecast_anything.runtime import Runtime
 from forecast_anything.store import Ledger
 from forecast_anything.worker import Worker
 
-T = datetime(2026, 11, 7, tzinfo=timezone.utc)
+T = datetime(2026, 11, 7, tzinfo=UTC)
 AUTH = {"Authorization": "Bearer operations-token"}
 
 
@@ -219,7 +219,7 @@ def test_resume_recovers_each_reserved_enqueue_interruption(
 def test_guided_confirmation_rolls_back_source_when_enqueue_fails(
     tmp_path, monkeypatch
 ):
-    ledger, client, _, _ = _setup(tmp_path)
+    _ledger, client, _, _ = _setup(tmp_path)
     service = client.app.state.observatory
     original = service.catalog.get("sales").revision
     spec = service.catalog.get("sales").spec.model_dump(mode="json")

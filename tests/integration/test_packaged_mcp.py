@@ -38,6 +38,8 @@ def test_installed_wheel_mcp_baseline_outside_checkout(tmp_path):
     with ZipFile(wheel) as archive:
         names = archive.namelist()
         assert "forecast_anything/mcp_adapter/server.py" in names
+        instructions = "forecast_anything/mcp_adapter/instructions.md"
+        assert archive.read(instructions) == (ROOT / "src" / instructions).read_bytes()
         assert "forecast_anything/mcp_adapter/ui_dist/context.html" in names
         for name in names:
             assert not inspector["SECRET_NAME"].search(name), name
@@ -90,7 +92,7 @@ def test_installed_wheel_mcp_baseline_outside_checkout(tmp_path):
                     str(python),
                     "-I",
                     "-c",
-                    "import forecast_anything, forecast_anything.mcp_adapter.server as server, mcp, importlib.metadata, json; print(json.dumps({'paths': [forecast_anything.__file__, server.__file__, mcp.__file__], 'mcp': importlib.metadata.version('mcp')}))",
+                    "import forecast_anything, forecast_anything.mcp_adapter.server as server, mcp, importlib.metadata, importlib.util, json; assert importlib.util.find_spec('timestral') is None; print(json.dumps({'paths': [forecast_anything.__file__, server.__file__, mcp.__file__], 'mcp': importlib.metadata.version('mcp')}))",
                 ],
                 outside,
                 env,

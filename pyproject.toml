@@ -15,20 +15,38 @@ dependencies = [
     "numpy>=2,<3",
     "fastapi>=0.115,<1",
     "uvicorn>=0.30,<1",
-    "timestral @ git+https://github.com/mistralai/timestral.git@a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
 ]
 
 [project.optional-dependencies]
 mcp = ["mcp>=2,<3", "httpx>=0.27,<1"]
-timestral = ["timestral @ git+https://github.com/mistralai/timestral.git@a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff"]
+timestral = ["huggingface-hub>=0.23", "safetensors>=0.4", "torch>=2.4"]
 dev = [
     "httpx>=0.27,<1",
     "pytest>=8,<10",
+    "hypothesis>=6,<7",
     "ruff>=0.17,<0.18",
+    "mypy>=1.15,<3",
+    "coverage>=7.10,<8",
+    "pip-audit>=2.9,<3",
 ]
 
+[dependency-groups]
+dev = ["timestral @ git+https://github.com/mistralai/timestral.git@a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff"]
+
 [tool.uv]
-default-groups = []
+default-groups = ["dev"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src"]
+check_untyped_defs = true
+ignore_missing_imports = true
+warn_unused_ignores = true
+
+[tool.coverage.run]
+branch = true
+source = ["forecast_anything"]
+patch = ["subprocess"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
@@ -40,14 +58,11 @@ forecast-anything = "forecast_anything.cli:main"
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I"]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP", "SIM", "RUF"]
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
-
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.hatch.build.targets.wheel.force-include]
 "examples/minimal" = "forecast_anything/examples/minimal"
@@ -80,7 +95,6 @@ exclude = [
     "**/playwright-report/**",
     "**/coverage/**",
     "/apps/console/dist/**",
-    "/apps/agent/dist/**",
     "/site/dist/**",
     "/site/.prerender/**",
 ]

@@ -1,7 +1,7 @@
 """Point-in-time evaluations of issued results, without rewriting an emission."""
 
 import json
-from datetime import timezone
+from datetime import UTC
 from hashlib import sha256
 
 from ..contracts import (
@@ -14,11 +14,23 @@ from ..contracts import (
 from ..graph import ForecastConfig, parse_node_config
 from ..operators import register_builtin_operators
 from ..temporal import freeze
-from .metrics import event_metrics, forecast_metrics, relative_mae
+from . import _legacy_metrics
+from .metrics import (
+    CURRENT_SCORING,
+    LEGACY_SCORING,
+    event_metrics,
+    forecast_metrics,
+    relative_mae,
+)
 
 
 def evaluate_run(
-    run: RunRecord, actuals: Snapshot, graph: GraphSpec, *, operators=None
+    run: RunRecord,
+    actuals: Snapshot,
+    graph: GraphSpec,
+    *,
+    operators=None,
+    scoring_version: str = CURRENT_SCORING,
 ) -> EvaluationRecord:
     """Score complete targets using only the selected actuals vintage.
 
@@ -27,22 +39,27 @@ def evaluate_run(
     the explicit builtin registry is the default. Scenario realizations are not
     represented by v1 contracts, so scenario runs remain insufficient evidence.
     """
+    if scoring_version not in {LEGACY_SCORING, CURRENT_SCORING}:
+        raise DomainError("unsupported_scoring_version", {"version": scoring_version})
+    score_forecast = (
+        _legacy_metrics.forecast_metrics
+        if scoring_version == LEGACY_SCORING
+        else forecast_metrics
+    )
     run = RunRecord.model_validate(run.model_dump())
     actuals = Snapshot.model_validate(actuals.model_dump())
     graph = GraphSpec.model_validate(graph.model_dump())
-    run.as_of = run.as_of.astimezone(timezone.utc)
-    actuals.as_of = actuals.as_of.astimezone(timezone.utc)
+    run.as_of = run.as_of.astimezone(UTC)
+    actuals.as_of = actuals.as_of.astimezone(UTC)
     for forecast in run.results.values():
-        forecast.timestamps = tuple(
-            t.astimezone(timezone.utc) for t in forecast.timestamps
-        )
+        forecast.timestamps = tuple(t.astimezone(UTC) for t in forecast.timestamps)
     if (run.graph_id, run.graph_version) != (graph.graph_id, graph.version):
         raise DomainError("graph_identity_mismatch", {})
     operators = register_builtin_operators() if operators is None else operators
     metrics, assumptions = (
         {},
         [
-            "evaluation=v1; one issued run is one origin; complete target windows only",
+            f"evaluation={scoring_version}; one issued run is one origin; complete target windows only",
             "actuals are selected by available_at <= actuals.as_of; no emission is modified",
         ],
     )
@@ -77,7 +94,7 @@ def evaluate_run(
             ):
                 if any(
                     o.unit != unit
-                    for row, unit in zip(cells, forecast.units)
+                    for row, unit in zip(cells, forecast.units, strict=False)
                     for o in row
                 ):
                     raise DomainError("incompatible_units", {"node_id": node_id})
@@ -94,7 +111,7 @@ def evaluate_run(
             elif forecast.timestamps[-1] > actuals.as_of or any(
                 o.available_at > actuals.as_of
                 and o.series_id in forecast.series_ids
-                and o.event_time.astimezone(timezone.utc) in forecast.timestamps
+                and o.event_time.astimezone(UTC) in forecast.timestamps
                 for o in actuals.observations
             ):
                 state = "pending"
@@ -169,7 +186,7 @@ def evaluate_run(
                     )
                 metrics[node_id] = {
                     "status": "evaluated",
-                    **forecast_metrics(forecast, outcome.point),
+                    **score_forecast(forecast, outcome.point),
                 }
                 if forecast.point is None and not forecast.quantiles:
                     metrics[node_id].update(

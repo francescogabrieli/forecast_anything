@@ -1,6 +1,6 @@
 """Controlled numerical fixtures shared by focused backtest tests."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from forecast_anything.contracts import (
     BacktestSettings,
@@ -13,7 +13,7 @@ from forecast_anything.runtime import Runtime
 from forecast_anything.sources.catalog import SourceRevision
 from forecast_anything.store import Ledger
 
-START = datetime(2026, 1, 1, tzinfo=timezone.utc)
+START = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 def rows(count=16):

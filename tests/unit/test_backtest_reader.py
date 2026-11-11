@@ -1,6 +1,6 @@
 """Revision capture retains raw history and refuses overflow before interpreting rows."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -41,7 +41,7 @@ def test_reader_retains_revisions_and_ingest_bytes_remain_unchanged(tmp_path):
     rows = profiling.read_observations(spec)
     assert tuple(row.revision for row in rows) == ("a", "b")
     assert rows[0].event_time.isoformat() == "2026-10-23T00:00:00+02:00"
-    as_of = datetime(2026, 10, 24, tzinfo=timezone.utc)
+    as_of = datetime(2026, 10, 24, tzinfo=UTC)
     expected = freeze(
         (
             Observation(

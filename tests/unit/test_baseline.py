@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -6,7 +6,7 @@ from forecast_anything.contracts import DomainError, ForecastRequest, Observatio
 from forecast_anything.providers.baseline import SeasonalNaiveProvider
 from forecast_anything.temporal import freeze
 
-T = datetime(2026, 10, 24, tzinfo=timezone.utc)
+T = datetime(2026, 10, 24, tzinfo=UTC)
 
 
 def history(values=(10, 20, 10, 20)):
@@ -81,7 +81,7 @@ def test_unusable_history_is_rejected(values):
 def test_multiple_series_share_fixed_utc_calendar_across_dst():
     from zoneinfo import ZoneInfo
 
-    start = datetime(2026, 10, 25, 0, tzinfo=timezone.utc)
+    start = datetime(2026, 10, 25, 0, tzinfo=UTC)
     observations = tuple(
         Observation(
             series_id=s,
@@ -119,7 +119,7 @@ def test_availability_uses_absolute_time_during_repeated_dst_hour():
     origin = datetime(2026, 10, 25, 2, 30, tzinfo=zone, fold=0)
     data = history((1,))
     data.as_of = origin
-    data.observations[0].event_time = datetime(2026, 10, 24, 23, tzinfo=timezone.utc)
+    data.observations[0].event_time = datetime(2026, 10, 24, 23, tzinfo=UTC)
     data.observations[0].available_at = datetime(2026, 10, 25, 2, tzinfo=zone, fold=1)
     with pytest.raises(DomainError, match="unavailable_observation"):
         SeasonalNaiveProvider(1).forecast(

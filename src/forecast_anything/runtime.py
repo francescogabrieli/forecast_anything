@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from hashlib import sha256
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from .contracts import (
-    REPRESENTATION_FIELDS,
     Capabilities,
     DomainError,
     EventRecord,
     ForecastRequest,
-    ForecastResult,
     GraphSpec,
+    ModelSelectionEvidence,
     OperatorContract,
     RunRecord,
     Snapshot,
@@ -28,6 +28,7 @@ from .graph import (
 )
 from .operators.base import Operator
 from .providers.base import ForecastProvider, frequency_step, observation_grid
+from .runtime_results import _require_representations, _result, apply_operator
 from .store import Ledger
 
 if TYPE_CHECKING:
@@ -37,43 +38,6 @@ if TYPE_CHECKING:
 def _digest(value: dict) -> str:
     wire = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
     return sha256(wire.encode()).hexdigest()
-
-
-def _result(value) -> ForecastResult:
-    # Revalidation catches mutable models and malicious adapters using model_copy.
-    result = ForecastResult.model_validate(value.model_dump())
-    # Compare absolute instants: same-ZoneInfo datetime comparisons ignore fold.
-    result.timestamps = tuple(
-        timestamp.astimezone(timezone.utc) for timestamp in result.timestamps
-    )
-    if not result.series_ids or len(set(result.series_ids)) != len(result.series_ids):
-        raise DomainError(
-            "invalid_result", {"reason": "series IDs must be nonempty and unique"}
-        )
-    if not result.timestamps or any(
-        b <= a for a, b in zip(result.timestamps, result.timestamps[1:])
-    ):
-        raise DomainError(
-            "invalid_result", {"reason": "timestamps must be nonempty and ordered"}
-        )
-    if result.paths is not None and not result.paths:
-        raise DomainError("invalid_result", {"reason": "paths must contain samples"})
-    if all(getattr(result, rep) is None for rep in ("point", "quantiles", "paths")):
-        raise DomainError(
-            "invalid_result", {"reason": "missing numerical representation"}
-        )
-    return result
-
-
-def _require_representations(result, representations):
-    if any(
-        rep not in REPRESENTATION_FIELDS
-        or not getattr(result, REPRESENTATION_FIELDS[rep])
-        for rep in representations
-    ):
-        raise DomainError(
-            "unsupported_representation", {"required": list(representations)}
-        )
 
 
 class Runtime:
@@ -104,12 +68,13 @@ class Runtime:
         previous_run_id: str | None = None,
         scenario_id: str | None = None,
         primary_node_id: str | None = None,
+        model_selection: ModelSelectionEvidence | None = None,
     ) -> RunRecord:
         if as_of.tzinfo is None or as_of.utcoffset() is None:
             raise DomainError("naive_timestamp", {"field": "as_of"})
         if not key:
             raise DomainError("invalid_key", {})
-        as_of = as_of.astimezone(timezone.utc)
+        as_of = as_of.astimezone(UTC)
         spec = GraphSpec.model_validate(spec.model_dump())
         snapshots = {
             name: Snapshot.model_validate(value.model_dump())
@@ -128,7 +93,7 @@ class Runtime:
             ):
                 raise DomainError("invalid_scenario_lineage", {})
             parent = self.ledger.get_run(previous_run_id)
-            if as_of != parent.as_of:
+            if as_of != parent.as_of or model_selection != parent.model_selection:
                 raise DomainError("invalid_scenario_lineage", {})
         elif scenario is not None or any(
             any(a.startswith("assumed:") for a in snapshot.assumptions)
@@ -143,6 +108,11 @@ class Runtime:
                     for name, value in snapshots.items()
                 },
                 "as_of": as_of.isoformat(),
+                **(
+                    {"model_selection": model_selection.model_dump(mode="json")}
+                    if model_selection
+                    else {}
+                ),
                 **({"scenario_id": scenario_id} if scenario_id else {}),
                 **(
                     {"primary_node_id": primary_node_id}
@@ -165,15 +135,23 @@ class Runtime:
 
         from .forecast_policy import ensure_required_model, validate_primary_provider
 
-        resolved_primary = validate_primary_provider(
-            spec, self.required_provider, primary_node_id
+        selected = (
+            model_selection.provider if model_selection else self.required_provider
         )
-        ensure_required_model(self)
+        resolved_primary = validate_primary_provider(spec, selected, primary_node_id)
+        if selected == self.required_provider:
+            ensure_required_model(self)
 
         capabilities = {
             name: Capabilities.model_validate(provider.capabilities().model_dump())
             for name, provider in self.providers.items()
         }
+        if model_selection is not None and (
+            selected not in capabilities
+            or capabilities[selected].provider_revision
+            != model_selection.provider_revision
+        ):
+            raise DomainError("provider_contract_changed", {"provider_id": selected})
         contracts = {
             name: OperatorContract.model_validate(operator.contract().model_dump())
             for name, operator in self.operators.items()
@@ -227,12 +205,12 @@ class Runtime:
             config = configs[node_id]
             if isinstance(config, SourceConfig):
                 snapshot = snapshots[config.source_id]
-                if snapshot.as_of.astimezone(timezone.utc) != as_of:
+                if snapshot.as_of.astimezone(UTC) != as_of:
                     raise DomainError("snapshot_origin_mismatch", {"node_id": node_id})
                 groups, calendar = observation_grid(snapshot, config.frequency)
                 if set(groups) != set(config.series_ids) or any(
                     groups[s][0].unit != unit
-                    for s, unit in zip(config.series_ids, config.units)
+                    for s, unit in zip(config.series_ids, config.units, strict=False)
                 ):
                     raise DomainError("source_metadata_mismatch", {"node_id": node_id})
                 values[node_id], calendars[node_id] = snapshot, calendar
@@ -325,7 +303,9 @@ class Runtime:
                         )
                     )
                     source = configs[config.history]
-                    expected_units = dict(zip(source.series_ids, source.units))
+                    expected_units = dict(
+                        zip(source.series_ids, source.units, strict=False)
+                    )
                     if (
                         result.provider_id != capability.provider_id
                         or result.provider_revision != capability.provider_revision
@@ -333,7 +313,9 @@ class Runtime:
                         or set(result.series_ids) != set(source.series_ids)
                         or any(
                             unit != expected_units[s]
-                            for s, unit in zip(result.series_ids, result.units)
+                            for s, unit in zip(
+                                result.series_ids, result.units, strict=False
+                            )
                         )
                     ):
                         raise DomainError(
@@ -345,106 +327,15 @@ class Runtime:
                     if config.known_future:
                         bindings["known_future"] = config.known_future
                 else:
-                    contract = contracts[config.operator]
-                    bindings = config.parameters.get("bindings") or {
-                        name: name for name in node.inputs
-                    }
-                    inputs = {role: values[parent] for role, parent in bindings.items()}
-                    forecasts = [
-                        value
-                        for value in inputs.values()
-                        if isinstance(value, ForecastResult)
-                    ]
-                    common = contract.accepted_inputs().intersection(
-                        *(guaranteed[parent] for parent in node.inputs)
+                    result, bindings, guaranteed[node_id] = apply_operator(
+                        node,
+                        config,
+                        self.operators,
+                        contracts[config.operator],
+                        values,
+                        guaranteed,
+                        reusable.get(node_id),
                     )
-                    if not common or len(forecasts) != len(inputs):
-                        raise DomainError(
-                            "unsupported_representation", {"node_id": node_id}
-                        )
-                    for value in forecasts:
-                        _require_representations(value, common)
-                    if forecasts and any(
-                        value.timestamps != forecasts[0].timestamps
-                        for value in forecasts
-                    ):
-                        raise DomainError("incompatible_calendar", {"node_id": node_id})
-                    if (
-                        "joint_paths" in common
-                        and forecasts
-                        and any(
-                            value.sample_group_id != forecasts[0].sample_group_id
-                            or len(value.paths) != len(forecasts[0].paths)
-                            for value in forecasts
-                        )
-                    ):
-                        raise DomainError("incompatible_samples", {"node_id": node_id})
-                    parameters = {
-                        k: v for k, v in config.parameters.items() if k != "bindings"
-                    }
-                    result = _result(
-                        reusable[node_id]
-                        if node_id in reusable
-                        else self.operators[config.operator].apply(
-                            deepcopy(inputs), deepcopy(parameters)
-                        )
-                    )
-                    output_reps = contract.output_representations(common, node.kind)
-                    _require_representations(result, output_reps)
-                    guaranteed[node_id] = output_reps
-                    if (
-                        "joint_paths" in output_reps
-                        and "joint_paths" in common
-                        and (
-                            result.sample_group_id != forecasts[0].sample_group_id
-                            or len(result.paths) != len(forecasts[0].paths)
-                        )
-                    ):
-                        raise DomainError("incompatible_samples", {"node_id": node_id})
-                    if contract.output_representation == "preserve" and any(
-                        result.series_ids != value.series_ids for value in forecasts
-                    ):
-                        raise DomainError("incompatible_series", {"node_id": node_id})
-                    if (
-                        node.kind == "event"
-                        and contract.output_representation == "point"
-                        and contract.units_rule == "probability"
-                    ):
-                        if (
-                            len(result.series_ids) != 1
-                            or result.timestamps != (forecasts[0].timestamps[-1],)
-                            or result.paths is not None
-                            or result.quantiles is not None
-                            or result.sample_group_id is not None
-                            or not 0 <= result.point[0][0] <= 1
-                        ):
-                            raise DomainError(
-                                "invalid_event_output", {"node_id": node_id}
-                            )
-                    input_units = {
-                        unit
-                        for value in inputs.values()
-                        for unit in (
-                            value.units
-                            if isinstance(value, ForecastResult)
-                            else tuple(o.unit for o in value.observations)
-                        )
-                    }
-                    expected_units = (
-                        {"1"}
-                        if contract.units_rule == "dimensionless"
-                        else {"probability"}
-                        if contract.units_rule == "probability"
-                        else input_units
-                    )
-                    if set(result.units) != expected_units:
-                        raise DomainError("incompatible_units", {"node_id": node_id})
-                    if (
-                        node.kind == "transform"
-                        and forecasts
-                        and result.timestamps != forecasts[0].timestamps
-                    ):
-                        raise DomainError("incompatible_calendar", {"node_id": node_id})
                 values[node_id] = result
                 results[node_id] = result
                 emit(
@@ -484,6 +375,7 @@ class Runtime:
         if state == "completed":
             emit("run_completed", {"node_ids": list(results)})
         run = RunRecord(
+            model_selection=model_selection,
             primary_node_id=resolved_primary,
             run_id=run_id,
             graph_id=spec.graph_id,

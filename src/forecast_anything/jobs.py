@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from uuid import uuid4
 
@@ -53,9 +53,7 @@ class JobQueue:
             *row[:2],
             json.loads(row[2]),
             *row[3:6],
-            datetime.fromtimestamp(row[6], timezone.utc)
-            if row[6] is not None
-            else None,
+            datetime.fromtimestamp(row[6], UTC) if row[6] is not None else None,
         )
 
     def get(self, job_id: str) -> Job:

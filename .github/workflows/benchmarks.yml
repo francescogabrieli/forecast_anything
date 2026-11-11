@@ -1,0 +1,36 @@
+name: Forecast benchmarks
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    name: Frozen full-dataset seasonal benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.3"
+          python-version: "3.14"
+      - name: Install locked dependencies
+        run: uv sync --locked --extra dev
+      - name: Prepare the pinned datasets
+        run: uv run --locked --extra dev python -m benchmarks.prepare --manifest benchmarks/manifest.yaml --output .local/data
+      - name: Run the full seasonal benchmark
+        run: uv run --locked --extra dev python -m benchmarks.run --manifest benchmarks/manifest.yaml --output .local/benchmark --providers baseline
+      - name: Upload forecast evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: frozen-seasonal-benchmark
+          path: |
+            .local/benchmark/report.json
+            .local/benchmark/origins.csv
+            .local/benchmark/frozen_calendar.json
+            .local/benchmark/environment.json
+          include-hidden-files: true
+          if-no-files-found: error

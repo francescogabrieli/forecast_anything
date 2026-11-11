@@ -28,6 +28,8 @@ Successful submission returns 202 and a safe `JobView`. Reusing a key with diffe
 
 Immutable reads are `GET /v1/runs/{id}`, `/evaluations/{id}`, `/snapshots/{id}` and `/graphs/{id}?version=N`. Run evidence IDs remain the issued immutable evidence; later evaluation records are read separately. `GET /v1/capabilities` reports the installed provider/operator contracts and registered templates.
 
+For a `configured_run`, pass the completed `selection_report_id` and optionally a compatible `challenger_report_id` to select the primary provider from held-out backtest results. The accepted job freezes the choice. Run records and presentations expose `model_selection` when evidence was supplied. See [provider selection](mcp.md#choose-a-provider-using-backtest-evidence) for the matching and scoring rules.
+
 ## Events and scenarios
 
 `GET /v1/events?after=N&limit=100` reads durable global cursor history without consuming it. `Last-Event-ID` is also supported; when both are supplied, the greater cursor wins. `GET /v1/events/stream` provides SSE with `id: cursor`, typed event names, and JSON `EventRecord` data. `follow=false` returns the currently available replay and closes; the default keeps polling for new committed events. Disconnection does not delete history or change any other client's cursor. Reconnect using the last received ID and deduplicate by cursor/event ID. Run/outbox publication is atomic; publication and replay survive API and worker restarts.

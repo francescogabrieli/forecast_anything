@@ -1,6 +1,6 @@
 """Guided previews enforce bounded, no-symlink CSV reads."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -19,7 +19,7 @@ def test_guided_preview_rejects_oversized_content(tmp_path, monkeypatch):
     path.write_text("date,value\n2026-01-01,1\n")
     monkeypatch.setattr(profiling, "_MAX_GUIDED_CSV_BYTES", 8, raising=False)
     with pytest.raises(DomainError, match="source_too_large"):
-        profiling.preview_csv(spec(path), datetime.now(timezone.utc))
+        profiling.preview_csv(spec(path), datetime.now(UTC))
 
 
 def test_guided_preview_refuses_symlink_replacement(tmp_path):
@@ -28,7 +28,7 @@ def test_guided_preview_refuses_symlink_replacement(tmp_path):
     link = tmp_path / "source.csv"
     link.symlink_to(target)
     with pytest.raises(DomainError, match="source_unavailable"):
-        profiling.preview_csv(spec(link), datetime.now(timezone.utc))
+        profiling.preview_csv(spec(link), datetime.now(UTC))
 
 
 def test_guided_capture_rejects_excess_rows_before_materializing_all(
@@ -37,7 +37,7 @@ def test_guided_capture_rejects_excess_rows_before_materializing_all(
     path = tmp_path / "source.csv"
     path.write_text("date,value\n2026-01-01,1\n2026-01-02,2\n2026-01-03,3\n")
     source = spec(path)
-    cutoff = datetime.now(timezone.utc)
+    cutoff = datetime.now(UTC)
     preview = profiling.preview_csv(source, cutoff)
     monkeypatch.setattr(profiling, "_MAX_GUIDED_CSV_ROWS", 2, raising=False)
     with pytest.raises(DomainError, match="source_row_limit"):
@@ -63,4 +63,4 @@ def test_guided_preview_refuses_symlink_parent_replacement(tmp_path):
     link = tmp_path / "replaced-directory"
     link.symlink_to(target, target_is_directory=True)
     with pytest.raises(DomainError, match="source_unavailable"):
-        profiling.preview_csv(spec(link / "source.csv"), datetime.now(timezone.utc))
+        profiling.preview_csv(spec(link / "source.csv"), datetime.now(UTC))

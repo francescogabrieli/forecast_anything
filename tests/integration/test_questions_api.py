@@ -1,7 +1,7 @@
 """Persistent question identity and revision API behavior."""
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 
@@ -12,7 +12,7 @@ from forecast_anything.store import Ledger
 
 
 def _client(path):
-    ledger = Ledger(path, clock=lambda: datetime(2026, 11, 7, tzinfo=timezone.utc))
+    ledger = Ledger(path, clock=lambda: datetime(2026, 11, 7, tzinfo=UTC))
     runtime = Runtime(
         ledger, {"seasonal_naive": SeasonalNaiveProvider(1)}, {}, lambda: ledger.clock()
     )

@@ -1,9 +1,9 @@
-"""Agent bridge trust and restart boundaries."""
+"""Agent bridge authentication, budget, and scoped evidence."""
 
-from datetime import datetime, timedelta, timezone
-from hashlib import sha256
+from datetime import timedelta
 
 import pytest
+from agent_gateway_fixtures import NOW, _agent_post, _operation, _setup
 from fastapi.testclient import TestClient
 
 from forecast_anything.api.app import create_app
@@ -13,18 +13,12 @@ from forecast_anything.contracts import (
     DomainError,
     EventRecord,
     RunRecord,
-    SourceSpec,
 )
 from forecast_anything.discovery.candidates import CandidateProposal, compile_proposal
 from forecast_anything.jobs import JobQueue
 from forecast_anything.runtime import Runtime
-from forecast_anything.sources.catalog import SourceCatalog
-from forecast_anything.sources.profiling import ingest_source, inspect_source
 from forecast_anything.store import Ledger
-from forecast_anything.watches import create_watch
 from forecast_anything.worker import Worker
-
-NOW = datetime(2026, 10, 24, tzinfo=timezone.utc)
 
 
 def test_agent_gateway_allows_only_internal_docker_agent_http_origin():
@@ -37,86 +31,6 @@ def test_agent_gateway_allows_only_internal_docker_agent_http_origin():
     for unsafe in ("http://agent:3001", "http://remote-agent:3000"):
         with pytest.raises(DomainError, match="invalid_agent_gateway_config"):
             AgentGateway(unsafe, token="bridge-token")
-
-
-def _setup(tmp_path, *, max_tool_calls=4, max_candidates=3):
-    csv = tmp_path / "sales.csv"
-    csv.write_text("time,value\n2026-10-21,1\n2026-10-22,2\n2026-10-23,3\n")
-    ledger = Ledger(tmp_path / "state.db", clock=lambda: NOW)
-    spec = SourceSpec(
-        source_id="sales",
-        kind="csv",
-        location=str(csv),
-        refresh_seconds=120,
-        mapping={
-            "event_time": "time",
-            "available_at": "time",
-            "value": "value",
-            **{
-                name: {"constant": value}
-                for name, value in {
-                    "series_id": "sales",
-                    "unit": "count",
-                    "revision": "1",
-                    "frequency": "D",
-                    "calendar": "gregorian",
-                    "timezone": "UTC",
-                    "missing_values": [],
-                }.items()
-            },
-        },
-    )
-    SourceCatalog(ledger.path).append(spec)
-    candidate = compile_proposal(
-        CandidateProposal(
-            template_id="forecast_change", source_ids=("sales",), reason="Frozen"
-        ),
-        (inspect_source(spec),),
-        epoch_id="epoch",
-    )
-    ledger.put_discovery_epoch(
-        DiscoveryEpoch(
-            epoch_id="epoch",
-            source_snapshot_ids=(),
-            explored_candidate_ids=(candidate.candidate_id,),
-            final_origin_ids=(),
-        ),
-        DiscoveryBudget(max_candidates=max_candidates, max_tool_calls=max_tool_calls),
-    )
-    ledger.register_candidate(candidate)
-    job = JobQueue(ledger).enqueue(
-        "discovery/sales",
-        {
-            "kind": "discovery",
-            "epoch_id": "epoch",
-            "source_ids": ["sales"],
-            "session_id": "session-1",
-        },
-    )
-    runtime = Runtime(ledger, {}, {}, lambda: NOW)
-    client = TestClient(
-        create_app(ledger, runtime, workspace_token="workspace", agent_token="agent")
-    )
-    return client, ledger, job, candidate, csv
-
-
-def _operation(job_id, *, call_key="call-1", tool="inspectSource", value=None):
-    return {
-        "job_id": job_id,
-        "epoch_id": "epoch",
-        "session_id": "session-1",
-        "call_key": call_key,
-        "tool": tool,
-        "input": value if value is not None else {"source_id": "sales"},
-    }
-
-
-def _agent_post(client, payload, token="agent"):
-    return client.post(
-        "/v1/agent/operations",
-        headers={"Authorization": f"Bearer {token}"},
-        json=payload,
-    )
 
 
 def test_agent_token_is_scoped_and_operation_is_bound_to_session(tmp_path):
@@ -386,121 +300,3 @@ def test_agent_explanation_contains_only_evidence_from_a_scoped_run(tmp_path):
     assert result.status_code == 200
     assert result.json()["result"]["evidenceIds"] == ["evidence-1"]
     assert "probability" not in result.json()["result"]["text"].lower()
-
-
-def test_template_discovery_schedules_optional_agent_session(tmp_path):
-    _, ledger, existing, candidate, _ = _setup(tmp_path)
-    queue = JobQueue(ledger)
-    claimed = queue.claim("setup", NOW, 60)
-    assert claimed.job_id == existing.job_id
-    queue.complete(claimed, NOW, {})
-    profile = candidate.source_profiles[0]
-    registered = SourceCatalog(ledger.path).get("sales")
-    template_job = queue.enqueue(
-        "templates/new",
-        {
-            "kind": "discovery_templates",
-            "source_id": "sales",
-            "revision": registered.revision,
-            "epoch_id": "new-epoch",
-            "profile": profile.model_dump(mode="json"),
-        },
-    )
-    runtime = Runtime(ledger, {}, {}, lambda: NOW)
-    Worker(runtime, queue, discovery_gateway=object()).run_due(NOW, limit=1)
-    assert queue.get(template_job.job_id).state == "completed", queue.history(
-        template_job.job_id
-    )
-    agent_job = queue.claim("assert", NOW, 60)
-    assert agent_job is not None
-    assert agent_job.payload == {
-        "kind": "discovery",
-        "epoch_id": "new-epoch",
-        "source_ids": ["sales"],
-    }
-
-
-def test_refreshed_epoch_schedules_optional_agent_session(tmp_path):
-    _, ledger, existing, candidate, _ = _setup(tmp_path)
-    queue = JobQueue(ledger)
-    queue.complete(queue.claim("setup", NOW, 60), NOW, {})
-    watch = create_watch(
-        candidate, watch_id="watch", next_due_at=NOW + timedelta(days=1)
-    )
-    ledger.put_watch(watch, now=NOW)
-    spec = SourceCatalog(ledger.path).get("sales").spec
-    snapshot = ingest_source(spec, NOW)
-    ledger.put_snapshot(snapshot)
-    refresh = queue.enqueue(
-        "rediscover/test",
-        {
-            "kind": "discover_refresh",
-            "watch_id": "watch",
-            "snapshot_id": snapshot.snapshot_id,
-            "profile": candidate.source_profiles[0].model_dump(mode="json"),
-        },
-    )
-    Worker(
-        Runtime(ledger, {}, {}, lambda: NOW), queue, discovery_gateway=object()
-    ).run_due(NOW, limit=1)
-    refreshed = queue.get(refresh.job_id)
-    assert refreshed.state == "completed", queue.history(refresh.job_id)
-    epoch_id = queue.history(refresh.job_id)[0]["result"]["epoch_id"]
-    agent_job_id = sha256(f"discovery/agent/{epoch_id}".encode()).hexdigest()
-    agent_job = queue.get(agent_job_id)
-    assert agent_job.payload == {
-        "kind": "discovery",
-        "epoch_id": epoch_id,
-        "source_ids": ["sales"],
-    }
-
-
-def test_postgres_restart_fixture_reaches_gateway_under_product_policy(
-    tmp_path, monkeypatch
-):
-    import runpy
-    from pathlib import Path
-
-    from forecast_anything.providers.configuration import configured_providers
-
-    monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path / "empty-cache"))
-    helper = runpy.run_path(
-        str(
-            Path(__file__).resolve().parents[2]
-            / "apps/agent/scripts/restart-test-core.py"
-        )
-    )
-    db = tmp_path / "restart.db"
-    seeded = helper["seed"](db, tmp_path / "source.csv")
-    ledger = Ledger(db)
-    runtime = Runtime(
-        ledger,
-        configured_providers(),
-        {},
-        lambda: datetime.now(timezone.utc),
-        required_provider="timestral",
-    )
-
-    class Gateway:
-        started = False
-
-        def start(self, *args, **kwargs):
-            self.started = True
-            return "restart-session"
-
-        def poll(self, session_id):
-            assert session_id == "restart-session"
-            return None
-
-    gateway = Gateway()
-    queue = JobQueue(ledger)
-    Worker(runtime, queue, discovery_gateway=gateway).run_due(runtime.clock(), limit=1)
-    assert gateway.started
-    assert queue.get(seeded["job_id"]).state == "pending"
-    candidate = ledger.get_candidate(seeded["candidate_id"])
-    assert (
-        next(n for n in candidate.graph.nodes if n.node_id == "forecast").config[
-            "provider"
-        ]
-        == "timestral"
-    )

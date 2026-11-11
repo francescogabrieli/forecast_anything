@@ -50,11 +50,11 @@ def export_contracts(output: Path) -> None:
             ledger.clock,
         )
         app = create_app(ledger, runtime, "schema-export-only")
+        # The public contract module re-exports wire models from their domain modules.
         schemas = {
             name: model.model_json_schema(mode="serialization")
             for name, model in inspect.getmembers(contracts, inspect.isclass)
             if issubclass(model, contracts.Contract)
-            and model.__module__ == contracts.__name__
         }
         schemas.update(
             (model.__name__, model.model_json_schema(mode="serialization"))

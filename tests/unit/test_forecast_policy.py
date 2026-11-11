@@ -54,8 +54,8 @@ def test_explicit_primary_must_be_terminal():
 def test_ambiguous_raw_graph_requires_primary_output():
     g = graph().model_copy(
         update={
-            "nodes": graph().nodes[:3]
-            + (
+            "nodes": (
+                *graph().nodes[:3],
                 Node(
                     node_id="model",
                     kind="forecast",

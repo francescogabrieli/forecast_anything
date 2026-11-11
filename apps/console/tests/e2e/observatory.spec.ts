@@ -244,8 +244,15 @@ test("reviews two-source evaluation, revision notification and immutable scenari
     .getByRole("button", { name: `Apri run ${notification.run_id}`, exact: true }).click();
   await expect(page.locator(".run-card").getByText(`ID run: ${notification.run_id}`)).toBeVisible();
   await navigate(page, "Home");
+  const actualsPath = `**/v1/snapshots/${evaluation.actuals_snapshot_id}`;
+  await page.route(actualsPath, async (route) => {
+    const response = await route.fetch();
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.fulfill({ response });
+  });
   await page.locator(`button[data-run-id="${baseRunId}"]`).click();
   await expect(page.locator(".run-card").getByText(`ID run: ${baseRunId}`)).toBeVisible();
+  await page.unroute(actualsPath);
 
   const forecastNode = page.getByRole("button", { name: /forecast, previsione/ });
   await forecastNode.focus();
@@ -260,7 +267,12 @@ test("reviews two-source evaluation, revision notification and immutable scenari
   await scenarioInput.fill(JSON.stringify(current, null, 2));
   await page.getByRole("button", { name: "Mostra modifiche proposte" }).click();
   await expect(page.getByRole("region", { name: "Modifiche proposte" })).toBeVisible();
+  const scenarioResponse = page.waitForResponse((response) =>
+    response.request().method() === "POST" && response.url() === `${api}/scenarios`,
+  );
   await page.getByRole("button", { name: "Conferma e crea scenario" }).click();
+  const scenario = await scenarioResponse;
+  expect(scenario.ok(), await scenario.text()).toBe(true);
   await expect(page.getByText("Scenario pronto. Il confronto usa soltanto timestamp e unità comuni.")).toBeVisible({ timeout: 25_000 });
   await expect(page.getByRole("heading", { name: "Confronto sulle date comuni" })).toBeVisible();
   const comparison = page.locator(".scenario-card");

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -24,19 +24,15 @@ def observation(
 def test_late_revision_is_invisible_asof():
     old = observation()
     new = observation(12, "a", "2026-10-21T00:00:00+00:00")
-    assert freeze(
-        (new, old), datetime(2026, 10, 20, tzinfo=timezone.utc)
-    ).observations == (old,)
-    assert freeze(
-        (old, new), datetime(2026, 10, 22, tzinfo=timezone.utc)
-    ).observations == (new,)
+    assert freeze((new, old), datetime(2026, 10, 20, tzinfo=UTC)).observations == (old,)
+    assert freeze((old, new), datetime(2026, 10, 22, tzinfo=UTC)).observations == (new,)
 
 
 def test_conflicting_same_revision():
     with pytest.raises(DomainError):
         freeze(
             (observation(), observation(12)),
-            datetime(2026, 10, 24, tzinfo=timezone.utc),
+            datetime(2026, 10, 24, tzinfo=UTC),
         )
 
 
@@ -44,7 +40,7 @@ def test_conflicting_availability_tie():
     with pytest.raises(DomainError):
         freeze(
             (observation(), observation(12, "other")),
-            datetime(2026, 10, 24, tzinfo=timezone.utc),
+            datetime(2026, 10, 24, tzinfo=UTC),
         )
 
 
@@ -52,12 +48,12 @@ def test_same_revision_with_changed_availability_is_conflicting():
     with pytest.raises(DomainError):
         freeze(
             (observation(), observation(12, "z", "2026-10-20T00:00:00+00:00")),
-            datetime(2026, 10, 24, tzinfo=timezone.utc),
+            datetime(2026, 10, 24, tzinfo=UTC),
         )
 
 
 def test_snapshot_hash_is_order_independent():
-    t = datetime(2026, 10, 24, tzinfo=timezone.utc)
+    t = datetime(2026, 10, 24, tzinfo=UTC)
     a = Observation(
         series_id="a", event_time=t, available_at=t, revision="1", value=1, unit="count"
     )
@@ -69,7 +65,7 @@ def test_snapshot_hash_is_order_independent():
 
 
 def test_assumed_availability_and_asof_are_part_of_identity():
-    t = datetime(2026, 10, 24, tzinfo=timezone.utc)
+    t = datetime(2026, 10, 24, tzinfo=UTC)
     declared = ("assumed_available_at=event_time", "retrospective dataset")
     snapshot = freeze((observation(),), t, declared)
     assert snapshot.assumptions == declared
@@ -105,7 +101,7 @@ def test_dst_repeated_hours_are_distinct_and_normalized():
         value=2,
         unit="count",
     )
-    early = freeze((a, b), datetime(2026, 10, 25, 1, tzinfo=timezone.utc))
+    early = freeze((a, b), datetime(2026, 10, 25, 1, tzinfo=UTC))
     assert [o.value for o in early.observations] == [1]
     later = freeze((b, a), second)
     assert [o.event_time.isoformat() for o in later.observations] == [
@@ -116,17 +112,17 @@ def test_dst_repeated_hours_are_distinct_and_normalized():
     utc = tuple(
         o.model_copy(
             update={
-                "event_time": o.event_time.astimezone(timezone.utc),
-                "available_at": o.available_at.astimezone(timezone.utc),
+                "event_time": o.event_time.astimezone(UTC),
+                "available_at": o.available_at.astimezone(UTC),
             }
         )
         for o in (a, b)
     )
-    assert later.snapshot_id == freeze(utc, second.astimezone(timezone.utc)).snapshot_id
+    assert later.snapshot_id == freeze(utc, second.astimezone(UTC)).snapshot_id
 
 
 def test_future_conflicts_do_not_change_current_snapshot():
-    t = datetime(2026, 10, 20, tzinfo=timezone.utc)
+    t = datetime(2026, 10, 20, tzinfo=UTC)
     future = (
         observation(12, "new", "2026-10-21T00:00:00+00:00"),
         observation(13, "new", "2026-10-21T00:00:00+00:00"),
@@ -138,13 +134,13 @@ def test_future_conflicts_do_not_change_current_snapshot():
 
 
 def test_empty_snapshot_and_missing_value():
-    t = datetime(2026, 10, 24, tzinfo=timezone.utc)
+    t = datetime(2026, 10, 24, tzinfo=UTC)
     assert freeze((), t).observations == ()
     assert freeze((observation(None),), t).observations[0].value is None
 
 
 def test_signed_zero_duplicates_have_order_independent_identity():
-    t = datetime(2026, 10, 24, tzinfo=timezone.utc)
+    t = datetime(2026, 10, 24, tzinfo=UTC)
     positive, negative = observation(0.0), observation(-0.0)
     assert (
         freeze((positive, negative), t).snapshot_id

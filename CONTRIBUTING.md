@@ -1,8 +1,8 @@
 # Contributing
 
-This repository is preparing a release candidate. The project name, public owner and publishing destinations remain provisional. Do not infer that a registry package, container image, support address or public deployment exists.
-
 The assistant connected over MCP is the main product interface; the site explains setup and the console remains optional. Use the [capability and compatibility matrix](docs/capabilities.md) to distinguish implemented behavior from the [roadmap](docs/roadmap.md). Small contributions with a reproducible example and explicit limits are welcome. Report suspected vulnerabilities through [SECURITY](SECURITY.md), and keep secrets and private observations out of issues and fixtures.
+
+Write public documentation in English. When documenting a localized interface, give the English meaning alongside the exact label users will see. Keep working plans and acceptance logs in the ignored `.local/` directory.
 
 ## Set up and check the core
 
@@ -10,19 +10,25 @@ Use Python 3.12+ and uv from the repository root:
 
 ```sh
 uv sync --locked --extra dev --extra mcp
-uv run --locked --extra dev --extra mcp ruff check src tests
-uv run --locked --extra dev --extra mcp ruff format --check src tests
-uv run --locked --extra dev --extra mcp pytest -q
+uv run --locked --extra dev --extra mcp python scripts/check_python_file_lengths.py
+uv run --locked --extra dev --extra mcp ruff check src tests scripts
+uv run --locked --extra dev --extra mcp ruff format --check src tests scripts
+uv run --locked --extra dev --extra mcp python scripts/check_types.py
+uv run --locked --extra dev --extra mcp coverage run -m pytest -q
+uv run --locked --extra dev --extra mcp coverage combine
+uv run --locked --extra dev --extra mcp coverage report
 uv run --locked --extra dev --extra mcp python scripts/export_contracts.py contracts/v1 --check
 uv run --locked --extra dev --extra mcp python scripts/export_contracts.py apps/console/src/api --check
 uv build
 ```
 
-CI targets Python 3.12 and 3.14 and retains both extras on Python validation commands. MCP integration tests launch real loopback API, worker and stdio processes; the artifact test builds a wheel and installs its locked MCP dependency set in a temporary environment outside the checkout. Keep network/cache access and local socket binding available for those checks. SDK-dependent modules skip explicitly without the optional extra; ordinary CLI/missing-extra coverage remains runnable. See the [MCP guide](docs/implementation/mcp.md) for the tool catalog, root/source permissions, reconnect behavior and output bounds. The SDK is the reference client. The local Desktop acceptance scope is documented separately in the [recorded checks](docs/research/desktop-assistant-acceptance.md).
+CI targets Python 3.12 and 3.14 and retains both extras on Python validation commands. MCP integration tests launch real loopback API, worker and stdio processes; the artifact test builds a wheel and installs its locked MCP dependency set in a temporary environment outside the checkout. Keep network/cache access and local socket binding available for those checks. SDK-dependent modules skip explicitly without the optional extra; ordinary CLI/missing-extra coverage remains runnable. See the [MCP guide](docs/implementation/mcp.md) for the tool catalog, root/source permissions, reconnect behavior and output bounds. The SDK is the reference client. See the [compatibility matrix](docs/capabilities.md) for Desktop support.
 
 Keep dependency locks and generated contracts synchronized with intentional changes. Do not hand-edit generated schemas or use a skipped model test as evidence that the provider works. The Timestral real-model test is gated; see [its acceptance conditions](docs/implementation/timestral.md). Routine tests require neither model weights nor paid API calls.
 
 ## Reproduce the site demo
+
+See the [design system](DESIGN.md) for typography, color and component conventions.
 
 The [release demo guide](docs/release-demo.md) documents the checked-in synthetic CSV, local Timestral requirements, MCP stdio journey, generated record and accuracy limits. To preview the static site without starting an API or running inference, use the [site preview instructions](site/README.md). The page retains its recorded content without JavaScript. When changing the demo schema or values, update its source fixture, assumptions, sanitized `site/demo-data.json` record and focused checks together. The static HTML is generated from React; run the browser checks described in the site preview instructions.
 
@@ -44,22 +50,6 @@ npm run test:e2e
 The Playwright configuration starts a Python API/worker and builds/serves the production Vite console on loopback ports 8000 and 4173. Keep those ports free so the test uses its own fixture services. Its synthetic source, fixed clock and seasonal-naive provider exercise the browser/API path, guided mapping, browser-history navigation, SSE reconnect and scenario comparison without external model calls. They do not validate live LLM discovery, Timestral quality or real-world data freshness.
 
 For a development console on port 5173, configure the API with `FORECAST_ANYTHING_CONSOLE_ORIGINS=http://127.0.0.1:5173,http://localhost:5173`. Origins must match the browser's scheme, host and port. Keep workspace tokens in memory and out of URLs, browser storage, logs and screenshots.
-
-## Optional agent checks
-
-The agent is separate from the numerical core. In `apps/agent`, run:
-
-```sh
-npm ci --ignore-scripts
-npm run contracts:check
-npm run typecheck
-npm test -- --run
-npm run build
-bash scripts/check-egress-policy.sh
-bash scripts/check-postgres-restart.sh
-```
-
-Build and Docker integration checks require a running Docker daemon. The checks use controlled model responses and disposable state; they do not authorize a paid live request. The restart fixture simulates expiry of the stale job lock instead of waiting four hours. See the [agent README](apps/agent/README.md) for token separation, Postgres and service-level egress requirements.
 
 ## Contracts and review expectations
 

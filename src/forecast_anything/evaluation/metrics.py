@@ -1,88 +1,96 @@
-"""Numerical scores for already aligned complete observed target matrices."""
+"""Vectorized scores for aligned, complete observed target matrices."""
 
-from fractions import Fraction
+import itertools
 from math import isfinite
+
+import numpy as np
 
 from ..contracts import DomainError, ForecastResult, Matrix
 
+LEGACY_SCORING = "v1"
+CURRENT_SCORING = "v2"
 
-def _mean(values, exact_values, count):
-    # Preserve established float scores/record identities on the ordinary path.
-    # Exact arithmetic is only needed when an intermediate sum/difference fails.
-    score = sum(values) / count
-    if isfinite(score):
-        return score
+
+def scoring_version_from_assumptions(assumptions: tuple[str, ...]) -> str:
+    if assumptions and assumptions[0].split(";", 1)[0] == "evaluation=v2":
+        return CURRENT_SCORING
+    return LEGACY_SCORING
+
+
+def _matrix(values: Matrix, field: str, shape: tuple[int, int]) -> np.ndarray:
     try:
-        return float(sum(exact_values(), Fraction()) / count)
-    except OverflowError:
-        raise DomainError("numerical_score_unrepresentable", {}) from None
+        array = np.asarray(values, dtype=np.float64)
+    except (ValueError, TypeError, OverflowError):
+        raise DomainError("invalid_score_input", {"field": field}) from None
+    if array.shape != shape or not array.size or not np.isfinite(array).all():
+        raise DomainError("invalid_score_input", {"field": field})
+    return array
+
+
+def _mean_error(actual: np.ndarray, predicted: np.ndarray, level=None) -> float:
+    with np.errstate(over="ignore", under="ignore"):
+        delta = actual - predicted
+        scaled = not np.isfinite(delta).all()
+        if scaled:
+            # Halve before subtracting when a finite pair would overflow.
+            delta = actual * 0.5 - predicted * 0.5
+        losses = (
+            np.abs(delta)
+            if level is None
+            else np.abs(delta) * np.where(delta >= 0, level, 1 - level)
+        )
+        score = np.mean(losses)
+        if not np.isfinite(score):
+            # A nonnegative mean cannot exceed its largest input.
+            peak = np.max(losses)
+            score = np.mean(losses / peak) * peak
+        if scaled:
+            score *= 2
+    if not np.isfinite(score):
+        raise DomainError("numerical_score_unrepresentable", {})
+    return float(score)
 
 
 def forecast_metrics(forecast: ForecastResult, observed: Matrix) -> dict:
-    actual = [x for row in observed for x in row]
-    scores = {"count": len(actual), "mae": None, "pinball": {}, "intervals": {}}
-    if forecast.point is not None:
-        points = [x for row in forecast.point for x in row]
-        scores["mae"] = _mean(
-            (abs(y - p) for y, p in zip(actual, points)),
-            lambda: (abs(Fraction(y) - Fraction(p)) for y, p in zip(actual, points)),
-            len(actual),
-        )
-    levels = []
+    shape = (len(forecast.series_ids), len(forecast.timestamps))
+    actual = _matrix(observed, "observed", shape)
+    points = None if forecast.point is None else _matrix(forecast.point, "point", shape)
+    levels = {}
     for label, matrix in (forecast.quantiles or {}).items():
         try:
             level = float(label)
         except ValueError as error:
             raise DomainError("invalid_quantiles", {"level": label}) from error
-        if (
-            not isfinite(level)
-            or not 0 < level < 1
-            or any(q == level for q, _, _ in levels)
-        ):
+        if not 0 < level < 1 or level in levels:
             raise DomainError("invalid_quantiles", {"level": label})
-        values = [x for row in matrix for x in row]
-        scores["pinball"][label] = _mean(
-            (
-                max(level * (y - p), (level - 1) * (y - p))
-                for y, p in zip(actual, values)
-            ),
-            lambda: (
-                max(
-                    Fraction(level) * (Fraction(y) - Fraction(p)),
-                    Fraction(level - 1) * (Fraction(y) - Fraction(p)),
-                )
-                for y, p in zip(actual, values)
-            ),
-            len(actual),
-        )
-        levels.append((level, label, values))
-    levels.sort()
-    for low, high in zip(levels, levels[1:]):
-        if any(a > b for a, b in zip(low[2], high[2])):
+        levels[level] = (label, _matrix(matrix, f"quantiles.{label}", shape))
+
+    ordered = sorted(levels)
+    for low, high in itertools.pairwise(ordered):
+        if np.any(levels[low][1] > levels[high][1]):
             raise DomainError("invalid_quantiles", {"reason": "crossing quantiles"})
-    for low, label, lower in levels:
+    scores = {
+        "count": actual.size,
+        "mae": None if points is None else _mean_error(actual, points),
+        "pinball": {
+            label: _mean_error(actual, values, level)
+            for level, (label, values) in levels.items()
+        },
+        "intervals": {},
+    }
+    for low in ordered:
         if low >= 0.5:
+            break
+        high = next((q for q in ordered if abs(q - (1 - low)) < 1e-12), None)
+        if high is None:
             continue
-        upper = next(
-            (
-                (high, name, values)
-                for high, name, values in levels
-                if abs(high - (1 - low)) < 1e-12
-            ),
-            None,
-        )
-        if upper is not None:
-            high, name, values = upper
-            scores["intervals"][f"{label}:{name}"] = {
-                "coverage": sum(a <= y <= b for y, a, b in zip(actual, lower, values))
-                / len(actual),
-                "width": _mean(
-                    (b - a for a, b in zip(lower, values)),
-                    lambda: (Fraction(b) - Fraction(a) for a, b in zip(lower, values)),
-                    len(actual),
-                ),
-                "level": high - low,
-            }
+        low_label, lower = levels[low]
+        high_label, upper = levels[high]
+        scores["intervals"][f"{low_label}:{high_label}"] = {
+            "coverage": float(np.mean((lower <= actual) & (actual <= upper))),
+            "width": _mean_error(upper, lower),
+            "level": high - low,
+        }
     return scores
 
 

@@ -1,5 +1,13 @@
 # Cross-domain benchmark evidence
 
+The pull request CPU gate uses a small synthetic series and an untrained,
+seeded Timestral model. It measures regression against a frozen reference
+and seasonal baseline. The **Forecast benchmarks** workflow runs the full
+manifest with the seasonal baseline on demand and uploads its report,
+origin outcomes and frozen calendar. Trained checkpoint comparisons use
+the separate local procedure below.
+
+
 Run from the repository root with the regular development environment:
 
 ```sh

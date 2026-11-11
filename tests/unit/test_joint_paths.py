@@ -1,7 +1,7 @@
 """Whole-origin sampling, leakage guards, and honest research scoring."""
 
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -13,7 +13,7 @@ from forecast_anything.uncertainty.residual_panels import (
     ResidualPanelSampler,
 )
 
-T = datetime(2026, 10, 24, tzinfo=timezone.utc)
+T = datetime(2026, 10, 24, tzinfo=UTC)
 
 
 def base(series=("a", "b"), horizon=2):

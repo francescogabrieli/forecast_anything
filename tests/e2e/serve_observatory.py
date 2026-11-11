@@ -6,7 +6,7 @@ import os
 import tempfile
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import uvicorn
@@ -20,8 +20,8 @@ from forecast_anything.runtime import Runtime
 from forecast_anything.store import Ledger
 from forecast_anything.worker import Worker
 
-ISSUED = datetime(2026, 10, 23, 12, tzinfo=timezone.utc)
-NOW = datetime(2026, 10, 24, 12, tzinfo=timezone.utc)
+ISSUED = datetime(2026, 10, 23, 12, tzinfo=UTC)
+NOW = datetime(2026, 10, 24, 12, tzinfo=UTC)
 TOKEN = "local-e2e-token"
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
@@ -50,7 +50,7 @@ class FixtureKnownFutureProvider(SeasonalNaiveProvider):
                 "point": tuple(
                     tuple(
                         value + signal[target]
-                        for value, target in zip(row, result.timestamps)
+                        for value, target in zip(row, result.timestamps, strict=False)
                     )
                     for row in result.point
                 ),
@@ -192,7 +192,7 @@ def main() -> None:
     )
     seed(ledger, runtime, clock)
     if os.environ.get("FA_USABILITY") == "1":
-        clock[0] = datetime.now(timezone.utc)
+        clock[0] = datetime.now(UTC)
     usability_csv = write_usability_fixture(data_dir, clock[0])
     port = int(os.environ.get("FA_USABILITY_PORT", "8000"))
     print(f"Usability API: http://127.0.0.1:{port}", flush=True)

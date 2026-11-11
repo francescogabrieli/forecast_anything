@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 Record = TypeVar("Record", bound=Contract)
 
 
-def _validated(model: type[Record], value: Record | str) -> Record:
+def _validated[Record: Contract](model: type[Record], value: Record | str) -> Record:
     try:
         return (
             model.model_validate_json(value)

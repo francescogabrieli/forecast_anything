@@ -15,11 +15,7 @@
 !apps/
 !apps/console/
 !apps/console/**
-!apps/agent/
-!apps/agent/**
 **/node_modules
-**/.eve
-**/.output
 **/dist
 **/__pycache__
 **/*.pyc

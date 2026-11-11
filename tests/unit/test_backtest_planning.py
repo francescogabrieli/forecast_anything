@@ -1,6 +1,6 @@
 """Frozen calendar and trusted graph boundaries, with literal target membership."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from backtest_fixtures import START, prepare, revision, rows
@@ -147,9 +147,7 @@ def test_rejects_unsupported_or_unbounded_inputs(change, code):
         )
     elif change in {"frequency", "integer_limit_frequency"}:
         source = revision("9" * (100 if change == "frequency" else 5000) + "d")
-    capture = (
-        datetime(2500, 1, 1, tzinfo=timezone.utc) if change == "huge_gap" else None
-    )
+    capture = datetime(2500, 1, 1, tzinfo=UTC) if change == "huge_gap" else None
     with pytest.raises(DomainError) as error:
         prepare(data, source=source, settings=settings, captured_at=capture)
     assert error.value.code == code

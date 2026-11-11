@@ -6,7 +6,7 @@ and target-grid metadata, when supplied, are checked rather than inferred.
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from math import isfinite
 from random import Random
@@ -33,7 +33,7 @@ def _utc(value, field):
         or value.utcoffset() is None
     ):
         raise DomainError("naive_timestamp", {"field": field})
-    return value.astimezone(timezone.utc)
+    return value.astimezone(UTC)
 
 
 def _digest(value):
@@ -178,8 +178,8 @@ class ResidualPanelSampler:
             quantiles=None,
             paths=paths,
             sample_group_id=identity,
-            assumptions=base.assumptions
-            + (
+            assumptions=(
+                *base.assumptions,
                 "status=experimental; evidence=provisional",
                 f"base_provider={base.provider_id}@{base.provider_revision}",
                 "assumption=residual transferability across origins; shared-origin series/horizon dependence preserved",

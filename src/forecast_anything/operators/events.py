@@ -49,8 +49,8 @@ class AnyExceed:
             quantiles=None,
             paths=None,
             sample_group_id=None,
-            assumptions=value.assumptions
-            + (
+            assumptions=(
+                *value.assumptions,
                 f"event=any_exceed; comparator={parameters.comparator}; threshold={parameters.threshold}; scope=any series at any timestamp",
                 f"window=[{value.timestamps[0].isoformat()}, {value.timestamps[-1].isoformat()}]; inclusive forecast grid",
                 f"empirical frequency; samples={len(value.paths)}; sample_group_id={value.sample_group_id}",

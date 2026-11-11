@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from forecast_anything.continuity import classify_snapshot_change
 from forecast_anything.contracts import (
@@ -10,14 +10,14 @@ from forecast_anything.contracts import (
 from forecast_anything.discovery.candidates import CandidateProposal, compile_proposal
 from forecast_anything.watches import advance_watch, create_watch
 
-NOW = datetime(2026, 11, 8, tzinfo=timezone.utc)
+NOW = datetime(2026, 11, 8, tzinfo=UTC)
 
 
 def _row(day: int, value: float, *, available_day: int | None = None, revision="1"):
     return Observation(
         series_id="sales",
-        event_time=datetime(2026, 10, day, tzinfo=timezone.utc),
-        available_at=datetime(2026, 10, available_day or day, tzinfo=timezone.utc),
+        event_time=datetime(2026, 10, day, tzinfo=UTC),
+        available_at=datetime(2026, 10, available_day or day, tzinfo=UTC),
         revision=revision,
         value=value,
         unit="count",

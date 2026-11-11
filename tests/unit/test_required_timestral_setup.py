@@ -239,3 +239,29 @@ def test_cache_paths_with_user_home_match_huggingface(variable, monkeypatch):
     path = configured_providers()["timestral"]._snapshot_path()
     assert path.is_absolute()
     assert path.is_relative_to(Path.home())
+
+
+def test_prepare_installs_pinned_code_before_using_cached_weights(
+    installed_cache, monkeypatch
+):
+    provider = configured_providers()["timestral"]
+    installed = []
+
+    def dependency_status():
+        return None if installed else "missing_dependency"
+
+    monkeypatch.setattr(provider, "_dependency_status", dependency_status)
+    monkeypatch.setattr(
+        provider,
+        "_install_model_dependency",
+        lambda: installed.append(CODE),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        provider, "_load", lambda: setattr(provider, "_forecaster", object())
+    )
+    assert provider.check_model()["status"] == "missing_dependency"
+    assert not installed
+    assert provider.prepare_model()["status"] == "loaded"
+    assert provider.prepare_model()["status"] == "loaded"
+    assert installed == [CODE]

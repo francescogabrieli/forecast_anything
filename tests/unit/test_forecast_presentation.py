@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from forecast_anything.contracts import ForecastResult, RunRecord
 from forecast_anything.presentations import present_run
 
 
 def test_long_forecast_keeps_primary_and_aligned_baseline():
-    now = datetime(2026, 11, 7, tzinfo=timezone.utc)
+    now = datetime(2026, 11, 7, tzinfo=UTC)
     times = tuple(now + timedelta(days=i) for i in range(80))
 
     def forecast(provider):

@@ -113,6 +113,8 @@ class ConfiguredForecastArguments(Contract):
     source_id: ToolIdentifier
     snapshot_id: ToolIdentifier
     selection: ForecastSelection
+    selection_report_id: ToolIdentifier | None = None
+    challenger_report_id: ToolIdentifier | None = None
 
 
 class BacktestArguments(Contract):

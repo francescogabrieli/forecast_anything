@@ -32,7 +32,8 @@ def test_source_distribution_excludes_local_work_materials(tmp_path: Path):
         "apps/console/node_modules/dependency/index.js",
         "apps/console/test-results/trace.zip",
         "apps/console/playwright-report/index.html",
-        "apps/agent/dist/bundle.js",
+        ".local/project-history/eve/apps/agent/package.json",
+        ".local/project-history/eve/compose.agent.yaml",
     )
     for name in private_files:
         path = project / name
@@ -179,3 +180,19 @@ def test_release_missing_weights_reports_preparation_without_running_forecast(
     assert report["model_prepared"] is False
     assert any("forecast-anything model prepare" in error for error in report["errors"])
     assert any(command[-2:] == ["model", "status"] for command in commands)
+
+
+def test_release_rejects_direct_dependency_in_metadata(tmp_path: Path):
+    check_release = run_path(str(ROOT / "scripts" / "check_release.py"))[
+        "check_release"
+    ]
+    with ZipFile(tmp_path / "forecast_anything-0.1.0-py3-none-any.whl", "w") as wheel:
+        wheel.writestr(
+            "forecast_anything-0.1.0.dist-info/METADATA",
+            "Version: 0.1.0\n"
+            'Requires-Dist: timestral @ git+https://example.invalid/model.git; extra == "timestral"\n',
+        )
+    report = check_release(tmp_path, artifact_only=True)
+    assert not report["passed"]
+    assert not report["installed_outside_checkout"]
+    assert "wheel declares a direct URL dependency: timestral" in report["errors"]

@@ -1,7 +1,8 @@
 """Provider protocol and shared validation for fixed UTC numerical calendars."""
 
+import itertools
 import re
-from datetime import timedelta, timezone
+from datetime import UTC, timedelta
 from typing import Protocol
 
 from ..contracts import (
@@ -38,9 +39,7 @@ def observation_grid(snapshot: Snapshot, frequency: str):
     step = frequency_step(frequency)
     groups = {}
     for observation in snapshot.observations:
-        if observation.available_at.astimezone(
-            timezone.utc
-        ) > snapshot.as_of.astimezone(timezone.utc):
+        if observation.available_at.astimezone(UTC) > snapshot.as_of.astimezone(UTC):
             raise DomainError(
                 "unavailable_observation", {"series_id": observation.series_id}
             )
@@ -49,9 +48,9 @@ def observation_grid(snapshot: Snapshot, frequency: str):
         raise DomainError("empty_history", {})
     calendar = None
     for series_id, observations in groups.items():
-        observations.sort(key=lambda o: o.event_time.astimezone(timezone.utc))
-        timestamps = tuple(o.event_time.astimezone(timezone.utc) for o in observations)
-        if any(b - a != step for a, b in zip(timestamps, timestamps[1:])):
+        observations.sort(key=lambda o: o.event_time.astimezone(UTC))
+        timestamps = tuple(o.event_time.astimezone(UTC) for o in observations)
+        if any(b - a != step for a, b in itertools.pairwise(timestamps)):
             raise DomainError("irregular_calendar", {"series_id": series_id})
         if len({o.unit for o in observations}) != 1:
             raise DomainError("incompatible_units", {"series_id": series_id})

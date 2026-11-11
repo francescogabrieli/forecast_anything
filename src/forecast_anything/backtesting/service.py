@@ -8,9 +8,11 @@ from ..contracts import (
     Capabilities,
     ConfiguredRunJobRequest,
     DomainError,
+    EvaluationJobRequest,
     QuestionReferenceRequest,
     RunJobRequest,
 )
+from ..evaluation.metrics import CURRENT_SCORING, LEGACY_SCORING
 from ..sources.profiling import read_observations
 from .contracts import canonical_json
 from .planning import (
@@ -20,6 +22,7 @@ from .planning import (
     prepare_backtest,
 )
 from .runner import execute_backtest
+from .selection import choose_model
 from .store import BacktestStore
 
 
@@ -37,15 +40,18 @@ def replay_job(queue, request):
         if error.code != "not_found":
             raise
         return None
-    if canonical_json(payload.get("request")) != canonical_json(
-        original_request(request)
-    ):
+    intent = (
+        {k: v for k, v in payload.items() if k != "scoring_version"}
+        if isinstance(request, EvaluationJobRequest)
+        else payload.get("request")
+    )
+    if canonical_json(intent) != canonical_json(original_request(request)):
         raise DomainError("idempotency_conflict", {"key": key})
     return queue.get(job_id)
 
 
-def configured_run(ledger, catalog, request: ConfiguredRunJobRequest) -> RunJobRequest:
-    snapshot = ledger.get_snapshot(request.snapshot_id)
+def configured_run(runtime, catalog, request: ConfiguredRunJobRequest):
+    snapshot = runtime.ledger.get_snapshot(request.snapshot_id)
     if any(item.startswith("assumed:") for item in snapshot.assumptions):
         raise DomainError("scenario_required", {})
     catalog.get(request.source_id)
@@ -61,27 +67,39 @@ def configured_run(ledger, catalog, request: ConfiguredRunJobRequest) -> RunJobR
     vintage = next(iter(vintages.values()))
     _observed(vintage.assumptions)
     frequency, _ = _source_frequency(vintage)
+    selection, evidence = choose_model(
+        runtime, request, snapshot, vintage.revision, frequency
+    )
     graph = build_forecast_graph(
         request.source_id,
         snapshot,
-        request.selection,
+        selection,
         frequency,
         graph_id="configured-"
         + sha256(canonical_json(original_request(request)).encode()).hexdigest(),
     )
+    if evidence is not None and selection.provider == "seasonal_naive":
+        graph = graph.model_copy(
+            update={
+                "nodes": tuple(
+                    node for node in graph.nodes if node.node_id != "baseline"
+                )
+            }
+        )
     return RunJobRequest(
         kind="run",
         key=request.key,
         graph=graph,
         snapshot_ids={request.source_id: snapshot.snapshot_id},
         as_of=snapshot.as_of,
-    )
+    ), evidence
 
 
-def _provider_contracts(runtime, selection):
+def _provider_contracts(runtime, selection, *, challenger=False):
     from ..forecast_policy import validate_selection
 
-    validate_selection(runtime, selection)
+    if not challenger:
+        validate_selection(runtime, selection)
     contracts = {}
     for name in {selection.provider, "seasonal_naive"}:
         provider = runtime.providers.get(name)
@@ -99,16 +117,32 @@ def _provider_contracts(runtime, selection):
 def backtest_payload(runtime, catalog, request: BacktestJobRequest) -> dict:
     revision = catalog.get(request.source_id)
     if revision.spec.kind != "csv":
-        raise DomainError("unsupported_backtest_source", {})
+        raise DomainError("unsupported_backtest_source", {}) from None
     _observed(revision.assumptions)
     _, step = _source_frequency(revision)
     if request.settings.origin_offset_seconds >= step // timedelta(seconds=1):
         raise DomainError("invalid_origin_offset", {})
-    _provider_contracts(runtime, request.selection)
+    challenger = (
+        request.watch_id is None
+        and runtime.required_provider is not None
+        and request.selection.provider
+        not in {runtime.required_provider, "seasonal_naive"}
+    )
+    contracts = _provider_contracts(runtime, request.selection, challenger=challenger)
     payload = {
         "kind": "backtest",
+        "scoring_version": CURRENT_SCORING,
         "request": original_request(request),
         "source_revision": revision.revision,
+        **(
+            {
+                "challenger_contract": contracts[request.selection.provider].model_dump(
+                    mode="json"
+                )
+            }
+            if challenger
+            else {}
+        ),
     }
     if request.watch_id is not None:
         from ..discovery.policy import candidate_backtest_selection
@@ -131,9 +165,9 @@ def backtest_payload(runtime, catalog, request: BacktestJobRequest) -> dict:
             or request.source_id not in candidate.source_ids
             or profile_revision != revision.revision
         ):
-            raise DomainError("watch_backtest_lineage_mismatch", {})
+            raise DomainError("watch_backtest_lineage_mismatch", {}) from None
         if request.selection != selection:
-            raise DomainError("watch_backtest_selection_mismatch", {})
+            raise DomainError("watch_backtest_selection_mismatch", {}) from None
         if request.settings.max_origins_per_partition < 30:
             raise DomainError("insufficient_backtest_budget", {"minimum": 30})
         payload["candidate_id"] = candidate.candidate_id
@@ -144,7 +178,8 @@ def backtest_payload(runtime, catalog, request: BacktestJobRequest) -> dict:
 def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
     """Capture once; existing plans/report recovery never consult source state."""
     store = BacktestStore(runtime.ledger)
-    if runtime.required_provider is not None:
+    challenger = job.payload.get("challenger_contract")
+    if runtime.required_provider is not None and challenger is None:
         selected = job.payload.get("request", {}).get("selection", {}).get("provider")
         if selected != runtime.required_provider:
             raise DomainError(
@@ -160,9 +195,9 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
         )
         revision = catalog.get(request.source_id)
         if revision.revision != job.payload["source_revision"]:
-            raise DomainError("source_revision_changed", {})
+            raise DomainError("source_revision_changed", {}) from None
         if revision.spec.kind != "csv":
-            raise DomainError("unsupported_backtest_source", {})
+            raise DomainError("unsupported_backtest_source", {}) from None
         watch_id = job.payload.get("watch_id")
         candidate_id = job.payload.get("candidate_id")
         scheduled_snapshot = None
@@ -183,13 +218,13 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
                 or profile_revision != revision.revision
                 or request.settings.max_origins_per_partition < 30
             ):
-                raise DomainError("watch_backtest_lineage_mismatch", {})
+                raise DomainError("watch_backtest_lineage_mismatch", {}) from None
             try:
                 selection = candidate_backtest_selection(candidate)
             except ValueError as error:
                 raise DomainError("unsupported_watch_backtest", {}) from error
             if request.selection != selection:
-                raise DomainError("watch_backtest_selection_mismatch", {})
+                raise DomainError("watch_backtest_selection_mismatch", {}) from None
             if job.payload.get("automatic_requalification"):
                 snapshot_id = job.payload.get("snapshot_id")
                 if (
@@ -199,7 +234,15 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
                 ):
                     return {"suppressed": "source_snapshot_superseded"}
                 scheduled_snapshot = runtime.ledger.get_snapshot(snapshot_id)
-        contracts = _provider_contracts(runtime, request.selection)
+        contracts = _provider_contracts(
+            runtime, request.selection, challenger=challenger is not None
+        )
+        if challenger is not None and contracts[
+            request.selection.provider
+        ] != Capabilities.model_validate(challenger):
+            raise DomainError(
+                "provider_contract_changed", {"provider_id": request.selection.provider}
+            ) from None
         observations = (
             scheduled_snapshot.observations
             if scheduled_snapshot is not None
@@ -215,6 +258,7 @@ def execute_job(runtime, catalog, job, now, *, secret_resolver=None) -> dict:
             request.settings,
             scheduled_snapshot.as_of if scheduled_snapshot is not None else now,
             provider_contracts=contracts,
+            scoring_version=job.payload.get("scoring_version", LEGACY_SCORING),
             watch_id=watch_id,
             candidate_id=candidate_id,
             origin_target_after=(

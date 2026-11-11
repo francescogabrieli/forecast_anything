@@ -1,6 +1,6 @@
 """Deterministic seasonal repetition with explicit period and no imputation."""
 
-from datetime import timezone
+from datetime import UTC
 
 from ..contracts import Capabilities, DomainError, ForecastRequest, ForecastResult
 from .base import frequency_step, observation_grid
@@ -34,7 +34,7 @@ class SeasonalNaiveProvider:
             )
         period = _period(request.options.get("period", self.period))
         groups, calendar = observation_grid(request.snapshot, request.frequency)
-        if calendar[-1] > request.snapshot.as_of.astimezone(timezone.utc):
+        if calendar[-1] > request.snapshot.as_of.astimezone(UTC):
             raise DomainError("future_history", {})
         if len(calendar) < period:
             raise DomainError(

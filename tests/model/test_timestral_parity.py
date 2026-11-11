@@ -9,7 +9,7 @@ import os
 import platform
 import resource
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from importlib.metadata import distribution
 from pathlib import Path
 
@@ -41,7 +41,7 @@ def test_real_timestral_cpu_fp32_parity(tmp_path):
     from timestral import TimestralForecaster
 
     torch.set_num_threads(1)
-    origin = datetime(2026, 10, 24, tzinfo=timezone.utc)
+    origin = datetime(2026, 10, 24, tzinfo=UTC)
     context = np.array(
         [[[1, 2, np.nan, 4, 3, 6, 5, 8], [9, 8, 7, 6, 5, 4, 3, 2]]], dtype=np.float32
     )
@@ -55,7 +55,7 @@ def test_real_timestral_cpu_fp32_parity(tmp_path):
             value=None if np.isnan(v) else float(v),
             unit="count",
         )
-        for s, row in zip(("a", "b"), context[0])
+        for s, row in zip(("a", "b"), context[0], strict=False)
         for i, v in enumerate(row)
     )
     covariates = tuple(

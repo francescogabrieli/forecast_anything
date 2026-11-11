@@ -1,6 +1,6 @@
 """Point scenarios and common-world path arithmetic, without implicit resampling."""
 
-from datetime import timezone
+from datetime import UTC
 from itertools import accumulate
 
 from pydantic import FiniteFloat, ValidationError
@@ -38,12 +38,15 @@ def aligned_inputs(inputs, *, roles=None):
     values = []
     for value in inputs.values():
         value = ForecastResult.model_validate(value.model_dump())
-        value.timestamps = tuple(t.astimezone(timezone.utc) for t in value.timestamps)
+        value.timestamps = tuple(t.astimezone(UTC) for t in value.timestamps)
         if (
             not value.series_ids
             or len(set(value.series_ids)) != len(value.series_ids)
             or not value.timestamps
-            or any(b <= a for a, b in zip(value.timestamps, value.timestamps[1:]))
+            or any(
+                b <= a
+                for a, b in zip(value.timestamps, value.timestamps[1:], strict=False)
+            )
             or value.paths == ()
         ):
             raise DomainError(
@@ -100,10 +103,8 @@ def transformed(name, values, common, transform):
         paths=paths,
         quantiles=None,
         sample_group_id=first.sample_group_id if paths is not None else None,
-        assumptions=tuple(
-            dict.fromkeys(a for value in values for a in value.assumptions)
-        )
-        + (
+        assumptions=(
+            *tuple(dict.fromkeys(a for value in values for a in value.assumptions)),
             f"operator={name}; exact timestamp/series/unit alignment; no marginal quantile arithmetic",
         ),
     )
@@ -129,7 +130,8 @@ class SumAligned:
 
         def total(matrices):
             return tuple(
-                tuple(sum(items) for items in zip(*rows)) for rows in zip(*matrices)
+                tuple(sum(items) for items in zip(*rows, strict=False))
+                for rows in zip(*matrices, strict=False)
             )
 
         return transformed("sum_aligned", values, common, total)
@@ -159,11 +161,11 @@ class CumulativeBalance:
             return tuple(
                 tuple(
                     accumulate(
-                        (a - b for a, b in zip(inflow, outflow)),
+                        (a - b for a, b in zip(inflow, outflow, strict=False)),
                         initial=parameters.initial_value,
                     )
                 )[1:]
-                for inflow, outflow in zip(*matrices)
+                for inflow, outflow in zip(*matrices, strict=False)
             )
 
         answer = transformed("cumulative_balance", values, common, balance)
