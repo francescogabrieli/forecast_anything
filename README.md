@@ -6,6 +6,8 @@ Forecast Anything is a local predictive observatory. The **assistant connected o
 
 The current implementation is a local forecasting observatory. The Python runtime validates typed graphs, freezes point-in-time inputs, records immutable forecasts in SQLite, and evaluates them against later observations. A React console uses the same authenticated API. Forecasting runs in your local workspace.
 
+**See it on real data.** Replay a daily retail forecast from a public CSV, compare against a seasonal baseline on held-out history, and reopen the saved question. On that retail split the baseline had the lower error. [Real-data demo and 30-second video](docs/real-data-demo.md).
+
 ## Connect your assistant
 
 Install the local wheel and its locked MCP dependencies, prepare the pinned local Timestral model, and connect the stdio server to your assistant. On macOS, `forecast-anything setup --prepare-model` starts the workspace service and registers Codex. For another MCP client, follow the [MCP connection guide](docs/implementation/mcp.md). Then ask for a CSV preview, confirm its explicit time and unit assumptions, and submit the first forecast. The [quickstart](docs/quickstart.md) and [installation guide](docs/installation.md) walk through the same path.
