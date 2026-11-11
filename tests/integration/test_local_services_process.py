@@ -38,7 +38,8 @@ def test_up_serves_health_and_stops_on_sigterm(tmp_path):
                 with urlopen(url, timeout=1) as response:
                     assert response.status == 200
                 break
-            except URLError:
+            except (URLError, TimeoutError):
+                # The supervisor listens before its API child can answer.
                 assert process.poll() is None
                 assert time.monotonic() < deadline
                 time.sleep(0.05)
@@ -271,7 +272,8 @@ def test_up_worker_processes_a_durable_source_job(tmp_path):
             try:
                 if request("/health")["worker"] == "running":
                     break
-            except URLError:
+            except (URLError, TimeoutError):
+                # The supervisor listens before its API child can answer.
                 assert process.poll() is None
             assert process.poll() is None and time.monotonic() < deadline
             time.sleep(0.05)
