@@ -1,0 +1,163 @@
+{
+  "cutoff": "2011-12-02T00:00:00+00:00",
+  "observations": 731,
+  "question_id": "09cc73b4b40375ee09e16aa8ccb3d7a2dc0d4c897a5d69583ab526e911cad070",
+  "run_id": "999e1ac450d1c8b4c2d78ac8f165409f04c1a0cdbbac377976768471e3faffad",
+  "forecasts": {
+    "forecast": {
+      "point": [
+        [
+          27212.33203125
+        ]
+      ],
+      "timestamps": [
+        "2011-12-03T00:00:00Z"
+      ],
+      "units": [
+        "items"
+      ],
+      "assumptions": [
+        "source_revision=30a272d7b93e8b7d7f77b63a701bba98ba84f375b407cc5370a4518a148fc0d1",
+        "csv_content_sha256=69c203bd7e20a4c5da210ee324723de260903e046f3f5195ae07539b60280ede",
+        "Explicit source mapping and time semantics.",
+        "Timestral checkpoint=mistralai/Timestral-28M@49b26409ac87b5935539a5d8ffe7f397b720db47; code=a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff; CPU fp32; official defaults; missing values remain NaN; marginal quantiles only"
+      ]
+    },
+    "reference": {
+      "point": [
+        [
+          27051.0
+        ]
+      ],
+      "timestamps": [
+        "2011-12-03T00:00:00Z"
+      ],
+      "units": [
+        "items"
+      ],
+      "assumptions": [
+        "source_revision=30a272d7b93e8b7d7f77b63a701bba98ba84f375b407cc5370a4518a148fc0d1",
+        "csv_content_sha256=69c203bd7e20a4c5da210ee324723de260903e046f3f5195ae07539b60280ede",
+        "Explicit source mapping and time semantics.",
+        "seasonal_naive period=1; fixed UTC calendar; no imputation"
+      ]
+    }
+  },
+  "actuals": {
+    "2011-12-03T00:00:00+00:00": 28825.0
+  },
+  "recent_history": [
+    {
+      "series_id": "retail:all_positive_items",
+      "event_time": "2011-11-19T00:00:00+00:00",
+      "available_at": "2011-11-19T00:00:00+00:00",
+      "revision": "assumed-v1",
+      "value": "24338.0",
+      "unit": "items"
+    },
+    {
+      "series_id": "retail:all_positive_items",
+      "event_time": "2011-11-20T00:00:00+00:00",
+      "available_at": "2011-11-20T00:00:00+00:00",
+      "revision": "assumed-v1",
+      "value": "0.0",
+      "unit": "items"
+    },
+    {
+      "series_id": "retail:all_positive_items",
+      "event_time": "2011-11-21T00:00:00+00:00",
+      "available_at": "2011-11-21T00:00:00+00:00",
+      "revision": "assumed-v1",
+      "value": "19416.0",
+      "unit": "items"
+    },
+    {
+      "series_id": "retail:all_positive_items",
+      "event_time": "2011-11-22T00:00:00+00:00",
+      "available_at": "2011-11-22T00:00:00+00:00",
+      "revision": "assumed-v1",
+      "value": "25814.0",
+      "unit": "items"
+    },
+    {
+      "series_id": "retail:all_positive_items",
+      "event_time": "2011-11-23T00:00:00+00:00",
+      "available_at": "2011-11-23T00:00:00+00:00",
+      "revision": "assumed-v1",
+      "value": "36025.0",
+      "unit": "items"
+    },
+    {
+      "series_id": "retail:all_positive_items",
+      "event_time": "2011-11-24T00:00:00+00:00",
+      "available_at": "2011-11-24T00:00:00+00:00",
+      "revision": "assumed-v1",
+      "value": "39420.0",
+      "unit": "items"
+    },
+    {
+      "series_id": "retail:all_positive_items",
+      "event_time": "2011-11-25T00:00:00+00:00",
+      "available_at": "2011-11-25T00:00:00+00:00",
+      "revision": "assumed-v1",
+      "value": "26629.0",
+      "unit": "items"
+    },
+    {
+      "series_id": "retail:all_positive_items",
+      "event_time": "2011-11-26T00:00:00+00:00",
+      "available_at": "2011-11-26T00:00:00+00:00",
+      "revision": "assumed-v1",
+      "value": "31775.0",
+      "unit": "items"
+    },
+    {
+      "series_id": "retail:all_positive_items",
+      "event_time": "2011-11-27T00:00:00+00:00",
+      "available_at": "2011-11-27T00:00:00+00:00",
+      "revision": "assumed-v1",
+      "value": "0.0",
+      "unit": "items"
+    },
+    {
+      "series_id": "retail:all_positive_items",
+      "event_time": "2011-11-28T00:00:00+00:00",
+      "available_at": "2011-11-28T00:00:00+00:00",
+      "revision": "assumed-v1",
+      "value": "11173.0",
+      "unit": "items"
+    },
+    {
+      "series_id": "retail:all_positive_items",
+      "event_time": "2011-11-29T00:00:00+00:00",
+      "available_at": "2011-11-29T00:00:00+00:00",
+      "revision": "assumed-v1",
+      "value": "29466.0",
+      "unit": "items"
+    },
+    {
+      "series_id": "retail:all_positive_items",
+      "event_time": "2011-11-30T00:00:00+00:00",
+      "available_at": "2011-11-30T00:00:00+00:00",
+      "revision": "assumed-v1",
+      "value": "30940.0",
+      "unit": "items"
+    },
+    {
+      "series_id": "retail:all_positive_items",
+      "event_time": "2011-12-01T00:00:00+00:00",
+      "available_at": "2011-12-01T00:00:00+00:00",
+      "revision": "assumed-v1",
+      "value": "28532.0",
+      "unit": "items"
+    },
+    {
+      "series_id": "retail:all_positive_items",
+      "event_time": "2011-12-02T00:00:00+00:00",
+      "available_at": "2011-12-02T00:00:00+00:00",
+      "revision": "assumed-v1",
+      "value": "27051.0",
+      "unit": "items"
+    }
+  ]
+}
