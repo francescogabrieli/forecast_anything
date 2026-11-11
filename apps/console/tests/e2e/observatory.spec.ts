@@ -244,8 +244,15 @@ test("reviews two-source evaluation, revision notification and immutable scenari
     .getByRole("button", { name: `Apri run ${notification.run_id}`, exact: true }).click();
   await expect(page.locator(".run-card").getByText(`ID run: ${notification.run_id}`)).toBeVisible();
   await navigate(page, "Home");
+  const actualsPath = `**/v1/snapshots/${evaluation.actuals_snapshot_id}`;
+  await page.route(actualsPath, async (route) => {
+    const response = await route.fetch();
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.fulfill({ response });
+  });
   await page.locator(`button[data-run-id="${baseRunId}"]`).click();
   await expect(page.locator(".run-card").getByText(`ID run: ${baseRunId}`)).toBeVisible();
+  await page.unroute(actualsPath);
 
   const forecastNode = page.getByRole("button", { name: /forecast, previsione/ });
   await forecastNode.focus();

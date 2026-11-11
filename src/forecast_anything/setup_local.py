@@ -92,7 +92,15 @@ def register_codex(codex: str, name: str, executable: Path, config_path: Path) -
 
 
 class LaunchAgent:
-    def __init__(self, config_path: Path, executable: Path):
+    config_path: Path
+    config: dict
+    executable: Path
+    label: str
+    domain: str
+    target: str
+    plist: Path
+
+    def __init__(self, config_path: Path, executable: Path) -> None:
         if sys.platform != "darwin":
             raise DomainError(
                 "macos_login_service_required",
