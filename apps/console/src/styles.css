@@ -1,4 +1,4 @@
-/* Shared with the public site's Linear reference in DESIGN.md. */
+/* Dark theme for the workspace console. */
 :root {color-scheme:dark; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; -webkit-font-smoothing:antialiased;
 --ground:#0c0d0f; --surface:#141517; --raised:#1b1c20; --active:#26272c; --ink:#f7f8f8; --text:#d0d6e0; --muted:#a0a4ae; --line:#303137; --border:#303137; --rule:#27282e; --control:#4a4c55; --accent:#a4abff; --action:#5e6ad2; --chart-1:var(--accent); color:var(--ink); background:var(--ground)}
 * { box-sizing: border-box; }
