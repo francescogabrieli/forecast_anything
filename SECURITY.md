@@ -14,10 +14,8 @@ Do not post credentials, private source data or exploit details in a public issu
 - Keep SQLite files on local disk, protect their permissions and backups, and run one worker per workspace. The source catalog retains source locations and secret references even though API responses omit them. Sanitized samples can still contain sensitive business data; review what a source exposes before registering it.
 - For authenticated HTTP JSON sources, inject a source-scoped credential resolver in the application. `secret_ref` names a credential; it is not the credential itself. The stock CLI does not resolve arbitrary environment secrets. Authenticated fetches require HTTPS; redirects must preserve origin and credential-shaped URLs are rejected.
 
-## Optional services
+## Model and integration boundaries
 
-The Eve bridge uses a dedicated worker-to-bridge token and a distinct agent-to-core token; neither is the workspace token. Only the agent service receives `OPENAI_API_KEY`. Keep model access separate from source credentials and retain persistent core budgets. Source content and model prose do not authorize execution or activation.
+External discovery clients use a dedicated bridge token and a distinct agent-to-core token. Keep these separate from the workspace token. The Python core owns source access, tool budgets and qualification. See the [runtime decision](docs/decisions/agent-runtime.md).
 
-Use the documented [agent egress overlay](apps/agent/compose.agent-egress.yaml) and verify it for the deployment. The agent process must remain on an internal network with provider egress through its allowlisted proxy; the Docker sandbox's `deny-all` policy alone does not restrict the service process. Keep the core and Workflow Postgres reachable on the internal network. See [agent runtime decisions](docs/decisions/agent-runtime.md) for the tested boundary and restart limitations.
-
-Timestral is required for new product forecasts. Its weights retain a separate license and should be prepared explicitly using the pinned revision. Do not enable its guarded real-model test or download weights as part of ordinary offline verification. External data, dependencies and weights retain their own terms and trust boundaries; keep revisions pinned and review changes before use.
+Timestral is the default model for new product forecasts. Its weights retain a separate license and should be prepared explicitly using the pinned revision. Do not enable its guarded real-model test or download weights as part of ordinary offline verification. External data, dependencies and weights retain their own terms and trust boundaries; keep revisions pinned and review changes before use.

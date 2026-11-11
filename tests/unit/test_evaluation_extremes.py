@@ -1,7 +1,7 @@
 """Finite inputs must not poison scoring through intermediate float overflow."""
 
 import pytest
-from test_evaluation import result
+from evaluation_fixtures import result
 
 from forecast_anything.contracts import DomainError
 from forecast_anything.evaluation.metrics import forecast_metrics, relative_mae
@@ -28,3 +28,9 @@ def test_genuinely_unrepresentable_score_has_explicit_numeric_error():
 
 def test_unrepresentable_ratio_is_unavailable_without_discarding_scores():
     assert relative_mae(1e308, 1e-308) == (None, "ratio_unrepresentable")
+
+
+@pytest.mark.parametrize("observed", [((1.0,),), ((float("inf"), 1.0),), ((),)])
+def test_scoring_rejects_misaligned_nonfinite_or_empty_inputs(observed):
+    with pytest.raises(DomainError, match="invalid_score_input"):
+        forecast_metrics(result((1.0, 2.0)), observed)

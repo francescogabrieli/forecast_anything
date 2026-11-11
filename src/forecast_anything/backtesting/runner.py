@@ -10,7 +10,7 @@ from time import monotonic
 from pydantic import ValidationError
 
 from ..contracts import Capabilities, DomainError
-from ..evaluation.metrics import relative_mae
+from ..evaluation.metrics import relative_mae, scoring_version_from_assumptions
 from ..evaluation.records import evaluate_run
 from ..jobs import LeaseGuard
 from ..providers.base import ForecastProvider
@@ -176,7 +176,13 @@ def _execute_origin(runtime, store, plan, actuals, origin, lease_guard):
             reason_code=reason,
         )
     try:
-        evaluation = evaluate_run(run, actuals, graph, operators=runtime.operators)
+        evaluation = evaluate_run(
+            run,
+            actuals,
+            graph,
+            operators=runtime.operators,
+            scoring_version=scoring_version_from_assumptions(plan.assumptions),
+        )
     except DomainError as error:
         # Runtime checks shape; scoring additionally validates quantile semantics.
         # Keep poisoned emissions durable and non-scored without hiding other errors.
@@ -210,8 +216,7 @@ def _execute_origin(runtime, store, plan, actuals, origin, lease_guard):
             reason_code="unsupported_score_representation"
             if any(
                 score.get("reason") == "no_supported_score_representation"
-                or score.get("status") == "evaluated"
-                and score.get("mae") is None
+                or (score.get("status") == "evaluated" and score.get("mae") is None)
                 for score in (model, baseline)
             )
             else "incomplete_actuals",

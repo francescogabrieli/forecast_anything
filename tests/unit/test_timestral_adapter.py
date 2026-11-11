@@ -2,8 +2,9 @@
 
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from typing import ClassVar
 
 import numpy as np
 import pytest
@@ -16,7 +17,7 @@ from forecast_anything.contracts import (
 )
 from forecast_anything.providers.timestral import TimestralProvider
 
-T = datetime(2026, 10, 24, tzinfo=timezone.utc)
+T = datetime(2026, 10, 24, tzinfo=UTC)
 
 
 def request():
@@ -53,8 +54,8 @@ def fake(monkeypatch, tmp_path):
     (snapshot / "model.safetensors").write_bytes(b"model double")
 
     class Forecaster:
-        loads = []
-        calls = []
+        loads: ClassVar[list] = []
+        calls: ClassVar[list] = []
 
         @classmethod
         def from_pretrained(cls, checkpoint, *, revision, device, local_files_only):

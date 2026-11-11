@@ -17,11 +17,11 @@ jobs:
           version: "0.12.3"
           python-version: "3.14"
       - name: Install locked build and verification dependencies
-        run: uv sync --locked --extra dev
+        run: uv sync --locked --no-dev --extra dev
       - name: Build wheel and source distribution
         run: uv build
       - name: Verify installed artifact without model weights
-        run: uv run --locked python scripts/check_release.py --dist dist --artifact-only | tee release-check.json
+        run: uv run --locked --no-dev --extra dev python scripts/check_release.py --dist dist --artifact-only | tee release-check.json
       - name: Upload candidate artifacts for review
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

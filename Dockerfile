@@ -17,7 +17,7 @@ COPY examples ./examples
 COPY contracts/v1 ./contracts/v1
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-RUN uv sync --frozen --no-dev --no-editable
+RUN uv sync --frozen --no-editable
 RUN mkdir /data
 
 # Default API and worker include pinned model code; prepare weights explicitly in a mounted cache.
@@ -43,19 +43,3 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:1.29-alpine AS console
 COPY --from=console-build /app/dist /usr/share/nginx/html
 EXPOSE 8080
-
-FROM node:24-bookworm-slim AS agent
-WORKDIR /app/apps/agent
-COPY apps/agent/package.json apps/agent/package-lock.json ./
-RUN npm ci --ignore-scripts
-COPY apps/agent/agent ./agent
-COPY apps/agent/src ./src
-COPY apps/agent/tsconfig.json ./
-COPY apps/agent/compose ./compose
-# The registered tools use core HTTP only, so no sandbox template is needed.
-# Keep the Docker socket out of both the build and the running agent container.
-RUN NODE_ENV=development FORECAST_AGENT_SCRIPTED_MODEL=1 npm run build -- --skip-sandbox-prewarm
-ENV NODE_ENV=production
-USER node
-EXPOSE 3000
-ENTRYPOINT ["sh", "compose/start.sh"]

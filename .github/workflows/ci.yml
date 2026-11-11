@@ -31,16 +31,58 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install locked dependencies
         run: uv sync --locked --extra dev --extra mcp
+      - name: Check Python file lengths
+        run: uv run --locked --extra dev --extra mcp python scripts/check_python_file_lengths.py
       - name: Lint Python
-        run: uv run --locked --extra dev --extra mcp ruff check src tests apps/agent/egress-proxy/proxy.py
+        run: uv run --locked --extra dev --extra mcp ruff check src tests scripts
       - name: Check Python formatting
-        run: uv run --locked --extra dev --extra mcp ruff format --check src tests apps/agent/egress-proxy/proxy.py
+        run: uv run --locked --extra dev --extra mcp ruff format --check src tests scripts
       - name: Check exported contract drift
         run: uv run --locked --extra dev --extra mcp python scripts/export_contracts.py contracts/v1 --check
       - name: Check exported console contract drift
         run: uv run --locked --extra dev --extra mcp python scripts/export_contracts.py apps/console/src/api --check
-      - name: Run tests
-        run: uv run --locked --extra dev --extra mcp pytest -q
+      - name: Check Python types
+        run: uv run --locked --extra dev --extra mcp python scripts/check_types.py
+      - name: Check CPU forecast accuracy and frozen splits
+        env:
+          HF_HUB_OFFLINE: "1"
+          OMP_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
+        run: uv run --locked --extra dev --extra mcp pytest -q tests/unit/test_accuracy_gate.py
+      - name: Run tests with branch coverage
+        run: uv run --locked --extra dev --extra mcp coverage run -m pytest -q
+      - name: Publish Python branch coverage
+        if: always()
+        run: |
+          if compgen -G '.coverage.*' > /dev/null; then
+            uv run --locked --extra dev --extra mcp coverage combine
+          fi
+          if test -f .coverage; then
+            echo "## Python ${{ matrix.python-version }} branch coverage" >> "$GITHUB_STEP_SUMMARY"
+            uv run --locked --extra dev --extra mcp coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Audit locked Python dependencies (informational)
+        if: always()
+        continue-on-error: true
+        run: |
+          echo "## Python dependency audit (informational)" >> "$GITHUB_STEP_SUMMARY"
+          echo "The pinned Timestral Git revision is reviewed separately. Its PyPI dependencies are included." >> "$GITHUB_STEP_SUMMARY"
+          requirements="$RUNNER_TEMP/forecast-audit-requirements.txt"
+          report="$RUNNER_TEMP/forecast-audit.md"
+          uv export --locked --group dev --extra mcp --no-emit-project --no-emit-package timestral --no-hashes --output-file "$requirements" --quiet
+          audit_status=0
+          uv run --locked --extra dev --extra mcp pip-audit --no-deps --disable-pip --progress-spinner off --format markdown --output "$report" --requirement "$requirements" || audit_status=$?
+          if test -s "$report"; then
+            cat "$report" >> "$GITHUB_STEP_SUMMARY"
+          elif test "$audit_status" -eq 0; then
+            echo "No known vulnerabilities reported for the scanned dependencies." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Audit produced no report. See the step log." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test "$audit_status" -ne 0; then
+            echo "::warning::pip-audit exited with status $audit_status. Review findings, skipped packages and the step log."
+          fi
+          exit "$audit_status"
       - name: Build wheel and source distribution
         run: uv build
       - name: Verify installed artifact outside checkout (model execution separate)
@@ -48,40 +90,6 @@ jobs:
       - name: Report remaining disk space
         if: always()
         run: df -h / "$RUNNER_TEMP"
-
-  agent:
-    name: Agent package (Node 24)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/agent
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24"
-          package-manager-cache: false
-      - name: Install locked agent dependencies
-        run: npm ci
-      - name: Audit production agent dependencies
-        run: npm audit --omit=dev --audit-level=high
-      - name: Check generated core contracts
-        run: npm run contracts:check
-      - name: Typecheck agent package
-        run: npm run typecheck
-      - name: Test agent package
-        run: npm test -- --run
-      - name: Build Eve agent
-        run: npm run build
-      - name: Verify process-level egress policy
-        run: bash scripts/check-egress-policy.sh
-      - name: Set up locked Python runtime for Eve/Postgres recovery check
-        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
-        with:
-          version: "0.12.3"
-          python-version: "3.14"
-      - name: Verify Eve and Postgres recovery
-        run: bash scripts/check-postgres-restart.sh
 
   console:
     name: Forecast console (Node 24)

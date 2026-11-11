@@ -444,13 +444,22 @@ export namespace RunRecordGenerated {
   export type EvidenceIds = string[];
   export type GraphId = string;
   export type GraphVersion = number;
+  export type Provider = string;
+  export type ProviderRevision = string;
+  export type Reason = "confirmed_lower_mae" | "default_retained";
+  /**
+   * @minItems 1
+   * @maxItems 2
+   */
+  export type ReportIds = [string] | [string, string];
+  export type SeriesId = string;
   export type ParentRunId = string | null;
   export type PrimaryNodeId = string | null;
   export type Assumptions = string[];
   export type Paths = number[][][] | null;
   export type Point = number[][] | null;
   export type ProviderId = string;
-  export type ProviderRevision = string;
+  export type ProviderRevision1 = string;
   export type Quantiles = {
     [k: string]: number[][];
   } | null;
@@ -469,6 +478,7 @@ export namespace RunRecordGenerated {
     evidence_ids: EvidenceIds;
     graph_id: GraphId;
     graph_version: GraphVersion;
+    model_selection?: ModelSelectionEvidence | null;
     parent_run_id: ParentRunId;
     primary_node_id?: PrimaryNodeId;
     requested_provider: RequestedProvider;
@@ -481,6 +491,13 @@ export namespace RunRecordGenerated {
   export interface ActualProvider {
     [k: string]: string;
   }
+  export interface ModelSelectionEvidence {
+    provider: Provider;
+    provider_revision: ProviderRevision;
+    reason: Reason;
+    report_ids: ReportIds;
+    series_id: SeriesId;
+  }
   export interface RequestedProvider {
     [k: string]: string;
   }
@@ -492,7 +509,7 @@ export namespace RunRecordGenerated {
     paths: Paths;
     point: Point;
     provider_id: ProviderId;
-    provider_revision: ProviderRevision;
+    provider_revision: ProviderRevision1;
     quantiles: Quantiles;
     sample_group_id: SampleGroupId;
     series_ids: SeriesIds;
@@ -1926,12 +1943,14 @@ export namespace OperationSubmitRequestGenerated {
   export type Kind1 = "run";
   export type PreviousRunId = string | null;
   export type PrimaryNodeId = string | null;
+  export type ChallengerReportId = string | null;
   export type Key1 = string;
   export type Kind2 = "configured_run";
   export type BaselinePeriod = number;
   export type Horizon = number;
   export type JsonValue = unknown;
   export type Provider = string;
+  export type SelectionReportId = string | null;
   export type SnapshotId = string;
   export type SourceId = string;
   export type Key2 = string;
@@ -1980,9 +1999,11 @@ export namespace OperationSubmitRequestGenerated {
     [k: string]: string;
   }
   export interface ConfiguredRunJobRequest {
+    challenger_report_id?: ChallengerReportId;
     key: Key1;
     kind: Kind2;
     selection: ForecastSelection;
+    selection_report_id?: SelectionReportId;
     snapshot_id: SnapshotId;
     source_id: SourceId;
   }
@@ -2396,12 +2417,21 @@ export namespace ForecastPresentationGenerated {
   export type BaselineNodeId = string | null;
   export type GraphId = string;
   export type GraphVersion = number;
+  export type Provider = string;
+  export type ProviderRevision = string;
+  export type Reason = "confirmed_lower_mae" | "default_retained";
+  /**
+   * @minItems 1
+   * @maxItems 2
+   */
+  export type ReportIds = [string] | [string, string];
+  export type SeriesId = string;
   export type NodeId = string;
   export type Point = number | null;
   export type QuantilesTruncated = boolean;
   export type Representation = "point" | "marginal_quantiles" | "joint_paths";
   export type SampleCount = number;
-  export type SeriesId = string;
+  export type SeriesId1 = string;
   export type Timestamp = string;
   export type Unit = string;
   /**
@@ -2633,6 +2663,7 @@ export namespace ForecastPresentationGenerated {
     baseline_node_id?: BaselineNodeId;
     graph_id: GraphId;
     graph_version: GraphVersion;
+    model_selection?: ModelSelectionEvidence | null;
     points: Points;
     primary_node_id?: PrimaryNodeId;
     providers: Providers;
@@ -2646,6 +2677,13 @@ export namespace ForecastPresentationGenerated {
     truncated: Truncated;
     visual_destination?: VisualDestination;
   }
+  export interface ModelSelectionEvidence {
+    provider: Provider;
+    provider_revision: ProviderRevision;
+    reason: Reason;
+    report_ids: ReportIds;
+    series_id: SeriesId;
+  }
   export interface ForecastPresentationPoint {
     node_id: NodeId;
     point: Point;
@@ -2653,7 +2691,7 @@ export namespace ForecastPresentationGenerated {
     quantiles_truncated: QuantilesTruncated;
     representation: Representation;
     sample_count: SampleCount;
-    series_id: SeriesId;
+    series_id: SeriesId1;
     timestamp: Timestamp;
     unit: Unit;
   }

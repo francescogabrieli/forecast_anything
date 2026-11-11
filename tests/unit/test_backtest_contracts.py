@@ -1,6 +1,6 @@
 """Backtest identity and validation boundaries, independent of numerical planning."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
@@ -51,7 +51,7 @@ def test_archive_hash_normalizes_utc_order_and_signed_zero():
     from forecast_anything.backtesting.contracts import ObservationArchive
     from forecast_anything.contracts import Observation
 
-    instant = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    instant = datetime(2026, 1, 1, tzinfo=UTC)
     row = Observation(
         series_id="s",
         event_time=instant,

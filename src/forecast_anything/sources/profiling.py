@@ -20,12 +20,13 @@ HTTP records_path is a separate optional dotted path to an array of records.
 
 from __future__ import annotations
 
+import itertools
 import json
 import math
 import os
 import re
 import stat
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -281,7 +282,7 @@ def preview_csv(
     if isinstance(event_column, str) and len(rows) >= 3:
         try:
             times = [datetime.fromisoformat(str(row[event_column])) for row in rows]
-            intervals = {(b - a).total_seconds() for a, b in zip(times, times[1:])}
+            intervals = {(b - a).total_seconds() for a, b in itertools.pairwise(times)}
             if intervals == {86400}:
                 hints["frequency"] = "1d"
             elif intervals == {3600}:
@@ -301,7 +302,7 @@ def _csv_identity(spec: SourceSpec, content: bytes, as_of: datetime) -> tuple[st
     proposal = json.dumps(
         {
             "algorithm": "guided-csv-v1",
-            "as_of": as_of.astimezone(timezone.utc).isoformat(),
+            "as_of": as_of.astimezone(UTC).isoformat(),
             "spec": spec.model_dump(mode="json"),
             "content_digest": digest,
         },
@@ -324,7 +325,7 @@ def _timestamp(value: Any, zone: ZoneInfo) -> datetime:
     )
     if first.utcoffset() != second.utcoffset():
         raise ValueError("ambiguous or nonexistent local time")
-    if first.astimezone(timezone.utc).astimezone(zone).replace(tzinfo=None) != parsed:
+    if first.astimezone(UTC).astimezone(zone).replace(tzinfo=None) != parsed:
         raise ValueError("nonexistent local time")
     return first
 

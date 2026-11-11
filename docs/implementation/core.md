@@ -52,3 +52,10 @@ Marginal quantiles never imply joint paths. Every joint-path operator input must
 - Add optional options={} to ForecastConfig and ForecastRequest; runtime passes it unchanged and baseline validates period — honor C6 node-owned period without baseline-specific runtime logic — additive wire schema field, future providers must reject unsupported options.
 - Runtime removes parameters.bindings before Operator.apply, maps explicit complete one-to-one roles to upstream nodes, otherwise keeps node-ID keys; original graph remains persisted — bridge generic graph and operator parameter contracts — future shared-input role aliases require extension.
 - Baseline calendar advances in fixed UTC steps after the aligned observed grid; runtime requires snapshot.as_of equal run origin and declared/actual source metadata agreement — no implicit resampling or fabricated alignment — stale histories remain distinguishable from future observations and need later freshness policy.
+
+
+## Evaluation scoring versions
+
+New evaluations use NumPy scoring (`evaluation=v2`). Observed values, point forecasts and quantile matrices must be finite and aligned to the same series and target dates. Scoring uses scaled floating-point arithmetic when a direct difference or sum would overflow. A score outside the representable range is reported as `numerical_score_unrepresentable`.
+
+The evaluation record includes its scoring version in its assumptions. New backtests pin the scorer when accepted and carry the version into the stored plan and report. Older jobs and plans resume with the original scorer, and existing records retain their scores and IDs. To score the same run and actuals again under the new version, submit a new evaluation key.

@@ -74,14 +74,27 @@ def test_first_provider_observes_persisted_plan_and_actuals(tmp_path):
     assert store.get_report(job_id).partitions[2].model_mae == 1.5
 
 
+@pytest.mark.parametrize("legacy", [False, True])
 @pytest.mark.parametrize("new_attempt", [False, True])
 def test_partial_origins_reclaim_uses_frozen_archive_and_stable_children(
-    tmp_path, monkeypatch, new_attempt
+    tmp_path, monkeypatch, new_attempt, legacy
 ):
     ledger, runtime, catalog, revision, client = setup(tmp_path)
     provider = Provider()
-    job_id, body = configured(runtime, client, provider)
     queue, store = JobQueue(ledger), BacktestStore(ledger)
+    if legacy:
+        from forecast_anything.backtesting.service import backtest_payload
+        from forecast_anything.contracts import BacktestJobRequest
+
+        runtime.providers["controlled"] = provider
+        body = request(selection={"provider": "controlled", "horizon": 2})
+        payload = backtest_payload(
+            runtime, catalog, BacktestJobRequest.model_validate(body)
+        )
+        payload.pop("scoring_version")
+        job_id = queue.enqueue(f"api/{body['key']}", payload).job_id
+    else:
+        job_id, body = configured(runtime, client, provider)
     old = queue.claim("old", T, 5)
     real_put = BacktestStore.put_origin
 
@@ -94,6 +107,14 @@ def test_partial_origins_reclaim_uses_frozen_archive_and_stable_children(
     with pytest.raises(KeyboardInterrupt):
         Worker(runtime, queue)._execute(old, T)
     plan = store.get_plan(job_id)
+    assert (plan.assumptions[0] == "evaluation=v2") is not legacy
+    first = store.get_origin(job_id, 0)
+    if first.evaluation_id is not None:
+        assert (
+            ledger.get_evaluation(first.evaluation_id)
+            .assumptions[0]
+            .startswith("evaluation=v1;" if legacy else "evaluation=v2;")
+        )
     assert [o.ordinal for o in store.list_origins(job_id).origins] == [0]
     assert provider.calls == 2
     with ledger._connection() as connection:

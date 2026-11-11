@@ -7,7 +7,7 @@ from forecast_anything.worker import Worker
 
 
 def test_product_backtest_rejects_baseline_but_replays_accepted_key(tmp_path):
-    ledger, runtime, _, _, client = setup(tmp_path)
+    _ledger, runtime, _, _, client = setup(tmp_path)
     job_id = submit(client, request())
     runtime.required_provider = "timestral"
     assert client.post("/v1/jobs", json=request()).json()["job_id"] == job_id

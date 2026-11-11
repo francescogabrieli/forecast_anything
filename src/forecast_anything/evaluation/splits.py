@@ -1,7 +1,8 @@
 """Frozen temporal partitions and complete, non-overlapping target windows."""
 
+import itertools
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from ..contracts import DomainError
@@ -14,8 +15,8 @@ def _calendar(timestamps):
         t.tzinfo is None or t.utcoffset() is None for t in timestamps
     ):
         raise DomainError("invalid_split_calendar", {})
-    normalized = tuple(t.astimezone(timezone.utc) for t in timestamps)
-    if any(b <= a for a, b in zip(normalized, normalized[1:])):
+    normalized = tuple(t.astimezone(UTC) for t in timestamps)
+    if any(b <= a for a, b in itertools.pairwise(normalized)):
         raise DomainError("invalid_split_calendar", {})
     return normalized
 

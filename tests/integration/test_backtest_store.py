@@ -2,7 +2,7 @@
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from importlib.resources import files
 
 import pytest
@@ -12,7 +12,7 @@ from forecast_anything.contracts import DomainError, Snapshot
 from forecast_anything.jobs import JobQueue, LeaseGuard
 from forecast_anything.store import MIGRATIONS, Ledger
 
-NOW = datetime(2026, 1, 10, tzinfo=timezone.utc)
+NOW = datetime(2026, 1, 10, tzinfo=UTC)
 
 
 def plan_fixture(ledger, backtest_id="bt"):

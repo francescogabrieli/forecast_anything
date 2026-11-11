@@ -15,6 +15,7 @@ from ..contracts import (
     Observation,
     Snapshot,
 )
+from ..evaluation.metrics import CURRENT_SCORING, LEGACY_SCORING
 from ..evaluation.splits import build_splits
 from ..providers.base import frequency_step, observation_grid
 from ..sources.catalog import SourceRevision
@@ -134,8 +135,11 @@ def prepare_backtest(
     watch_id: str | None = None,
     candidate_id: str | None = None,
     origin_target_after: datetime | None = None,
+    scoring_version: str = CURRENT_SCORING,
 ) -> BacktestPlan:
     """Freeze source/configuration/calendar/membership without I/O or inference."""
+    if scoring_version not in {LEGACY_SCORING, CURRENT_SCORING}:
+        raise DomainError("unsupported_scoring_version", {"version": scoring_version})
     source_revision = SourceRevision.model_validate_json(
         source_revision.model_dump_json()
     )
@@ -221,6 +225,11 @@ def prepare_backtest(
         origins=tuple(origins),
         actuals_snapshot_id=actuals.snapshot_id,
         assumptions=(
+            *(
+                (f"evaluation={scoring_version}",)
+                if scoring_version != LEGACY_SCORING
+                else ()
+            ),
             "Only supplied revisions are replayed; upstream-discarded vintages cannot be reconstructed.",
             "Frozen 50/25/25 partitions; earliest bounded origins; no tuning or imputation.",
             *(

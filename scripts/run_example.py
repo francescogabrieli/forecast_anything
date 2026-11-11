@@ -59,14 +59,15 @@ def run_example(name: str, database: Path):
     source_id = source_nodes[0].config.get("source_id")
     if not isinstance(source_id, str):
         raise ValueError("example source node must declare source_id")
-    assumptions = tuple(
-        a
-        for a in manifest.get("assumptions", ())
-        if not any(
-            word in a.lower()
-            for word in ("repetition", "point-only", "seasonal baseline")
-        )
-    ) + (
+    assumptions = (
+        *tuple(
+            a
+            for a in manifest.get("assumptions", ())
+            if not any(
+                word in a.lower()
+                for word in ("repetition", "point-only", "seasonal baseline")
+            )
+        ),
         "Pinned local Timestral primary; seasonal repetition is only the independent reference.",
         "Synthetic illustrative inputs; model marginal quantiles do not establish calibration, joint probabilities or general forecast accuracy.",
     )

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from pydantic import ValidationError
@@ -13,7 +13,7 @@ from forecast_anything.contracts import (
 )
 from forecast_anything.graph import compile_graph
 
-T = datetime(2026, 10, 24, tzinfo=timezone.utc)
+T = datetime(2026, 10, 24, tzinfo=UTC)
 
 
 def registry():

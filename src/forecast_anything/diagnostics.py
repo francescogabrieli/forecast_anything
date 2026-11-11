@@ -1,5 +1,6 @@
 """Small read-only loopback diagnostics shared by CLI and the MCP adapter."""
 
+import contextlib
 import hmac
 import json
 import os
@@ -64,10 +65,8 @@ def _get(url, path, headers):
         connected_socket = connection.sock
 
         def expire():
-            try:
+            with contextlib.suppress(OSError):
                 connected_socket.shutdown(socket.SHUT_RDWR)
-            except OSError:
-                pass
 
         # The socket timeout alone resets when a peer drips headers or a body.
         timer = Timer(_PROBE_TIMEOUT_SECONDS, expire)

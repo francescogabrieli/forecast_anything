@@ -3,7 +3,7 @@
 import csv
 import json
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -68,12 +68,12 @@ def test_cli_preserves_legacy_baseline_emissions_and_refuses_new_baseline(tmp_pa
         Ledger(db),
         {"seasonal_naive": SeasonalNaiveProvider(1)},
         {},
-        lambda: datetime(2026, 10, 24, tzinfo=timezone.utc),
+        lambda: datetime(2026, 10, 24, tzinfo=UTC),
     )
     spec = GraphSpec.model_validate_json(graph.read_text())
 
     def run(origin):
-        as_of = datetime.fromisoformat(origin).astimezone(timezone.utc)
+        as_of = datetime.fromisoformat(origin).astimezone(UTC)
         return runtime.run(
             spec,
             {"csv_observations": freeze(load_csv(data), as_of)},
@@ -118,6 +118,7 @@ def test_csv_missing_semantics(tmp_path, field, missing_header):
         zip(
             FIELDS,
             ["demand", "2026-10-23T00:00:00Z", "2026-10-23T00:00:00Z", "1", "1", "kWh"],
+            strict=False,
         )
     )
     names = [name for name in FIELDS if name != field] if missing_header else FIELDS

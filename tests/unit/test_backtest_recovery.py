@@ -114,7 +114,7 @@ def test_runtime_stale_guard_prevents_graph_snapshot_and_provider_writes(tmp_pat
     from forecast_anything.temporal import freeze
 
     provider = ControlledProvider()
-    runtime, store, plan = controlled(tmp_path, provider)
+    runtime, _store, plan = controlled(tmp_path, provider)
     snapshot = freeze(rows(4), START + timedelta(days=3))
     graph = build_forecast_graph(
         "sales", snapshot, plan.selection, "1d", graph_id="new-graph"

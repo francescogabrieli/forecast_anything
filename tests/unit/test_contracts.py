@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -18,7 +18,7 @@ from forecast_anything.contracts import (
     Snapshot,
 )
 
-NOW = datetime(2026, 10, 24, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 24, tzinfo=UTC)
 
 
 def observation(**overrides):

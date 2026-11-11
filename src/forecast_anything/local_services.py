@@ -7,7 +7,7 @@ import socket
 import subprocess
 import sys
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from uuid import uuid4
 
@@ -139,10 +139,8 @@ def run_services(db: Path, host: str, port: int, *, verify_model: bool = False) 
         try:
             for child in children:
                 if child.poll() is None:
-                    try:
+                    with suppress(ProcessLookupError):
                         child.terminate()
-                    except ProcessLookupError:
-                        pass
             for child in children:
                 try:
                     child.wait(timeout=5)

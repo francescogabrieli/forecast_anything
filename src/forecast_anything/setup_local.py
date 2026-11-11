@@ -244,9 +244,11 @@ class LaunchAgent:
             )
         if self.loaded():
             return
-        with worker_lock(Path(self.config["db"])):
-            with reserve_port("127.0.0.1", self.config["port"]):
-                pass
+        with (
+            worker_lock(Path(self.config["db"])),
+            reserve_port("127.0.0.1", self.config["port"]),
+        ):
+            pass
         self._launchctl("enable", self.target)
         try:
             self._launchctl("bootstrap", self.domain, self.plist)
@@ -265,9 +267,11 @@ class LaunchAgent:
         while True:
             if not self.loaded():
                 try:
-                    with worker_lock(Path(self.config["db"])):
-                        with reserve_port("127.0.0.1", self.config["port"]):
-                            return
+                    with (
+                        worker_lock(Path(self.config["db"])),
+                        reserve_port("127.0.0.1", self.config["port"]),
+                    ):
+                        return
                 except DomainError as error:
                     if error.code not in {"worker_already_running", "port_in_use"}:
                         raise

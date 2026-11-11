@@ -9,4 +9,4 @@ Before changing visibility:
 - Confirm the public owner, repository name and support channels. Enable private vulnerability reporting and check repository permissions and branch protection for the intended public workflow.
 - Keep local databases, credential files, model weights and built packages out of Git. Review the final release artifact separately using the release workflow and the real-model acceptance procedure.
 
-The website and the registry release have their own publication steps. See [first release gates](first-release.md).
+Before publishing release artifacts, verify installation from a clean environment on the declared platforms. Complete the [quickstart](quickstart.md) from those artifacts and check that the published instructions match the [capability matrix](capabilities.md). Verify website and package publication separately. Keep local working plans and acceptance logs under `.local/`.

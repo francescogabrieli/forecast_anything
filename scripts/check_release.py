@@ -12,6 +12,8 @@ import sys
 import tempfile
 from email.parser import Parser
 from pathlib import Path
+from tarfile import TarError
+from tarfile import open as open_tar
 from zipfile import BadZipFile, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,6 +50,14 @@ def _run(
 
 def _outside(path: Path) -> bool:
     return not path.resolve().is_relative_to(ROOT.resolve())
+
+
+def _metadata_errors(metadata, artifact: str) -> list[str]:
+    return [
+        f"{artifact} declares a direct URL dependency: {requirement.split('@', 1)[0].strip()}"
+        for requirement in metadata.get_all("Requires-Dist", [])
+        if "@" in requirement.split(";", 1)[0]
+    ]
 
 
 def check_release(dist_dir: Path, *, artifact_only: bool = False) -> dict:
@@ -96,21 +106,18 @@ def check_release(dist_dir: Path, *, artifact_only: bool = False) -> dict:
                     continue
                 if Path(name).suffix.lower() in WEIGHT_SUFFIXES:
                     report["model_weights"].append(name)
-                if SECRET_NAME.search(name):
-                    report["embedded_credentials"].append(name)
-                elif archive.getinfo(
-                    name
-                ).file_size <= 2_000_000 and SECRET_VALUE.search(archive.read(name)):
+                if SECRET_NAME.search(name) or (
+                    archive.getinfo(name).file_size <= 2_000_000
+                    and SECRET_VALUE.search(archive.read(name))
+                ):
                     report["embedded_credentials"].append(name)
             metadata = next(
                 (name for name in names if name.endswith(".dist-info/METADATA")), None
             )
             if metadata:
-                report["version"] = (
-                    Parser()
-                    .parsestr(archive.read(metadata).decode("utf-8"))
-                    .get("Version")
-                )
+                message = Parser().parsestr(archive.read(metadata).decode("utf-8"))
+                report["version"] = message.get("Version")
+                report["errors"].extend(_metadata_errors(message, "wheel"))
             else:
                 report["errors"].append("wheel metadata missing")
             if "forecast_anything/contracts/v1/openapi.json" in names:
@@ -131,8 +138,31 @@ def check_release(dist_dir: Path, *, artifact_only: bool = False) -> dict:
         report["errors"].append(f"invalid wheel contents: {error}")
         return report
 
+    for source in sorted(Path(dist_dir).glob("forecast_anything-*.tar.gz")):
+        try:
+            with open_tar(source, mode="r:gz") as archive:
+                metadata = next(
+                    (
+                        member
+                        for member in archive.getmembers()
+                        if member.name.count("/") == 1
+                        and member.name.endswith("/PKG-INFO")
+                    ),
+                    None,
+                )
+                stream = archive.extractfile(metadata) if metadata is not None else None
+                if stream is None:
+                    report["errors"].append("source distribution metadata missing")
+                else:
+                    with stream:
+                        message = Parser().parsestr(stream.read().decode("utf-8"))
+                    report["errors"].extend(_metadata_errors(message, "sdist"))
+        except (TarError, OSError, ValueError):
+            report["errors"].append("invalid source distribution metadata")
+
     if (
-        report["embedded_credentials"]
+        report["errors"]
+        or report["embedded_credentials"]
         or report["model_weights"]
         or not report["version"]
     ):
@@ -202,6 +232,21 @@ def check_release(dist_dir: Path, *, artifact_only: bool = False) -> dict:
                 and not report["model_weights"]
                 and not report["errors"]
             )
+            return report
+
+        dependencies = _run(
+            [
+                str(python),
+                "-I",
+                "-c",
+                "from forecast_anything.providers.configuration import pinned_timestral_provider; "
+                "pinned_timestral_provider().prepare_dependencies()",
+            ],
+            workspace,
+            env,
+        )
+        if dependencies.returncode:
+            report["errors"].append("Pinned Timestral code installation failed")
             return report
 
         # Inspect first: this release check never silently downloads missing weights.

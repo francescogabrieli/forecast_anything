@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -9,7 +9,7 @@ from forecast_anything.contracts import (
 )
 from forecast_anything.store import Ledger
 
-NOW = datetime(2026, 11, 8, tzinfo=timezone.utc)
+NOW = datetime(2026, 11, 8, tzinfo=UTC)
 
 
 def _request(key: str, title: str = "Revenue outlook"):

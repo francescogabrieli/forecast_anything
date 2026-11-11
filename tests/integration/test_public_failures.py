@@ -50,7 +50,7 @@ def test_http_sse_and_mcp_redact_persisted_provider_failures(
     assert [(e["event_id"], e["cursor"]) for e in visible] == [
         (e.event_id, e.cursor) for e in persisted
     ]
-    for original, event in zip(persisted, visible):
+    for original, event in zip(persisted, visible, strict=False):
         if original.kind == "run_failed":
             assert event["payload"]["error"]["code"] == "execution_error"
             assert event["payload"]["node_id"] == "model"
@@ -112,7 +112,7 @@ def test_job_status_redacts_provider_capabilities_domain_error(tmp_path, monkeyp
     monkeypatch.setattr(provider, "capabilities", private_capabilities)
     for attempt in range(3):
         now = T + timedelta(seconds=31 * attempt)
-        runtime.clock = ledger.clock = lambda: now
+        runtime.clock = ledger.clock = lambda now=now: now
         Worker(runtime, JobQueue(ledger)).run_due(now, limit=1)
     assert PRIVATE in json.dumps(JobQueue(ledger).history(job_id))
     response = client.get(f"/v1/jobs/{job_id}")

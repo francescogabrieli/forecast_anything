@@ -2,7 +2,7 @@
 
 The first-result path is **assistant → local MCP stdio adapter → workspace API and worker → pinned local Timestral**. Results and evidence stay in the workspace; the website explains setup and the optional console is for deeper visual inspection. For Codex on macOS, start with the [guided installation](installation.md). For another MCP client, use the [connection and first-result guide](implementation/mcp.md). The [reproducible demo](release-demo.md) walks the same source-to-question-to-worker path with a checked-in synthetic CSV.
 
-Forecast Anything requires pinned local Mistral Timestral-28M for product forecasts. Install its dependencies and prepare the weights before submitting forecasts. No Mistral API key or hosted inference account is needed; seasonal-naive is only the comparison baseline.
+Forecast Anything defaults to pinned local Mistral Timestral. Install its dependencies and prepare the weights before submitting forecasts. No Mistral API key or hosted inference account is needed; seasonal-naive is only the comparison baseline.
 
 Install from source with `uv sync --locked --extra dev --extra mcp`, or use the local wheel and locked requirements file described in [installation](installation.md). The adapter's tested reference client is the official `mcp==2.3.0` Python SDK. Recorded SDK, browser, MCP Apps reference-host and Codex Desktop evidence has separate rows in the [compatibility matrix](capabilities.md); one host's result does not imply another host's rendering. The CLI and optional console paths below remain available for local inspection and development.
 
@@ -66,7 +66,7 @@ summary = await client.call_tool(
 
 Backtests capture one registered CSV series/unit on a regular UTC hourly/daily grid. They freeze supplied revisions, source vintage, provider contracts, calendar and earliest bounded origins in 50/25/25 partitions before inference. History requires both occurred events and revisions available by issuance; missing cells remain missing. A later edit to the CSV cannot change an already captured report. Upstream-discarded revisions cannot be reconstructed. Horizon is 1–366, comparator period 1–10000, and origins per partition 1–50 (default 10); raw capture and complete calendar are bounded at 100000 rows/instants. Configured forecasts can also reuse supported stored HTTP snapshots; raw HTTP backtesting, scenarios and multi-history scoring are unsupported.
 
-The [historical baseline acceptance](research/forecast-evidence.md) used an alternating synthetic series to verify calculation and persistence. [Real Timestral acceptance](research/required-timestral-acceptance.md) exercised the pinned model on synthetic input with a separate seasonal comparator, durable jobs and MCP reconnection. Generic backtests do not attach discovery attestations or activate watches.
+Generic backtests do not attach discovery attestations or activate watches.
 
 ## Run a forecast from the checkout
 
@@ -108,7 +108,7 @@ docker compose --env-file .local/demo/demo.env --profile demo up --build
 
 Open [http://localhost:5173](http://localhost:5173). Copy `FORECAST_ANYTHING_WORKSPACE_TOKEN` from `.local/demo/demo.env` into the workspace form. The token stays in browser memory. The API listens only on local port 8000, and browser access is limited to the configured console origins.
 
-Open **Workspace** to enter the API address and token, then **Fonti** to connect or review a source. **Home** lists recent forecasts and lets you prepare a new forecast from a registered source. **Osservatorio** opens recorded results, their Future Graph, evaluations, watches and scenarios.
+Open **Workspace** to enter the API address and token, then **Sources** (shown as *Fonti*) to connect or review a source. **Home** lists recent forecasts and lets you prepare a new forecast from a registered source. **Observatory** (shown as *Osservatorio*) opens recorded results, their Future Graph, evaluations, watches and scenarios.
 
 To connect a CSV, place it in the workspace directory printed by the bootstrap command and enter its container path as `/data/your-file.csv`. Use the guided column/constant fields to identify observation time, value, availability time, revision, series, unit, frequency, timezone, calendar and missing-value markers. Availability must be declared explicitly, even when it uses the observation-time column. Review the proposed profile and resolve every required field before activating the source. **Mappatura avanzata** retains JSON configuration for extensions; browser file upload is deferred behind the primary assistant/MCP journey.
 
@@ -124,7 +124,7 @@ forecast-anything permissions revoke sales --config .local/demo/config.json
 
 Grant only source IDs you trust. A grant for an HTTP JSON source permits the local worker to fetch its registered URL during refresh or watch updates. Restart the assistant's MCP server after granting or revoking; the source catalog itself remains available in the workspace.
 
-Once discovery has prepared a compatible single-series source, **Calcola la prima previsione** submits its existing one-step Timestral candidate to the worker. The issued value, unit and UTC target appear in the console with a link to its recorded run. This initial result is provisional and not yet evaluated. **Aggiorna dati** explicitly rereads the registered source into a new snapshot. A target that is no longer in the future according to the snapshot and device clock is not offered as a new forecast; update the data and check the device clock if necessary.
+Once discovery has prepared a compatible single-series source, **Calculate the first forecast** (shown as *Calcola la prima previsione*) submits its existing one-step Timestral candidate to the worker. The issued value, unit and UTC target appear in the console with a link to its recorded run. This initial result is provisional and not yet evaluated. **Refresh data** (shown as *Aggiorna dati*) rereads the registered source into a new snapshot. A target that is no longer in the future according to the snapshot and device clock is not offered as a new forecast; update the data and check the device clock if necessary.
 
 The console shows recorded discoveries, their current quality, event history, graph dependencies and run evidence when available. Forecast charts use only the history source resolved through the recorded graph and snapshot binding; unavailable or ambiguous history stays unavailable. Recorded evaluation metrics are displayed as issued; the multi-origin backtesting workflow remains a core/product milestone, prioritized for access through tools before browser controls. Its deterministic E2E flow runs the production frontend against two local fixtures, mutes a watch, resumes an interrupted event stream from the durable history, navigates the graph by keyboard and compares an assumed scenario with a worker-produced run. It is a functional test fixture, not a forecast-quality benchmark or a completed external usability study.
 
@@ -132,16 +132,15 @@ Stop the stack with `Ctrl+C`. The workspace database and generated token remain 
 
 ## Optional integrations
 
-- Timestral has separately pinned code and weight revisions. Real CPU fp32 parity passed for the pinned provider, and one local personal evaluation was authorized by the project owner. The weights use a separate Modified MIT license; each downstream user must assess whether its terms apply to their use. Weights are not included in this repository. The default demo uses the required local Timestral provider. Run `model prepare` explicitly before forecasting. See the [provider notes](implementation/timestral.md).
-- `compose.agent.yaml` requires a separate workspace agent setup, distinct bridge/core tokens, a URL-safe Postgres password and an OpenAI API key. It makes paid provider calls when configured. The agent runs behind the repository's restricted egress proxy and does not receive the Docker socket. Do not start this override without intended credentials and approval for any paid inference.
+- Timestral has separately pinned code and weight revisions. Real CPU fp32 parity passed for the pinned provider. The weights use a separate Modified MIT license; each downstream user must assess whether its terms apply to their use. Weights are not included in this repository. The default demo uses the required local Timestral provider. Run `model prepare` explicitly before forecasting. See the [provider notes](implementation/timestral.md).
 
 ## Verify changes
 
 From the repository root:
 
 ```sh
-uv run --locked --extra dev --extra mcp ruff check src tests apps/agent/egress-proxy/proxy.py
-uv run --locked --extra dev --extra mcp ruff format --check src tests apps/agent/egress-proxy/proxy.py
+uv run --locked --extra dev --extra mcp ruff check src tests
+uv run --locked --extra dev --extra mcp ruff format --check src tests
 uv run --locked --extra dev --extra mcp pytest -q
 npm --prefix apps/console test -- --run
 npm --prefix apps/console run typecheck
@@ -150,10 +149,10 @@ npm --prefix apps/console run build
 
 For the deterministic browser test, install Chromium once with `npx --prefix apps/console playwright install chromium`, then run `npm --prefix apps/console run test:e2e`. It starts a local API and worker using fixed synthetic input and a fixed test-only token.
 
-For the accepted Desktop workflow, source correction, qualification, automatic update, permission revocation and report boundaries, see the [acceptance record](research/desktop-assistant-acceptance.md).
+See the [compatibility matrix](capabilities.md) for tested Desktop workflows and limits.
 
 ## Required-model readiness and migration
 
 Run `forecast-anything model status` to inspect dependency/provenance and local cache state without importing Torch or downloading weights. `cached` means artifacts exist; only `model prepare` or actual inference verifies loading in that process. Run `forecast-anything model prepare` explicitly to prepare the pinned CPU model. API/worker liveness does not establish model readiness; `get_capabilities` separately reports the required provider and inspected model status.
 
-A baseline-only primary request, a baseline mixed into the primary calculation, or a disconnected Timestral node cannot bypass the model requirement. Legacy baseline reports remain readable. Legacy recurring watches pause with `migration_reason=required_provider_migration`; refresh/re-profile the source and create a new Timestral watch with fresh qualification evidence. Do not rewrite old graphs or reuse qualified final windows. Restart the API, worker and assistant's MCP server after upgrading so all processes load the new contracts.
+Raw graph submissions require Timestral as the primary provider. For configured forecasts, use [backtest evidence](implementation/mcp.md#choose-a-provider-using-backtest-evidence) to choose the primary provider. Legacy baseline reports remain readable. Legacy recurring watches pause with `migration_reason=required_provider_migration`; refresh/re-profile the source and create a new Timestral watch with fresh qualification evidence. Do not rewrite old graphs or reuse qualified final windows. Restart the API, worker and assistant's MCP server after upgrading so all processes load the new contracts.

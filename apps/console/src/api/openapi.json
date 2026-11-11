@@ -681,6 +681,18 @@
       "ConfiguredRunJobRequest": {
         "additionalProperties": false,
         "properties": {
+          "challenger_report_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Challenger Report Id"
+          },
           "key": {
             "minLength": 1,
             "title": "Key",
@@ -693,6 +705,18 @@
           },
           "selection": {
             "$ref": "#/components/schemas/ForecastSelection"
+          },
+          "selection_report_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selection Report Id"
           },
           "snapshot_id": {
             "minLength": 1,
@@ -1307,6 +1331,16 @@
             "title": "Graph Version",
             "type": "integer"
           },
+          "model_selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelSelectionEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "points": {
             "items": {
               "$ref": "#/components/schemas/ForecastPresentationPoint"
@@ -1908,6 +1942,53 @@
         "type": "object"
       },
       "JsonValue": {},
+      "ModelSelectionEvidence": {
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_revision": {
+            "minLength": 1,
+            "title": "Provider Revision",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "confirmed_lower_mae",
+              "default_retained"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "report_ids": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 2,
+            "minItems": 1,
+            "title": "Report Ids",
+            "type": "array"
+          },
+          "series_id": {
+            "minLength": 1,
+            "title": "Series Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_ids",
+          "series_id",
+          "provider",
+          "provider_revision",
+          "reason"
+        ],
+        "title": "ModelSelectionEvidence",
+        "type": "object"
+      },
       "Node": {
         "additionalProperties": false,
         "properties": {
@@ -3457,6 +3538,16 @@
           "graph_version": {
             "title": "Graph Version",
             "type": "integer"
+          },
+          "model_selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelSelectionEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "parent_run_id": {
             "anyOf": [

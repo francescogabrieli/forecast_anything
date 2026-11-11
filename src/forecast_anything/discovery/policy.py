@@ -5,7 +5,8 @@ positive control. Exploratory/corrected selection is never silently certified.
 The Timestral acceptance and event-method gates remain pending.
 """
 
-from datetime import timezone
+import itertools
+from datetime import UTC
 from math import fsum, isfinite
 
 from ..backtesting.contracts import BacktestPlan, BacktestReport, OriginOutcome
@@ -146,12 +147,12 @@ def assess_candidate(
         references.append(pair[1])
         windows.append(
             (
-                context.target_start.astimezone(timezone.utc),
-                context.target_end.astimezone(timezone.utc),
+                context.target_start.astimezone(UTC),
+                context.target_end.astimezone(UTC),
             )
         )
     windows.sort()
-    if any(b[0] <= a[1] for a, b in zip(windows, windows[1:])):
+    if any(b[0] <= a[1] for a, b in itertools.pairwise(windows)):
         reject.append("overlapping_final_windows")
     if origins != set(epoch.final_origin_ids):
         provisional.append("incomplete_final_block")
@@ -231,7 +232,7 @@ def assess_candidate_backtest(
 
     windows = sorted((item.target_start, item.target_end) for item in final)
     if any(
-        current[0] <= previous[1] for previous, current in zip(windows, windows[1:])
+        current[0] <= previous[1] for previous, current in itertools.pairwise(windows)
     ):
         reject.append("overlapping_final_windows")
     evaluation_ids = tuple(

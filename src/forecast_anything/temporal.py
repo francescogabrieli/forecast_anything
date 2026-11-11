@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from hashlib import sha256
 
 from forecast_anything.contracts import DomainError, Observation, Snapshot
@@ -21,7 +21,7 @@ def freeze(
     """
     if as_of.tzinfo is None or as_of.utcoffset() is None:
         raise DomainError("naive_timestamp", {"field": "as_of"})
-    as_of = as_of.astimezone(timezone.utc)
+    as_of = as_of.astimezone(UTC)
     revisions: dict[tuple[str, datetime, str], Observation] = {}
     latest: dict[tuple[str, datetime], Observation] = {}
     visible = []
@@ -29,8 +29,8 @@ def freeze(
         normalized = Observation(
             **{
                 **observation.model_dump(),
-                "event_time": observation.event_time.astimezone(timezone.utc),
-                "available_at": observation.available_at.astimezone(timezone.utc),
+                "event_time": observation.event_time.astimezone(UTC),
+                "available_at": observation.available_at.astimezone(UTC),
                 "value": 0.0 if observation.value == 0 else observation.value,
             }
         )

@@ -1,5 +1,6 @@
 """Private configuration for a local workspace and its MCP client."""
 
+import contextlib
 import json
 import os
 import secrets
@@ -177,10 +178,8 @@ def _write_workspace(path: Path, config: dict) -> None:
             os.fsync(stream.fileno())
         os.replace(temporary, path)
     except BaseException:
-        try:
+        with contextlib.suppress(FileNotFoundError):
             temporary.unlink()
-        except FileNotFoundError:
-            pass
         raise
 
 

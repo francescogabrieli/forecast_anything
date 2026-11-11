@@ -11,8 +11,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from benchmarks.prepare import prepare_suite  # noqa: E402
-from benchmarks.run import run_suite  # noqa: E402
+from benchmarks.prepare import prepare_suite
+from benchmarks.run import run_suite
 
 MANIFEST = Path("tests/fixtures/benchmarks/manifest.yaml")
 

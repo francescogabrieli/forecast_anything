@@ -5,7 +5,7 @@ import socket
 import subprocess
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
@@ -230,7 +230,7 @@ def test_up_worker_processes_a_durable_source_job(tmp_path):
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
     source = tmp_path / "sales.csv"
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     rows = ["time,value,published"]
     for offset, value in enumerate((1, 2, 3), start=3):
         day = today - timedelta(days=offset)

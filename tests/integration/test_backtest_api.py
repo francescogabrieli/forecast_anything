@@ -1,6 +1,6 @@
-"""Real authenticated API, SQLite and leased-worker evidence boundaries."""
+"""Authenticated backtest and configured forecast submission boundaries."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -16,7 +16,7 @@ from forecast_anything.sources.profiling import ingest_source
 from forecast_anything.store import Ledger
 from forecast_anything.worker import Worker
 
-T = datetime(2026, 1, 20, tzinfo=timezone.utc)
+T = datetime(2026, 1, 20, tzinfo=UTC)
 AUTH = {"Authorization": "Bearer test-token"}
 
 
@@ -150,9 +150,7 @@ def test_configured_run_uses_historical_snapshot_vintage_without_source_io(tmp_p
     assert run.results["model"].point == ((15.0, 16.0),)
     assert run.results["baseline"].point == ((16.0, 16.0),)
     assert len(run.results["model"].timestamps) == 2
-    assert run.results["model"].timestamps[0] == datetime(
-        2026, 1, 17, tzinfo=timezone.utc
-    )
+    assert run.results["model"].timestamps[0] == datetime(2026, 1, 17, tzinfo=UTC)
     runtime.providers.clear()
     assert submit(client, body) == job_id
 

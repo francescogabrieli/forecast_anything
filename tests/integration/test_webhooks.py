@@ -2,7 +2,7 @@
 
 import hmac
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from urllib.error import HTTPError
 
@@ -19,7 +19,7 @@ from forecast_anything.runtime import Runtime
 from forecast_anything.store import Ledger
 from forecast_anything.worker import Worker
 
-T = datetime(2026, 11, 8, tzinfo=timezone.utc)
+T = datetime(2026, 11, 8, tzinfo=UTC)
 
 
 def _setup(tmp_path, target_url="http://127.0.0.1:8765/updates"):
@@ -282,9 +282,7 @@ def test_crash_after_retry_commit_reschedules_pending_webhook(tmp_path, monkeypa
         next_due = connection.execute(
             "SELECT next_due_at FROM jobs WHERE job_id = ?", (job.job_id,)
         ).fetchone()[0]
-    assert (
-        datetime.fromtimestamp(next_due, timezone.utc) == second_retry.next_attempt_at
-    )
+    assert datetime.fromtimestamp(next_due, UTC) == second_retry.next_attempt_at
     assert len(sent) == 2
 
     now[0] = second_retry.next_attempt_at

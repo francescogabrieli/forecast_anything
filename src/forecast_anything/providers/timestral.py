@@ -4,9 +4,13 @@ Weights have a Modified MIT license with a restriction above USD 20 million
 in global consolidated monthly revenue. Review applicability before loading.
 """
 
+import itertools
 import json
 import os
-from datetime import timezone
+import shutil
+import subprocess
+import sys
+from datetime import UTC
 from importlib.metadata import PackageNotFoundError, distribution
 from pathlib import Path
 from threading import Lock
@@ -133,7 +137,7 @@ class TimestralProvider:
             "cached": cached if dependency_error is None else False,
             "ready": self._forecaster is not None and dependency_error is None,
             "prepare_command": self._prepare_command,
-            "install_command": "uv sync --locked --extra dev --extra mcp",
+            "install_command": self._prepare_command,
             "weights_license": "Modified MIT; global consolidated monthly revenue above USD 20 million requires a separate license",
             "weights_license_url": f"https://huggingface.co/{self.checkpoint}/blob/{self.revision}/LICENSE",
         }
@@ -147,13 +151,38 @@ class TimestralProvider:
                 else "model_code_revision_mismatch",
                 {
                     "expected": self.code_revision,
-                    "setup": f"Install the pinned forecast-anything dependencies, then run {self._prepare_command}",
+                    "setup": f"Run {self._prepare_command} to install the pinned model code and weights.",
                 },
             )
 
-    def prepare_model(self) -> dict:
-        """Explicitly fetch pinned artifacts if absent and verify they load on CPU."""
+    def _install_model_dependency(self) -> None:
+        requirement = f"timestral @ git+https://github.com/mistralai/timestral.git@{self.code_revision}"
+        uv = shutil.which("uv")
+        command = (
+            [uv, "pip", "install", "--python", sys.executable, requirement]
+            if uv
+            else [sys.executable, "-m", "pip", "install", requirement]
+        )
+        try:
+            subprocess.run(command, check=True, capture_output=True)
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise DomainError(
+                "model_dependency_install_failed",
+                {
+                    "prepare_command": self._prepare_command,
+                    "error_type": type(error).__name__,
+                },
+            ) from error
+
+    def prepare_dependencies(self) -> None:
+        """Install the pinned inference package explicitly, without downloading weights."""
+        if self._dependency_status() is not None:
+            self._install_model_dependency()
         self._require_dependency()
+
+    def prepare_model(self) -> dict:
+        """Prepare pinned inference code and weights, then verify CPU loading."""
+        self.prepare_dependencies()
         if not self.check_model()["cached"]:
             try:
                 from huggingface_hub import snapshot_download
@@ -216,11 +245,10 @@ class TimestralProvider:
             raise DomainError(
                 "unsupported_options", {"options": sorted(request.options)}
             )
-        origin = request.snapshot.as_of.astimezone(timezone.utc)
+        origin = request.snapshot.as_of.astimezone(UTC)
         # Check before grid validation or any optional import/download.
         if any(
-            o.event_time.astimezone(timezone.utc) > origin
-            for o in request.snapshot.observations
+            o.event_time.astimezone(UTC) > origin for o in request.snapshot.observations
         ):
             raise DomainError("future_history", {})
         groups, calendar = observation_grid(request.snapshot, request.frequency)
@@ -243,8 +271,7 @@ class TimestralProvider:
         if request.known_future is not None:
             snapshot = request.known_future
             if any(
-                o.available_at.astimezone(timezone.utc) > origin
-                for o in snapshot.observations
+                o.available_at.astimezone(UTC) > origin for o in snapshot.observations
             ):
                 raise DomainError("unavailable_observation", {})
             cov_groups, cov_calendar = observation_grid(snapshot, request.frequency)
@@ -285,7 +312,7 @@ class TimestralProvider:
             or 0.5 not in levels
             or len(set(levels)) != len(levels)
             or any(not 0 < q < 1 for q in levels)
-            or any(b <= a for a, b in zip(levels, levels[1:]))
+            or any(b <= a for a, b in itertools.pairwise(levels))
             or (np.diff(values, axis=-1) < 0).any()
         ):
             raise DomainError("invalid_model_output", {})

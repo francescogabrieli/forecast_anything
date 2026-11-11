@@ -7,8 +7,8 @@ decision. This notice does not assign copyright ownership or grant trademark
 rights in the working name.
 
 Third-party software retains its own copyright and license terms. The Python
-dependency inventory is in pyproject.toml and uv.lock. The console, public site and optional
-agent inventories are in their package.json and package-lock.json files.
+dependency inventory is in pyproject.toml and uv.lock. The console and public site inventories are in their
+package.json and package-lock.json files.
 Retain applicable third-party notices when redistributing their artifacts;
 this file is not a complete third-party license inventory or SBOM.
 

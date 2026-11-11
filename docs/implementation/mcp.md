@@ -42,7 +42,7 @@ Configure the host to launch the installed executable with arguments `mcp --conf
 }
 ```
 
-In another terminal, `forecast-anything status --config .local/mcp/config.json` checks authenticated API access and the worker heartbeat recorded in the API's SQLite database. `worker` is `running` when its heartbeat is no more than ten seconds old, `stale` when an earlier worker stopped updating it, and `not_running` before a worker has started or after a clean stop. A heartbeat shows that the worker process is alive; it does not guarantee that a particular job or provider will succeed. `status` exits successfully only when both API and worker report as running. `up` stops both services on Ctrl+C; accepted jobs remain in the database for the next start. The command remains in the foreground and does not install an OS service. Codex CLI was exercised with the same configuration surface. The recorded Desktop workflow uses an already connected adapter. See the [Desktop acceptance record](../research/desktop-assistant-acceptance.md).
+In another terminal, `forecast-anything status --config .local/mcp/config.json` checks authenticated API access and the worker heartbeat recorded in the API's SQLite database. `worker` is `running` when its heartbeat is no more than ten seconds old, `stale` when an earlier worker stopped updating it, and `not_running` before a worker has started or after a clean stop. A heartbeat shows that the worker process is alive; it does not guarantee that a particular job or provider will succeed. `status` exits successfully only when both API and worker report as running. `up` stops both services on Ctrl+C; accepted jobs remain in the database for the next start. The command remains in the foreground and does not install an OS service. Codex CLI was exercised with the same configuration surface. The recorded Desktop workflow uses an already connected adapter.
 
 ### Environment-based setup
 
@@ -117,11 +117,24 @@ Once the complete mapping is agreed, preview it again and show the user the exac
 
 Poll `get_job` and use `summarize_snapshot` and `list_snapshot_series` for compact provenance. A pending job is not a result; `source_forbidden`, missing data and a failed job are different states. After reconnection, use the original request and key, or read known job and operation IDs. For a configured forecast create a question and a ready operation, submit the configured-run request with Timestral, poll it and use `get_forecast_presentation`; the baseline is the comparator. Use a backtest operation for a supported single-series CSV with sufficient regular history and a current source grant, and read `get_backtest_presentation`. Resume checks that grant even if the job already exists; state reads remain separate. Do not promise historical evidence when required publication or revision history is missing.
 
-Save the question with its semantic revision and link its candidate, operation, run, report and watch as appropriate. A watch requires the candidate and source grant; saving it does not imply it is qualified or active. Use `get_question_presentation`, references and watch history to recover it. `summarize_watch_change` compares recorded compatible runs and describes observed differences without asserting causes. Revoking assistant access and stopping scheduled reads are distinct: revoke controls future MCP process access but does not stop the worker. Muting a watch does not stop source reads, and pausing a question does not stop its watch. There is currently no per-watch stop control exposed through MCP; stopping the local service stops all scheduled reads until it is restarted. Per-watch pause is future phase 6 work.
+Save the question with its semantic revision and link its candidate, operation, run, report and watch as appropriate. A watch requires the candidate and source grant; saving it does not imply it is qualified or active. Use `get_question_presentation`, references and watch history to recover it. `summarize_watch_change` compares recorded compatible runs and describes observed differences without asserting causes. Use `update_question` to pause forecast work for a question. Muting suppresses notifications. The worker may continue reading a source shared by other active questions. Use `set_source_subscription` to control scheduled polling for the source. MCP source grants control assistant-initiated access separately.
 
 Suggested starting requests: “Help me forecast this CSV; ask me about anything you cannot infer”, “Compare the forecast with historical outcomes”, and “Save this question so I can revisit it.” The assistant assembles tool arguments; the user need not write JSON or inspect SQLite. These instructions do not establish client attachment transfer or Desktop rendering support.
 
 ## Tool catalog
+
+The [initialization instructions](../../src/forecast_anything/mcp_adapter/instructions.md) cover workspace access, source confirmation and durable jobs. Tool descriptions carry their own prerequisites and follow-up steps.
+
+| Need | Preferred read |
+| --- | --- |
+| Show one forecast and its baseline | `get_forecast_presentation` |
+| Explain a completed historical comparison in chat | `summarize_backtest` |
+| Chart the historical comparison | `get_backtest_presentation` |
+| Recover the exact issued output or full report | `get_run` or `get_backtest` |
+| Open a saved record visually | `open_context_view` |
+
+These reads have separate typed outputs and stable names used by existing clients. A combined reader could reduce the catalog only if it replaced the existing entries. Evaluate that change against real assistant tool selection and client compatibility before changing the discovery surface.
+
 
 Tools publish input/output JSON schemas. Extra arguments are rejected. Successful results are `{"ok":true,"data":...}`; failures are `{"ok":false,"code":"..."}` with MCP `isError=true`. Input failures may include safe field locations/types, without submitted values. Mutating and open-world tools are marked explicitly.
 
@@ -156,7 +169,7 @@ Tools publish input/output JSON schemas. Extra arguments are rejected. Successfu
 | `get_watch_history` | `watch_id`, `offset=0`, `limit=25` (1–100) | Page of append-only transitions and state snapshots |
 | `summarize_watch_change` | `watch_id`, `previous_run_id`, `current_run_id` | Observed differences and snapshots for comparable recorded runs |
 
-Profiling is a mutating operation (`readOnlyHint=false`): the existing core GET route inspects the source and enqueues template discovery. A changed profile can create a new durable job; its worker can persist epochs, snapshots, candidates and graphs, and enqueue optional agent discovery when configured. The profile response contains the profile only, without that job ID. Profiling has no caller key, so it advertises `idempotentHint=false`; do not assume that repeating it is side-effect-free.
+Profiling is a mutating operation (`readOnlyHint=false`): the existing core GET route inspects the source and enqueues template discovery. A changed profile can create a new durable job; its worker can persist epochs, snapshots, candidates and graphs. The profile response contains the profile only, without that job ID. Profiling has no caller key, so it advertises `idempotentHint=false`; do not assume that repeating it is side-effect-free.
 
 `as_of` must be timezone-aware. Snapshot bindings must exactly match the candidate's declared sources. Unresolved/non-executable candidates cannot be submitted. A forecast does not manufacture snapshots or select another provider. Refresh, forecast and evaluation require stable caller keys; registration and profiling have no caller-key replay guarantee.
 
@@ -338,24 +351,42 @@ Run the acceptance journeys with:
 uv run --locked --extra dev --extra mcp pytest tests/integration/test_mcp_stdio.py tests/integration/test_packaged_mcp.py -q
 ```
 
-SDK-dependent test modules skip explicitly without the optional extra; the ordinary CLI's missing-extra error remains covered separately. The four evidence tools have protocol/schema/HTTP-boundary coverage and a real subprocess/installed-wheel configured/backtest recovery journey. Watch tools also have typed protocol, source-grant, history and comparison coverage. A 24-day alternating series explicitly selects period 2 against comparator period 1: model MAE 0, comparator MAE 1, relative MAE 0. Two planned origins per partition remain fixed, including an early insufficient-history exclusion. The worker is terminated after partial persisted origins; API/worker restart after CSV corruption preserves the original capture, plan, child identities and paginated report. A separate process case retains unavailable-history and missing-target exclusions. A configured horizon-3 forecast separately proves options and future target dates. [Full numerical fixture, verification and limits](../research/forecast-evidence.md). Generic backtest reports contain no discovery attestation and do not activate or qualify watches. The [phase 1 acceptance record](../research/phase-1-local-setup.md) distinguishes the installed SDK journey, Codex CLI registration and the pending Desktop and macOS login-cycle checks.
+SDK-dependent test modules skip explicitly without the optional extra; the ordinary CLI's missing-extra error remains covered separately. The four evidence tools have protocol/schema/HTTP-boundary coverage and a real subprocess/installed-wheel configured/backtest recovery journey. Watch tools also have typed protocol, source-grant, history and comparison coverage. A 24-day alternating series explicitly selects period 2 against comparator period 1: model MAE 0, comparator MAE 1, relative MAE 0. Two planned origins per partition remain fixed, including an early insufficient-history exclusion. The worker is terminated after partial persisted origins; API/worker restart after CSV corruption preserves the original capture, plan, child identities and paginated report. A separate process case retains unavailable-history and missing-target exclusions. A configured horizon-3 forecast separately proves options and future target dates. Generic backtest reports contain no discovery attestation and do not activate or qualify watches.
 
-### Desktop acceptance evidence (5 November 2026)
+### Codex Desktop compatibility
 
-The owner-observed Desktop chat successfully read sources/watches, compared a backtest summary with its persisted report/origins, displayed a textual MAE chart and reread the immutable result. The two isolated real-process acceptance tests additionally cover candidate-bound qualification, 30 final points, persistent CLI grants/revocation, reconnect/restart, automatic source refresh and successor-watch evidence invalidation. Full Desktop quit/reopen was confirmed by the owner; a subsequent live assistant journey completed source correction, watch qualification, automatic refresh and a nonzero recorded forecast-change summary. Native graphical rendering is not established. See [acceptance record](../research/desktop-assistant-acceptance.md).
+Codex Desktop has been tested for reading sources and watches, displaying text reports and rereading a stored result after reopening the app. See the [compatibility matrix](../capabilities.md) for host-specific limits.
 
 When explaining a known synthetic example, explicitly label it synthetic. Present MAE as error on recorded matched cells, preserve exclusions and unavailable reasons, and do not infer future accuracy or qualify a watch from a generic report. Chart data are per-origin errors rather than forecast values; identify textual charts as such.
 
+## Choose a provider using backtest evidence
+
+For a configured forecast, submit a Timestral backtest for the same source and forecast settings, then use its completed `report_id` as `selection_report_id` in `submit_configured_forecast`. Use the same Timestral selection, including horizon, options and baseline period. The forecast snapshot must be at least as recent as the report capture and retain the report's historical observations. If necessary, refresh the original source before forecasting.
+
+```json
+{
+  "key": "sales/forecast-2026-11-11",
+  "source_id": "sales",
+  "snapshot_id": "CURRENT_SNAPSHOT_ID",
+  "selection": {"provider": "timestral", "horizon": 7, "options": {}, "baseline_period": 7},
+  "selection_report_id": "COMPLETED_TIMESTRAL_REPORT_ID"
+}
+```
+
+The core chooses the unique lowest-MAE provider on the selection partition and requires that it also have strictly lower MAE on the final partition. Each partition must contain at least ten non-overlapping evaluated origins, with every planned origin evaluated. Ties, disagreement or incomplete evidence retain Timestral. Mismatched evidence is rejected. Use fresh held-out windows for another selection after tuning options or revising the shortlist.
+
+The seasonal baseline can become the primary provider. To consider another provider already registered in the runtime, backtest it against the same seasonal baseline using the same source archive and origin windows, then pass its report as `challenger_report_id`. The runtime includes the seasonal baseline and uses Timestral after model preparation. Read `model_selection` on the saved run or forecast presentation to see the report IDs, series, chosen provider, provider revision and reason. Replaying the same request retains the original decision.
+
 ## Required Timestral product policy
 
-The installed CLI API/worker require the pinned local Timestral model, not a remote Mistral API key. Inspect `get_capabilities.required_provider` and `model_status` separately from heartbeat health. Missing artifacts require `forecast-anything model prepare`; inference never substitutes seasonal-naive. Configured forecasts and backtests must select `timestral` with supported options. Candidate graphs generated by the product already select it.
+The installed CLI and services use pinned local Timestral by default. Configured forecasts can select another provider with compatible backtest evidence. Inspect `get_capabilities.required_provider` and `model_status` separately from heartbeat health. Missing artifacts require `forecast-anything model prepare`; inference never substitutes seasonal-naive. Configured requests use `timestral` as the default selection. Generic backtests can also compare another registered forecasting provider against the seasonal baseline. Candidate graphs and watch qualification retain their own fixed model and settings.
 
 Raw graph submissions may supply `primary_node_id`; the product resolves conventional unambiguous outputs otherwise. The primary output must depend on Timestral and may not incorporate a seasonal baseline as a primary input. An unrelated Timestral node is insufficient. The primary is persisted on new runs and inherited by scenarios. Old baseline-only accepted keys/results remain readable, but pending numerical jobs fail terminally with a migration reason; legacy watches pause rather than generate baseline forecasts.
 
-[Real model acceptance](../research/required-timestral-acceptance.md) uses the pinned CPU model through actual CLI/API/worker/MCP processes, a bound backtest and autonomous source refresh. The older measured baseline/disconnect journeys above remain labeled library fixtures, not acceptance of the required Timestral product engine. Restart the assistant's MCP server after upgrading contracts.
+See the [capability matrix](../capabilities.md) for verification of the pinned Timestral workflow. The synthetic baseline examples above verify execution and recovery. Restart the assistant's MCP server after upgrading contracts.
 
 ## Context views in MCP Apps hosts
 
 For a stored result, call `open_context_view` with `kind` (`run`, `question` or `report`), its exact `resource_id`, and the operator's loopback `browser_url` origin. The response always includes a concise textual summary and a link to the same workspace-bound record; the structured payload carries the shared presentation. The UI resource is optional: hosts without MCP Apps, or hosts that cannot load the UI, can use the text and link. If a presentation exceeds the MCP result limit, the response retains the link and marks the presentation unavailable. Do not infer embedded rendering support merely from a successful tool call.
 
-The embedded HTML is generated by `npm run build:mcp-app` in `apps/console`; `npm run check:mcp-app` checks the bundled artifact. It uses the MCP Apps host channel for data and detail tools, has no core credential or direct network access, and opens browser links via the host. See [phase 5 evidence](../research/phase-5-mcp-apps.md) for tested versions and host limitations.
+The embedded HTML is generated by `npm run build:mcp-app` in `apps/console`; `npm run check:mcp-app` checks the bundled artifact. It uses the MCP Apps host channel for data and detail tools, has no core credential or direct network access, and opens browser links via the host. See the [compatibility matrix](../capabilities.md) for tested hosts and limitations.

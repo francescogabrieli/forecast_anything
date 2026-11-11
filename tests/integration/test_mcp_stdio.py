@@ -4,7 +4,7 @@ import asyncio
 import copy
 import json
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -277,7 +277,7 @@ def test_stdio_errors_and_large_result_are_bounded_and_sanitized(tmp_path):
                 run_id="missing/../private-marker?token=secret",
             )
             # The upstream response fits 1 MiB; the duplicated MCP result exceeds 64 KiB.
-            start = datetime(2020, 1, 1, tzinfo=timezone.utc)
+            start = datetime(2020, 1, 1, tzinfo=UTC)
             workspace.history.write_text(
                 "time,value,published\n"
                 + "".join(
