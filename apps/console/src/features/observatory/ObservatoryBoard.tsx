@@ -79,6 +79,7 @@ export function ObservatoryBoard({
   const [baseGraph, setBaseGraph] = useState<GraphSpec>();
   const [error, setError] = useState<string>();
   const [status, setStatus] = useState<string>();
+  const [notification, setNotification] = useState<string>();
   const [scenarioLabel, setScenarioLabel] = useState("Scenario modificato");
   const [scenarioOverridesText, setScenarioOverridesText] = useState("{}");
   const [scenarioBusy, setScenarioBusy] = useState(false);
@@ -223,7 +224,7 @@ export function ObservatoryBoard({
               if (!active) return;
               setEvents((current) => mergeEvents(current, [event]));
               if (event.kind === "run_completed") {
-                setStatus(`Nuovo risultato disponibile: ${event.run_id}. Aprilo dalla cronologia.`);
+                setNotification(`Nuovo risultato disponibile: ${event.run_id}. Aprilo dalla cronologia.`);
                 void refreshWatches().catch((reason: unknown) => {
                   if (active)
                     setError(
@@ -363,6 +364,7 @@ export function ObservatoryBoard({
           {error}
         </p>
       )}
+      {notification && <p role="status">{notification}</p>}
       {status && <p role="status">{status}</p>}
       {(graph || run) && (
         <div className="detail-grid">
