@@ -267,7 +267,12 @@ test("reviews two-source evaluation, revision notification and immutable scenari
   await scenarioInput.fill(JSON.stringify(current, null, 2));
   await page.getByRole("button", { name: "Mostra modifiche proposte" }).click();
   await expect(page.getByRole("region", { name: "Modifiche proposte" })).toBeVisible();
+  const scenarioResponse = page.waitForResponse((response) =>
+    response.request().method() === "POST" && response.url() === `${api}/scenarios`,
+  );
   await page.getByRole("button", { name: "Conferma e crea scenario" }).click();
+  const scenario = await scenarioResponse;
+  expect(scenario.ok(), await scenario.text()).toBe(true);
   await expect(page.getByText("Scenario pronto. Il confronto usa soltanto timestamp e unità comuni.")).toBeVisible({ timeout: 25_000 });
   await expect(page.getByRole("heading", { name: "Confronto sulle date comuni" })).toBeVisible();
   const comparison = page.locator(".scenario-card");
