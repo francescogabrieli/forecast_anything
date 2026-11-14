@@ -44,10 +44,24 @@ def test_same_contract_three_domains(tmp_path):
     for dataset in report["datasets"].values():
         baseline = dataset["providers"]["baseline"]
         assert baseline["status"] == "evaluated"
-        assert baseline["splits"]["final"]["origin_count"] == 4
-        assert baseline["splits"]["final"]["mae"] == 2.0
+        assert dataset["data_class"] == "synthetic"
+        assert dataset["evaluation_mode"] == "rolling_origin_replay"
+        assert baseline["splits"]["exploration"]["mase"] is not None
+        assert baseline["splits"]["exploration"]["smape"] is not None
+        assert baseline["splits"]["final"]["status"] == "reserved"
+        assert baseline["splits"]["final"]["origin_count"] == 0
+        assert baseline["splits"]["final"]["mae"] is None
     assert (tmp_path / "run" / "environment.json").exists()
     assert (tmp_path / "run" / "origins.csv").exists()
+    scored_origins = read_csv(tmp_path / "run" / "origin_scores.csv")
+    assert all(row["split"] != "final" for row in scored_origins)
+    assert scored_origins[0]["latency_ms"]
+    assert scored_origins[0]["wql"] == ""
+    assert scored_origins[0]["wql_reason"] == "quantiles_unavailable"
+    performance = json.loads((tmp_path / "run" / "performance.json").read_text())
+    assert performance["execution_device"] == "cpu"
+    assert performance["process_peak_rss_bytes"] > 0
+    assert performance["origins"][0]["p95_ms"] > 0
 
 
 def test_returned_goods_and_missing_meter_reading(tmp_path):
@@ -103,9 +117,11 @@ def test_residuals_exclude_final_and_incomplete_windows(tmp_path):
         row["split"] == "final" and row["origin"] == "2020-01-25T00:00:00+00:00"
         for row in origins
     )
-    assert any(
-        row["dataset"] == "energy" and row["reason"] == "incomplete_targets"
+    assert all(
+        row["status"] == "reserved"
+        and row["reason"] == "holdout_reserved_for_final_evaluation"
         for row in origins
+        if row["split"] == "final"
     )
     for panel in panels:
         assert datetime.fromisoformat(
@@ -116,59 +132,18 @@ def test_residuals_exclude_final_and_incomplete_windows(tmp_path):
 def test_model_gate_does_not_require_or_load_timestral(tmp_path, monkeypatch):
     monkeypatch.delenv("FORECAST_ANYTHING_TIMESTRAL_WEIGHTS_APPROVED", raising=False)
     report = json.loads(
-        run_suite(MANIFEST, tmp_path, ("baseline", "timestral")).read_text()
+        run_suite(
+            MANIFEST, tmp_path, ("baseline", "timestral", "timestral_123m")
+        ).read_text()
     )
     assert report["status"] == "pending_model_comparison"
     for dataset in report["datasets"].values():
         assert dataset["providers"]["timestral"]["status"] == "pending_license"
+        assert dataset["providers"]["timestral_123m"]["status"] == "pending_license"
+        assert "no inference" in dataset["providers"]["timestral_123m"]["reason"]
         assert (
             dataset["providers"]["baseline"]["splits"]["selection"]["origin_count"] > 0
         )
-
-
-def test_approved_timestral_comparison_uses_same_final_origins(tmp_path, monkeypatch):
-    from forecast_anything.contracts import Capabilities
-    from forecast_anything.providers.baseline import SeasonalNaiveProvider
-
-    class FixtureTimestralProvider:
-        def __init__(self, checkpoint, revision, code_revision):
-            self.delegate = SeasonalNaiveProvider(period=1)
-            self.revision = f"{checkpoint}@{revision};code={code_revision}"
-
-        def capabilities(self):
-            return Capabilities(
-                provider_id="timestral",
-                provider_revision=self.revision,
-                representations=("point",),
-                supports_known_future=True,
-            )
-
-        def forecast(self, request):
-            result = self.delegate.forecast(request)
-            return result.model_copy(
-                update={"provider_id": "timestral", "provider_revision": self.revision}
-            )
-
-    monkeypatch.setenv("FORECAST_ANYTHING_TIMESTRAL_WEIGHTS_APPROVED", "1")
-    monkeypatch.setattr(
-        "benchmarks.run.TimestralProvider", FixtureTimestralProvider, raising=False
-    )
-    report = json.loads(
-        run_suite(MANIFEST, tmp_path, ("baseline", "timestral")).read_text()
-    )
-
-    assert report["status"] == "evaluated"
-    assert report["model_comparison"]["status"] == "evaluated"
-    for dataset in report["datasets"].values():
-        baseline = dataset["providers"]["baseline"]
-        timestral = dataset["providers"]["timestral"]
-        assert timestral["status"] == "evaluated"
-        baseline_final = baseline["splits"]["final"]
-        timestral_final = timestral["splits"]["final"]
-        assert timestral_final["origin_count"] == baseline_final["origin_count"] == 4
-        assert timestral_final["matched_origin_count"] == 4
-        assert timestral_final["relative_mae"] is not None
-        assert timestral["provider_revision"].startswith("mistralai/Timestral-28M@")
 
 
 def test_prepared_input_tamper_is_rejected(tmp_path):
@@ -221,14 +196,40 @@ def test_final_values_never_enter_exploration_or_selection_residuals(tmp_path):
     assert panels[0] == panels[1]
     before = json.loads((tmp_path / "before" / "report.json").read_text())
     after = json.loads((tmp_path / "after" / "report.json").read_text())
-    assert (
-        before["datasets"]["activity"]["providers"]["baseline"]["splits"]["final"][
-            "mae"
-        ]
-        != after["datasets"]["activity"]["providers"]["baseline"]["splits"]["final"][
-            "mae"
-        ]
+    before_splits = before["datasets"]["activity"]["providers"]["baseline"]["splits"]
+    after_splits = after["datasets"]["activity"]["providers"]["baseline"]["splits"]
+    assert before_splits["exploration"] == after_splits["exploration"]
+    assert before_splits["selection"] == after_splits["selection"]
+    assert before_splits["final"]["mae"] is after_splits["final"]["mae"] is None
+
+
+def test_incomplete_development_targets_keep_their_exclusion_reason(tmp_path):
+    import shutil
+
+    fixture = tmp_path / "fixture"
+    shutil.copytree(MANIFEST.parent, fixture)
+    activity = fixture / "activity.csv"
+    rows = read_csv(activity)
+    rows.pop(6)
+    with activity.open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=("timestamp", "views"))
+        writer.writeheader()
+        writer.writerows(rows)
+
+    report = json.loads(
+        run_suite(
+            fixture / "manifest.yaml", tmp_path / "run", ("baseline",)
+        ).read_text()
     )
+    origins = read_csv(tmp_path / "run" / "origins.csv")
+    assert any(
+        row["dataset"] == "activity"
+        and row["split"] == "exploration"
+        and row["status"] == "excluded"
+        and row["reason"] == "incomplete_targets"
+        for row in origins
+    )
+    assert report["datasets"]["activity"]["providers"]["baseline"]["excluded"]
 
 
 def test_official_xlsx_recipe_reads_shared_strings_and_excel_dates(tmp_path):
@@ -314,6 +315,56 @@ def test_missing_baseline_is_rejected_before_preparation(tmp_path, providers):
         "details": {"providers": list(providers)},
     }
     assert not output.exists()
+
+
+def test_runner_refuses_to_score_reserved_holdout(tmp_path):
+    output = tmp_path / "reserved"
+
+    with pytest.raises(ValueError, match="final holdout is reserved"):
+        run_suite(MANIFEST, output, ("baseline",), score_splits=("final",))
+
+    assert not output.exists()
+
+
+def test_graph_exports_are_written_once_per_dataset(tmp_path, monkeypatch):
+    from collections import Counter
+
+    from benchmarks import run as benchmark_run
+
+    written = Counter()
+    original_write_json = benchmark_run.write_json
+
+    def counting_write_json(path, value):
+        if Path(path).name.startswith("graph."):
+            written[Path(path).name] += 1
+        return original_write_json(path, value)
+
+    monkeypatch.setattr(benchmark_run, "write_json", counting_write_json)
+    run_suite(MANIFEST, tmp_path / "run", ("baseline",))
+
+    assert written == {
+        "graph.retail.json": 1,
+        "graph.energy.json": 1,
+        "graph.activity.json": 1,
+    }
+
+
+def test_frozen_calendar_artifact_keeps_timestamps_and_origin_contract(tmp_path):
+    report = json.loads(
+        run_suite(MANIFEST, tmp_path / "run", ("baseline",)).read_text()
+    )
+    frozen = json.loads((tmp_path / "run" / "frozen_calendar.json").read_text())
+
+    assert set(frozen) == {"retail", "energy", "activity"}
+    assert frozen["activity"]["timestamps"]
+    assert frozen["activity"]["origins"]["final"]
+    assert report["frozen_splits"]["split_sha256"]
+    assert (
+        report["datasets"]["activity"]["providers"]["baseline"]["splits"]["final"][
+            "status"
+        ]
+        == "reserved"
+    )
 
 
 def test_cli_reports_structured_error_without_baseline(tmp_path):

@@ -150,5 +150,62 @@
       "adapter_cold_seconds": 0.0625486249991809,
       "adapter_warm_seconds": 0.01041679199988721
     }
+  },
+  "timestral_123m": {
+    "code": {
+      "repo": "https://github.com/mistralai/timestral",
+      "revision": "a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
+      "license": "Apache-2.0"
+    },
+    "weights": {
+      "repo": "mistralai/Timestral-123M",
+      "revision": "5a147287addda85f6acd8da3fb8858fe9af7e8f7",
+      "license": "Modified MIT v1.0",
+      "license_url": "https://huggingface.co/mistralai/Timestral-123M/blob/5a147287addda85f6acd8da3fb8858fe9af7e8f7/LICENSE",
+      "local_evaluation_authorized": true,
+      "authorization_scope": "Personal local Phase 0 benchmark only; no checkpoint, dataset, or score redistribution.",
+      "downloaded_to_local_cache": true,
+      "included_in_repository": false,
+      "license_sha256": "648194727930df730890e9f9affdbcc5c930d406d6829559b25ca3d5a973fc8c",
+      "license_verified_at_pinned_revision": true,
+      "restriction": "No license rights if global consolidated monthly revenue of the user's company or employer exceeded USD 20 million in the preceding month; a commercial license is required above that threshold.",
+      "user_authorization_received": true,
+      "user_authorized_scope": "Local Phase 0 benchmark only; no model weights or benchmark data redistribution.",
+      "authorization_received_on": "2026-11-14",
+      "local_cache_path": "~/.cache/huggingface/hub/models--mistralai--Timestral-123M/snapshots/5a147287addda85f6acd8da3fb8858fe9af7e8f7",
+      "downloaded_on": "2026-11-14",
+      "cached_files": [
+        {
+          "path": ".gitattributes",
+          "bytes": 1519,
+          "sha256": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361"
+        },
+        {
+          "path": "LICENSE",
+          "bytes": 1695,
+          "sha256": "648194727930df730890e9f9affdbcc5c930d406d6829559b25ca3d5a973fc8c"
+        },
+        {
+          "path": "README.md",
+          "bytes": 4556,
+          "sha256": "3e7a53b77535239ea4e023e783fa0dbbbf0a1c75f112d57811873dae1460b71d"
+        },
+        {
+          "path": "config.json",
+          "bytes": 1074,
+          "sha256": "7bb4c042fb2d2ed6469b6758ba380dfeda3ab32df47690a87aec1527bdae79bf"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 490445904,
+          "sha256": "599fafa73cadbbc800b5a346ca900fa741ee3e5fd22e3b4a4430e151e74f4bc2"
+        },
+        {
+          "path": "timestral-hourglass.png",
+          "bytes": 1847,
+          "sha256": "2d1e6cd9e25c14a751169ba32bfe8c85e3beed2970bb711f84cbb3777104e447"
+        }
+      ]
+    }
   }
 }

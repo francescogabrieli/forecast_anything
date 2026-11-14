@@ -90,3 +90,5 @@ Project code is available under the [Apache License 2.0](LICENSE). [NOTICE](NOTI
 ## Required model and historical evidence
 
 Timestral is the default. Configured forecasts can [select a provider using held-out backtest results](docs/implementation/mcp.md#choose-a-provider-using-backtest-evidence). Raw graph submissions and discovery candidates use the default provider policy. Model setup/inference failures remain errors. Old runs/reports stay immutable and readable. Pending baseline-primary jobs fail with `required_provider_migration`; legacy watches pause with an explicit migration reason and require a new Timestral candidate and fresh evidence. See the [Timestral guide](docs/implementation/timestral.md).
+
+See the [Phase 0 benchmark](benchmarks/README.md) for the reproducible development and validation comparison.

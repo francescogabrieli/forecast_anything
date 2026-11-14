@@ -31,16 +31,18 @@ class TimestralProvider:
         code_revision: str,
         *,
         prepare_command: str = "forecast-anything model prepare",
+        provider_id: str = "timestral",
     ):
         if not all(
             isinstance(v, str) and v.strip()
-            for v in (checkpoint, revision, code_revision)
+            for v in (checkpoint, revision, code_revision, provider_id)
         ):
             raise DomainError("invalid_model_provenance", {})
         self._checkpoint = checkpoint
         self._revision = revision
         self._code_revision = code_revision
         self._prepare_command = prepare_command
+        self._provider_id = provider_id
         self._forecaster = None
         self._load_lock = Lock()
 
@@ -58,7 +60,7 @@ class TimestralProvider:
 
     def capabilities(self) -> Capabilities:
         return Capabilities(
-            provider_id="timestral",
+            provider_id=self._provider_id,
             provider_revision=f"{self.checkpoint}@{self.revision};code={self.code_revision}",
             representations=("point", "marginal_quantiles"),
             supports_known_future=True,
