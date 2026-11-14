@@ -1,0 +1,209 @@
+{
+  "datasets": {
+    "activity": {
+      "calendar_count": 3969,
+      "calendar_sha256": "edf5cae4e04567624e5e2fd7e2e23fc01dab29f3aa9ecb4a95bc65d66063449f",
+      "exploration_end": "2021-01-01T00:00:00+00:00",
+      "final_end": "2026-11-13T00:00:00+00:00",
+      "final_start": "2026-01-02T00:00:00+00:00",
+      "final_target_count": 316,
+      "final_target_sha256": "b1180a61d289fc0ead1544cbc5d5cef9db57feaed39d861e2ab6851898690df3",
+      "historical_target_count": 3621,
+      "historical_target_sha256": "159e9bcf24ee005075343e378c906299f65e67238998d5bc675701791c508fc4",
+      "horizon": 7,
+      "origin_count": {
+        "exploration": 1820,
+        "final": 310,
+        "selection": 723
+      },
+      "origin_sha256": {
+        "exploration": "90275706194fa5a2d03168d225b52cb1c67c11b5057d2cb513aa51ff866dfc3e",
+        "final": "c7f2bb9d29421e553444fb14b9912a053b53801f5af1e062f92964758610cf12",
+        "selection": "50eba19220190dc1d92215ef501616d868769ec331822f8c458b0510e900029b"
+      },
+      "selection_end": "2022-12-31T00:00:00+00:00",
+      "series_id": "activity:en.wikipedia:all-access:user",
+      "stride": 1
+    },
+    "energy": {
+      "calendar_count": 34608,
+      "calendar_sha256": "9345314f7eec7375b4a8adbe09b5cfe288bc3b0dd4c37cbdd1556845e464485c",
+      "exploration_end": "2009-01-01T00:00:00+00:00",
+      "final_end": "2009-12-01T12:00:00+00:00",
+      "final_start": "2009-06-01T01:00:00+00:00",
+      "final_target_count": 0,
+      "final_target_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "historical_target_count": 22785,
+      "historical_target_sha256": "24bfd3083131285136950fc48d5bae495ae2870e6393a09eb4db94528d897cc9",
+      "horizon": 24,
+      "origin_count": {
+        "exploration": 17904,
+        "final": 0,
+        "selection": 3601
+      },
+      "origin_sha256": {
+        "exploration": "4672de16c11d571efaacb1590889988d430dc080ac71cc89dd0fa5460e0bd844",
+        "final": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "selection": "913d9b49440cca185494813c0de6d4db409a1ef398cb4c96d79f4fcde5a2c51f"
+      },
+      "selection_end": "2009-06-01T00:00:00+00:00",
+      "series_id": "energy:global_active_power",
+      "stride": 1
+    },
+    "energy_reactive": {
+      "calendar_count": 34608,
+      "calendar_sha256": "9345314f7eec7375b4a8adbe09b5cfe288bc3b0dd4c37cbdd1556845e464485c",
+      "exploration_end": "2009-01-01T00:00:00+00:00",
+      "final_end": "2010-11-27T00:00:00+00:00",
+      "final_start": "2009-06-01T01:00:00+00:00",
+      "final_target_count": 13056,
+      "final_target_sha256": "1f764717a8e7aa02e89cc94486e2c777bae87f5bd7682ff046cb9160237a285d",
+      "historical_target_count": 0,
+      "historical_target_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "horizon": 24,
+      "origin_count": {
+        "exploration": 17904,
+        "final": 13033,
+        "selection": 3601
+      },
+      "origin_sha256": {
+        "exploration": "4672de16c11d571efaacb1590889988d430dc080ac71cc89dd0fa5460e0bd844",
+        "final": "deeaeb52f9f54cd9b75229d978bff5cf9acbb25b8d65519488a92a4407b6f2bf",
+        "selection": "913d9b49440cca185494813c0de6d4db409a1ef398cb4c96d79f4fcde5a2c51f"
+      },
+      "selection_end": "2009-06-01T00:00:00+00:00",
+      "series_id": "energy:global_reactive_power",
+      "stride": 1
+    },
+    "m4_daily_d1": {
+      "calendar_count": 1020,
+      "calendar_sha256": "c394f8a94e76983a9de650e52f70b25e61c8bd756447123d380ac7646f146ebf",
+      "exploration_end": "1995-05-27T12:00:00+00:00",
+      "final_end": null,
+      "final_start": "1996-02-07T12:00:00+00:00",
+      "final_target_count": 255,
+      "final_target_sha256": "f3019f69688c311566c66e3a9fa7aa14ea8dfca1dfc702488433683042ae05b4",
+      "historical_target_count": 709,
+      "historical_target_sha256": "b8ba0bfb900d808723d401cf636e105a92dc21b0e10cdff00825e14ce3d81ea0",
+      "horizon": 14,
+      "origin_count": {
+        "exploration": 496,
+        "final": 242,
+        "selection": 242
+      },
+      "origin_sha256": {
+        "exploration": "bb9dede1bdfa8182361a51bf4fbcb55222d28eae52b768df7e6457c53f02cfcd",
+        "final": "423346d777ca8b47a601fa423657368942a40e2d34ecf699ab6b25c2f376d311",
+        "selection": "372dabef4e5db8441c89aa53a64f518ad13b4a927f617ad8b62e1b64dc14dfda"
+      },
+      "selection_end": "1996-02-06T12:00:00+00:00",
+      "series_id": "D1",
+      "stride": 1
+    },
+    "m4_daily_d2": {
+      "calendar_count": 1020,
+      "calendar_sha256": "73a7b4e6a67788a2823a5a9d80135b51808d608c200d05a477a4ec01f2eedbe6",
+      "exploration_end": "1996-05-25T12:00:00+00:00",
+      "final_end": null,
+      "final_start": "1997-02-05T12:00:00+00:00",
+      "final_target_count": 255,
+      "final_target_sha256": "91df10fba16b59219bc98638b38e2ea700a863a6ed3a1fee7a312cc321cd612d",
+      "historical_target_count": 709,
+      "historical_target_sha256": "9a60bfab9e321e1485b883e43c76aa3fd5a819d49d5c2ee90530ef53e3ca2741",
+      "horizon": 14,
+      "origin_count": {
+        "exploration": 496,
+        "final": 242,
+        "selection": 242
+      },
+      "origin_sha256": {
+        "exploration": "f5071283e0bda0382f2e1a786c443ec9f0e4fe3f6665ed54872419cf4b6bf801",
+        "final": "8caf6bc7db493eb1850edcd22ece70dc264205b33bd72ddafd3bc8744d3e32ba",
+        "selection": "af81295448652e548d328ff2544bc137263ec038647b937973f9f279d6745383"
+      },
+      "selection_end": "1997-02-04T12:00:00+00:00",
+      "series_id": "D2",
+      "stride": 1
+    },
+    "m4_daily_d3": {
+      "calendar_count": 144,
+      "calendar_sha256": "f73383b68478f435782fea3c1d93282f2329662da81b093af317e14d4ee580aa",
+      "exploration_end": "2006-03-17T12:00:00+00:00",
+      "final_end": null,
+      "final_start": "2006-04-23T12:00:00+00:00",
+      "final_target_count": 36,
+      "final_target_sha256": "d4d20861e606da0f18ad7d9f7576cc0e84a6aad69f2d6994e351364ed57c0d3f",
+      "historical_target_count": 52,
+      "historical_target_sha256": "f139659e96abfb6c33a4c7489011bea8062a140d3b39d5f3c29fe69e95eca74d",
+      "horizon": 14,
+      "origin_count": {
+        "exploration": 58,
+        "final": 23,
+        "selection": 23
+      },
+      "origin_sha256": {
+        "exploration": "e1ae04d9493354b5d60fd585fdf05d76a63be3665e9753cc7897b9008adfc892",
+        "final": "223a9b7908cb257b5099389238bcd322d7e3963b27d19a38d3e1c4807e739051",
+        "selection": "db16fcecc410f23974f62bc355135cdac8d0bd6bcbe7116f977ecc162e1bd9f5"
+      },
+      "selection_end": "2006-04-22T12:00:00+00:00",
+      "series_id": "D3",
+      "stride": 1
+    },
+    "m5_retail": {
+      "calendar_count": 1913,
+      "calendar_sha256": "2ee15ca0e24c99afbaa616e96f8036c4b23826ac9759da1c95dabe8ec3aa4826",
+      "exploration_end": "2013-01-01T00:00:00+00:00",
+      "final_end": "2016-04-25T00:00:00+00:00",
+      "final_start": "2014-01-02T00:00:00+00:00",
+      "final_target_count": 845,
+      "final_target_sha256": "526e82283d35f69e16c5dd83265c48a5f0c05d7410d8cb9851bba624ee800ccf",
+      "historical_target_count": 1012,
+      "historical_target_sha256": "b555265d1657aaf5490b522334d28777a7ffee2b1b515020fa45f80e6372fc69",
+      "horizon": 28,
+      "origin_count": {
+        "exploration": 675,
+        "final": 818,
+        "selection": 338
+      },
+      "origin_sha256": {
+        "exploration": "618733a20865761ec5f23290b62f729790c98417ca7f670fc5cac491f22443e1",
+        "final": "0a58dc39a260c5366b3501f0ec9a09673968963e27ce2f67291f6d035acbbeb5",
+        "selection": "87f37657b4538306a70f83e24d1a2f7fbc60017c80ff872bea9aadb68fdb6f85"
+      },
+      "selection_end": "2014-01-01T00:00:00+00:00",
+      "series_id": "m5:all_stores_all_items",
+      "stride": 1
+    },
+    "retail": {
+      "calendar_count": 739,
+      "calendar_sha256": "ea2490848f877576b3e1f56c41ad23d6d6c1f091efec26d5cc46e73c579994a2",
+      "exploration_end": "2010-12-05T00:00:00+00:00",
+      "final_end": null,
+      "final_start": "2011-06-09T00:00:00+00:00",
+      "final_target_count": 0,
+      "final_target_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "historical_target_count": 711,
+      "historical_target_sha256": "441946e4885077443dfc82dccface69a2878533187247c4b2afdc6124cab1b27",
+      "horizon": 5,
+      "origin_count": {
+        "exploration": 364,
+        "final": 0,
+        "selection": 181
+      },
+      "origin_sha256": {
+        "exploration": "cd77b04374e94488aeee842122b6ce63743fb2c2ac7358d2c1145429367ae37e",
+        "final": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "selection": "b314457c6b943bcbc7905bf1aa585481fbb0d70e8d5f77467de216963f81093e"
+      },
+      "selection_end": "2011-06-08T00:00:00+00:00",
+      "series_id": "retail:all_positive_items",
+      "stride": 1
+    }
+  },
+  "historical_targets_file": "splits/historical_targets.json",
+  "historical_targets_sha256": "d8dd71cef3b9e60196162b390d173a226ec60ca9b34710669e5338513268e055",
+  "manifest_sha256": "d2520ace6183b71b4386ff4e87fdb715a55b136bc691ed65a48670e562210bb1",
+  "schema_version": 1,
+  "split_sha256": "3dedddcb7b3c0ab183e90208d1b4467500551da80b7b8c7e412400121c5bffce"
+}

@@ -29,6 +29,7 @@ class TemporalSplit:
     horizon: int
     stride: int
     _timestamps: tuple[datetime, ...] = field(default=(), repr=False)
+    final_end: datetime | None = None
 
     def origins_for(
         self, partition: Partition, timestamps: tuple[datetime, ...]
@@ -61,6 +62,11 @@ class TemporalSplit:
             ),
             len(calendar),
         )
+        if partition == "final" and self.final_end is not None:
+            last = next(
+                (i for i, t in enumerate(calendar) if t > self.final_end),
+                len(calendar),
+            )
         # The first timestamp supplies context; an origin needs a preceding row.
         return tuple(
             calendar[start - 1]
@@ -81,20 +87,58 @@ class TemporalSplit:
         )
 
 
-def build_splits(timestamps: tuple[datetime, ...], horizon: int) -> TemporalSplit:
+def build_splits(
+    timestamps: tuple[datetime, ...],
+    horizon: int,
+    stride: int | None = None,
+    *,
+    exploration_end: datetime | None = None,
+    selection_end: datetime | None = None,
+    final_start: datetime | None = None,
+    final_end: datetime | None = None,
+) -> TemporalSplit:
     if type(horizon) is not int or horizon <= 0:
         raise DomainError("invalid_horizon", {"horizon": horizon})
+    if stride is not None and (type(stride) is not int or stride <= 0):
+        raise DomainError("invalid_stride", {"stride": stride})
     calendar = _calendar(timestamps)
     if len(calendar) < 4:
         raise DomainError(
             "insufficient_timestamps", {"required": 4, "actual": len(calendar)}
         )
+    boundaries = (exploration_end, selection_end, final_start, final_end)
+    if any(boundary is not None for boundary in boundaries):
+        if any(boundary is None for boundary in boundaries):
+            raise DomainError("invalid_split_boundaries", {})
+        if any(
+            boundary.tzinfo is None or boundary.utcoffset() is None
+            for boundary in boundaries
+            if boundary is not None
+        ):
+            raise DomainError("invalid_split_boundaries", {})
+        normalized = tuple(
+            boundary.astimezone(UTC) for boundary in boundaries if boundary is not None
+        )
+        if any(boundary not in calendar for boundary in normalized):
+            raise DomainError("invalid_split_boundaries", {})
+        if not (normalized[0] < normalized[1] < normalized[2] <= normalized[3]):
+            raise DomainError("invalid_split_boundaries", {})
+        return TemporalSplit(
+            exploration_end=normalized[0],
+            selection_end=normalized[1],
+            final_start=normalized[2],
+            horizon=horizon,
+            stride=horizon if stride is None else stride,
+            _timestamps=calendar,
+            final_end=normalized[3],
+        )
+
     exploration, selection = len(calendar) // 2, 3 * len(calendar) // 4
     return TemporalSplit(
-        calendar[exploration - 1],
-        calendar[selection - 1],
-        calendar[selection],
-        horizon,
-        horizon,
-        calendar,
+        exploration_end=calendar[exploration - 1],
+        selection_end=calendar[selection - 1],
+        final_start=calendar[selection],
+        horizon=horizon,
+        stride=horizon if stride is None else stride,
+        _timestamps=calendar,
     )

@@ -18,3 +18,5 @@ The optional console and scenarios are maintained while the primary workflow is 
 - [Capabilities and tested environments](capabilities.md)
 - [Quality roadmap](quality-roadmap.md)
 - [Assistant interface decision](decisions/assistant-interface.md) and [discovery runtime decision](decisions/agent-runtime.md)
+
+- [Phase 0 measurement benchmark](../benchmarks/README.md)

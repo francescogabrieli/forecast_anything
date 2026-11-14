@@ -14,7 +14,8 @@ import shutil
 import urllib.request
 import xml.etree.ElementTree as ET
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from itertools import pairwise
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -22,6 +23,15 @@ from forecast_anything.providers.base import frequency_step
 
 USER_AGENT = "ForecastAnythingBenchmark/0.1 (research; https://github.com/francescogabrieli/forecast_anything)"
 FIELDS = ("series_id", "event_time", "available_at", "revision", "value", "unit")
+M5_SOURCE_FILES = (
+    "calendar.csv",
+    "sales_train_validation.csv",
+    "sales_train_evaluation.csv",
+    "sales_test_validation.csv",
+    "sales_test_evaluation.csv",
+    "sell_prices.csv",
+)
+M5_SERIES_FILES = ("calendar.csv", "sales_train_validation.csv")
 
 
 def load_manifest(path):
@@ -40,7 +50,7 @@ def timestamp(value):
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
         raise ValueError("benchmark timestamps require an explicit timezone")
-    return parsed.astimezone(timezone.utc)
+    return parsed.astimezone(UTC)
 
 
 def write_json(path, value):
@@ -57,10 +67,12 @@ def bucket_calendar(config):
     return tuple(start + step * i for i in range((end - start) // step + 1))
 
 
-def _raw(manifest, config, destination, name):
-    source = config["source"]
-    source_key = hashlib.sha256(source["url"].encode()).hexdigest()[:16]
-    raw = destination / "raw" / f"{name}.{source_key}.download"
+def _raw(manifest, config, destination, name, source=None):
+    source = source or config["source"]
+    source_identity = source.get("url", f"file:{source.get('path', '')}")
+    source_key = hashlib.sha256(source_identity.encode()).hexdigest()[:16]
+    raw_name = source_key if source.get("shared_cache") else f"{name}.{source_key}"
+    raw = destination / "raw" / f"{raw_name}.download"
     raw.parent.mkdir(parents=True, exist_ok=True)
     if "path" in source:
         shutil.copyfile(manifest.parent / source["path"], raw)
@@ -155,9 +167,7 @@ def _retail(raw, config, calendar):
             event = datetime(1899, 12, 30) + timedelta(days=float(date))
         except ValueError:
             event = datetime.fromisoformat(date)
-        bucket = event.replace(
-            hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc
-        )
+        bucket = event.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=UTC)
         if not calendar[0] <= bucket <= calendar[-1]:
             continue
         quantity = float(row["Quantity"])
@@ -189,7 +199,7 @@ def _energy(raw, config, calendar):
             for row in csv.DictReader(stream, delimiter=";"):
                 event = datetime.strptime(
                     row["Date"] + " " + row["Time"], "%d/%m/%Y %H:%M:%S"
-                ).replace(tzinfo=timezone.utc)
+                ).replace(tzinfo=UTC)
                 bucket = event.replace(minute=0, second=0, microsecond=0)
                 if not calendar[0] <= bucket <= calendar[-1]:
                     continue
@@ -197,7 +207,7 @@ def _energy(raw, config, calendar):
                     raise ValueError("misaligned meter minute")
                 if event in readings[bucket]:
                     raise ValueError("duplicate meter minute")
-                text = row["Global_active_power"].strip()
+                text = row[config.get("value_column", "Global_active_power")].strip()
                 value = None if text in {"?", ""} else float(text)
                 if value is not None and not math.isfinite(value):
                     raise ValueError("non-finite meter reading")
@@ -232,9 +242,7 @@ def _activity(raw, config, calendar):
         rows = json.loads(raw.read_text())["items"]
     values = {}
     for row in rows:
-        event = datetime.strptime(str(row["timestamp"]), "%Y%m%d%H").replace(
-            tzinfo=timezone.utc
-        )
+        event = datetime.strptime(str(row["timestamp"]), "%Y%m%d%H").replace(tzinfo=UTC)
         if event in values:
             raise ValueError("duplicate pageview day")
         count = float(row["views"])
@@ -251,7 +259,8 @@ def _write_observations(path, name, config, calendar, values):
         writer.writeheader()
         for start, value in zip(calendar, values, strict=True):
             # Right-end labels: the complete bucket is assumed known at its end.
-            end = (start + step).isoformat()
+            event_time = start if config.get("label_at_start") else start + step
+            end = event_time.isoformat()
             writer.writerow(
                 dict(
                     series_id=name,
@@ -264,21 +273,259 @@ def _write_observations(path, name, config, calendar, values):
             )
 
 
+def _m4_values(path, series_id):
+    with Path(path).open(newline="") as stream:
+        for row in csv.DictReader(stream):
+            if row.get("V1") == series_id:
+                cells = []
+                for key, value in row.items():
+                    if key == "V1":
+                        continue
+                    cells.extend(value if key is None and value else [value])
+                values = [(value or "").strip() for value in cells]
+                while values and not values[-1]:
+                    values.pop()
+                if not values or any(not value for value in values):
+                    raise ValueError(f"M4 {series_id} has missing values in its series")
+                parsed = [float(value) for value in values]
+                if any(not math.isfinite(value) for value in parsed):
+                    raise ValueError(f"M4 {series_id} contains a non-finite value")
+                return parsed
+    raise ValueError(f"M4 series not found: {series_id}")
+
+
+def _m4_daily(raw, config):
+    series_id = config["series_id"]
+    with raw["info"].open(newline="") as stream:
+        info = next(
+            (row for row in csv.DictReader(stream) if row.get("M4id") == series_id),
+            None,
+        )
+    if info is None or info.get("Frequency") != "1" or info.get("SP") != "Daily":
+        raise ValueError(
+            f"M4 series must be declared in metadata as daily: {series_id}"
+        )
+    expected_category = config.get("expected_category")
+    category = info.get("Category", info.get("category"))
+    if expected_category and category != expected_category:
+        raise ValueError(
+            f"M4 category does not match manifest for {series_id}: {category}"
+        )
+    if int(info["Horizon"]) != config["horizon"]:
+        raise ValueError(f"M4 horizon does not match manifest: {series_id}")
+    train = _m4_values(raw["train"], series_id)
+    test = _m4_values(raw["test"], series_id)
+    if len(test) != config["horizon"]:
+        raise ValueError(f"M4 test horizon is incomplete: {series_id}")
+    start = datetime.strptime(info["StartingDate"], "%d-%m-%y %H:%M").replace(
+        tzinfo=UTC
+    )
+    values = [*train, *test]
+    calendar = tuple(start + timedelta(days=index) for index in range(len(values)))
+    return (
+        calendar,
+        values,
+        {
+            "start": calendar[0].isoformat(),
+            "end": calendar[-1].isoformat(),
+            "rows": len(values),
+            "missing": 0,
+            "train_rows": len(train),
+            "official_test_rows": len(test),
+            "official_horizon": int(info["Horizon"]),
+            "category": category,
+        },
+    )
+
+
+def _m5_source_files(manifest, config):
+    source = config["source"]
+    if source.get("format") != "m5_official_csv_bundle":
+        raise ValueError("unsupported M5 source format")
+    expected_files = source.get("files", {})
+    if set(expected_files) != set(M5_SOURCE_FILES):
+        raise ValueError("M5 source manifest must pin all six original CSV files")
+
+    directory = Path(manifest.parent / source["directory"])
+    checksums_path = Path(manifest.parent / source["checksums_file"])
+    registered = json.loads(checksums_path.read_text())
+    for key in ("source_repository", "source_folder"):
+        if registered.get(key) != source.get(key):
+            raise ValueError(f"M5 source provenance mismatch: {key}")
+    registered_files = registered.get("files", {})
+    if set(registered_files) != set(M5_SOURCE_FILES):
+        raise ValueError("M5 checksum register must list all six original CSV files")
+
+    paths, checksums = {}, {}
+    for name in M5_SOURCE_FILES:
+        expected = expected_files[name]
+        recorded = registered_files[name]
+        if (
+            expected.get("sha256") != recorded.get("sha256")
+            or expected.get("bytes") != recorded.get("bytes")
+            or expected.get("source") != recorded.get("source")
+        ):
+            raise ValueError(f"M5 source manifest mismatch: {name}")
+        path = directory / name
+        if not path.is_file():
+            raise ValueError(f"M5 source file is missing: {name}")
+        if path.stat().st_size != expected["bytes"]:
+            raise ValueError(f"M5 source size mismatch: {name}")
+        checksum = digest(path)
+        if checksum != expected["sha256"]:
+            raise ValueError(f"M5 source checksum mismatch: {name}")
+        paths[name] = path
+        checksums[name] = checksum
+    return paths, checksums
+
+
+def _m5_retail(raw, config):
+    """Aggregate official M5 training units across all item-store rows by day."""
+    dates_by_day = {}
+    with raw["calendar.csv"].open(newline="") as stream:
+        reader = csv.DictReader(stream)
+        has_day_ids = "d" in (reader.fieldnames or ())
+        for index, row in enumerate(reader, start=1):
+            day = row.get("d", "").strip() if has_day_ids else f"d_{index}"
+            value = row.get("date", "").strip()
+            if not day or day in dates_by_day:
+                raise ValueError("M5 calendar has an empty or duplicate day ID")
+            try:
+                event_date = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=UTC)
+            except ValueError as error:
+                raise ValueError("M5 calendar contains an invalid date") from error
+            dates_by_day[day] = event_date
+
+    identifiers = ("item_id", "dept_id", "cat_id", "store_id", "state_id")
+    totals, dates, seen = None, None, set()
+    source_rows = 0
+    with raw["sales_train_validation.csv"].open(newline="") as stream:
+        reader = csv.reader(stream)
+        header = next(reader, None)
+        if header is None or tuple(header[:5]) != identifiers:
+            raise ValueError("M5 training CSV has an unexpected identifier header")
+        day_columns = header[5:]
+        expected_days = [f"d_{index}" for index in range(1, len(day_columns) + 1)]
+        if not day_columns or day_columns != expected_days:
+            raise ValueError("M5 training CSV day columns must be contiguous from d_1")
+        if any(day not in dates_by_day for day in day_columns):
+            raise ValueError("M5 training CSV contains a day absent from its calendar")
+        dates = [dates_by_day[day] for day in day_columns]
+        if any(
+            current - previous != timedelta(days=1)
+            for previous, current in pairwise(dates)
+        ):
+            raise ValueError("M5 training calendar dates must be consecutive")
+        totals = [0] * len(day_columns)
+
+        for row in reader:
+            if len(row) != len(header):
+                raise ValueError("M5 training CSV contains a malformed row")
+            if any(not row[index].strip() for index in range(5)):
+                raise ValueError("M5 training CSV has an empty series identifier")
+            series_key = (row[0], row[3])
+            if series_key in seen:
+                raise ValueError(
+                    "M5 training CSV contains a duplicate item-store series"
+                )
+            seen.add(series_key)
+            source_rows += 1
+            for index, cell in enumerate(row[5:]):
+                try:
+                    value = int(cell)
+                except ValueError as error:
+                    raise ValueError(
+                        "M5 sales values must be integer unit counts"
+                    ) from error
+                if value < 0:
+                    raise ValueError("M5 sales values cannot be negative")
+                totals[index] += value
+
+    expected_rows = config.get("expected_source_rows")
+    if expected_rows is not None and source_rows != expected_rows:
+        raise ValueError(
+            f"M5 training series count mismatch: expected {expected_rows}, got {source_rows}"
+        )
+    return (
+        dates,
+        totals,
+        {
+            "rows": len(dates),
+            "missing": 0,
+            "source_series_rows": source_rows,
+            "aggregated_series_count": 1,
+            "source_files_used": list(M5_SERIES_FILES),
+            "source_files_verified": sorted(M5_SOURCE_FILES),
+        },
+    )
+
+
 def prepare_suite(manifest: Path, destination: Path) -> dict[str, Path]:
     manifest, destination = Path(manifest), Path(destination)
     specification = load_manifest(manifest)
     destination.mkdir(parents=True, exist_ok=True)
     metadata = {"manifest_sha256": digest(manifest), "datasets": {}}
     prepared = {}
-    recipes = {"retail": _retail, "energy": _energy, "activity": _activity}
+    recipes = {
+        "retail": _retail,
+        "energy": _energy,
+        "activity": _activity,
+        "m4_daily": _m4_daily,
+        "m5_retail": _m5_retail,
+    }
     for name, config in specification["datasets"].items():
         if config["assumed_available_at"] != "period_end_UTC":
             raise ValueError("unsupported assumed availability recipe")
-        calendar = bucket_calendar(config)
-        raw, checksum = _raw(manifest, config, destination, name)
-        values, extra = recipes[config["recipe"]](raw, config, calendar)
+        if config["recipe"] == "m5_retail":
+            raw, checksums = _m5_source_files(manifest, config)
+            calendar, values, extra = _m5_retail(raw, config)
+            checksum = hashlib.sha256(
+                json.dumps(checksums, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            coverage = {
+                "start_bucket": calendar[0].isoformat(),
+                "end_bucket": calendar[-1].isoformat(),
+                "rows": len(values),
+                "missing": 0,
+                **extra,
+            }
+        elif config["recipe"] == "m4_daily":
+            sources = config["source"].get("files", {})
+            if set(sources) != {"info", "train", "test"}:
+                raise ValueError("M4 daily sources require info, train, and test files")
+            raw, checksums = {}, {}
+            for key in ("info", "train", "test"):
+                raw[key], checksums[key] = _raw(
+                    manifest, config, destination, f"{name}.{key}", sources[key]
+                )
+            calendar, values, extra = _m4_daily(raw, config)
+            checksum = hashlib.sha256(
+                json.dumps(checksums, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            coverage = {
+                "start_bucket": extra["start"],
+                "end_bucket": extra["end"],
+                "rows": extra["rows"],
+                "missing": extra["missing"],
+                "train_rows": extra["train_rows"],
+                "official_test_rows": extra["official_test_rows"],
+                "category": extra["category"],
+            }
+        else:
+            calendar = bucket_calendar(config)
+            raw_source, checksum = _raw(manifest, config, destination, name)
+            values, extra = recipes[config["recipe"]](raw_source, config, calendar)
+            coverage = {
+                "start_bucket": config["start"],
+                "end_bucket": config["end"],
+                "rows": len(values),
+                "missing": sum(v is None for v in values),
+            }
         path = destination / f"{name}.csv"
-        _write_observations(path, config["series_id"], config, calendar, values)
+        write_config = dict(config)
+        if config["recipe"] == "m4_daily":
+            write_config["label_at_start"] = True
+        _write_observations(path, config["series_id"], write_config, calendar, values)
         if "returns" in extra:
             _write_observations(
                 destination / f"{name}.returns.csv",
@@ -293,12 +540,7 @@ def prepare_suite(manifest: Path, destination: Path) -> dict[str, Path]:
             "source": config["source"],
             "download_sha256": checksum,
             "prepared_sha256": digest(path),
-            "coverage": {
-                "start_bucket": config["start"],
-                "end_bucket": config["end"],
-                "rows": len(values),
-                "missing": sum(v is None for v in values),
-            },
+            "coverage": coverage,
             "recipe": config,
             "availability_basis": "assumed_not_observed",
         }

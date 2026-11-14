@@ -46,3 +46,7 @@ The local parity check passed against the pinned official API on macOS arm64, Py
 ## Required-product acceptance
 
 See the [capability matrix](../capabilities.md) for verified Timestral workflows and their limits. An insufficient/losing backtest remains provisional/rejected even though Timestral is required; model selection never certifies forecast quality. Legacy `timestral_acceptance_pending` logic applies to the old evaluation-attestation path; the supported candidate-bound backtest uses its own preserved final-evidence safeguards.
+
+## Phase 0 benchmark
+
+The [Phase 0 runner](../../benchmarks/README.md) compares the pinned 28M and 123M checkpoints on development and validation with separate local approval gates. The final holdout remains reserved.

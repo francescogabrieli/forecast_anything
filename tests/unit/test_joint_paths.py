@@ -219,7 +219,13 @@ def test_fixture_experiment_uses_frozen_final_origins_and_preserves_inputs(tmp_p
 
     manifest = Path("tests/fixtures/benchmarks/manifest.yaml")
     source = tmp_path / "m4"
-    run_suite(manifest, source, ("baseline",))
+    run_suite(
+        manifest,
+        source,
+        ("baseline",),
+        score_splits=("exploration", "selection", "final"),
+        allow_synthetic_final_for_legacy_experiment=True,
+    )
     fingerprints = {
         p.name: hashlib.sha256(p.read_bytes()).hexdigest()
         for p in source.iterdir()
@@ -310,7 +316,13 @@ def test_final_actual_perturbation_cannot_change_event_or_sample_probabilities(
     from benchmarks.run import run_suite
 
     source = tmp_path / "m4"
-    run_suite(Path("tests/fixtures/benchmarks/manifest.yaml"), source, ("baseline",))
+    run_suite(
+        Path("tests/fixtures/benchmarks/manifest.yaml"),
+        source,
+        ("baseline",),
+        score_splits=("exploration", "selection", "final"),
+        allow_synthetic_final_for_legacy_experiment=True,
+    )
     before = json.loads(run_experiment(source, tmp_path / "before", 0, 100).read_text())
     frozen = json.loads((source / "frozen_calendar.json").read_text())
     finals = {
